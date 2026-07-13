@@ -1,0 +1,112 @@
+use crate::crypto::DeviceKeys;
+use crate::error::AgentResult;
+use rusqlite::{params, Connection, OptionalExtension};
+use uuid::Uuid;
+
+pub struct SyncOutbox;
+
+impl SyncOutbox {
+    pub fn enqueue(
+        conn: &Connection,
+        entity_type: &str,
+        entity_id: &str,
+        payload: impl serde::Serialize,
+        signing_key: &DeviceKeys,
+    ) -> AgentResult<String> {
+        let payload_str = serde_json::to_string(&payload)?;
+        let signature = signing_key.sign_payload(&payload_str);
+        let id = Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        conn.execute(
+            "INSERT INTO sync_queue (id, entity_type, entity_id, payload_json, signature, status, created_at, next_retry_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?6)",
+            params![id, entity_type, entity_id, payload_str, signature, now],
+        )?;
+
+        Ok(id)
+    }
+
+    pub fn mark_sending(conn: &Connection, id: &str) -> AgentResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE sync_queue SET status = 'sending', last_attempt_at = ?2, attempts = attempts + 1 WHERE id = ?1",
+            params![id, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn mark_confirmed(conn: &Connection, id: &str) -> AgentResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE sync_queue SET status = 'confirmed', confirmed_at = ?2, error_message = NULL WHERE id = ?1",
+            params![id, now],
+        )?;
+        Ok(())
+    }
+
+    pub fn mark_failed(conn: &Connection, id: &str, error: &str, attempts: i64) -> AgentResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let backoff_secs = (2_i64.pow(attempts.min(8) as u32)).min(3600);
+        let next_retry = chrono::Utc::now() + chrono::Duration::seconds(backoff_secs);
+
+        conn.execute(
+            "UPDATE sync_queue SET status = 'failed', error_message = ?2, last_attempt_at = ?3, next_retry_at = ?4 WHERE id = ?1",
+            params![id, error, now, next_retry.to_rfc3339()],
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingSyncItem {
+    pub id: String,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub payload_json: String,
+    pub signature: Option<String>,
+    pub attempts: i64,
+}
+
+pub fn fetch_pending_batch(conn: &Connection, limit: usize) -> AgentResult<Vec<PendingSyncItem>> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let mut stmt = conn.prepare(
+        "SELECT id, entity_type, entity_id, payload_json, signature, attempts
+         FROM sync_queue
+         WHERE status IN ('pending', 'failed') AND (next_retry_at IS NULL OR next_retry_at <= ?1)
+         ORDER BY created_at ASC
+         LIMIT ?2",
+    )?;
+
+    let rows = stmt.query_map(params![now, limit as i64], |row| {
+        Ok(PendingSyncItem {
+            id: row.get(0)?,
+            entity_type: row.get(1)?,
+            entity_id: row.get(2)?,
+            payload_json: row.get(3)?,
+            signature: row.get(4)?,
+            attempts: row.get(5)?,
+        })
+    })?;
+
+    rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+pub fn screenshot_file_path(conn: &Connection, screenshot_id: &str) -> AgentResult<Option<String>> {
+    conn.query_row(
+        "SELECT file_path FROM screenshots WHERE id = ?1",
+        params![screenshot_id],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+pub fn mark_screenshot_synced(conn: &Connection, screenshot_id: &str) -> AgentResult<()> {
+    let now = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE screenshots SET synced_at = ?2 WHERE id = ?1",
+        params![screenshot_id, now],
+    )?;
+    Ok(())
+}
