@@ -1,0 +1,74 @@
+# =============================================================================
+# voowork-desktop — Bun + Vite + React + Tauri 2 + Rust
+# =============================================================================
+
+# --- Dependencies ---
+node_modules/
+.bun/
+
+# --- Frontend build (Vite → Tauri frontendDist) ---
+dist/
+dist-ssr/
+dist-linux/
+
+# --- TypeScript ---
+*.tsbuildinfo
+
+# --- Rust / Tauri ---
+**/target/
+src-tauri/gen/
+
+# --- Environment & secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Logs ---
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun-debug.log*
+lerna-debug.log*
+
+# --- Test & tooling cache ---
+coverage/
+.eslintcache
+.prettiercache
+.vite/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Editor / IDE ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.cursor/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*~
+
+# --- Local overrides ---
+*.local
+
+# --- Release / bundle artifacts (when copied outside target/) ---
+*.deb
+*.rpm
+*.AppImage
+*.dmg
+*.msi
+*.exe
+
+# --- Runtime local data (never commit agent DB or screenshots) ---
+voowork-agent.db
+voowork-agent.db-*
+screenshots/
