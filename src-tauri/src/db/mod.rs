@@ -20,7 +20,7 @@ pub struct Database {
 impl Database {
     pub fn open(app_data_dir: PathBuf) -> AgentResult<Self> {
         std::fs::create_dir_all(&app_data_dir)?;
-        let path = app_data_dir.join("voowork-agent.db");
+        let path = app_data_dir.join("voowork-desktop.db");
         let conn = Connection::open(&path)?;
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         let db = Self { conn, path };

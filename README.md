@@ -131,8 +131,8 @@ src-tauri/src/                # Backend Rust
 O banco SQLite e screenshots ficam em:
 
 ```
-~/.local/share/voowork-agent/
-├── voowork-agent.db
+~/.local/share/voowork-desktop/
+├── voowork-desktop.db
 └── screenshots/
 ```
 

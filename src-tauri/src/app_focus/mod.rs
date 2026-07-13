@@ -40,7 +40,7 @@ pub fn capture_active_window() -> Option<AppFocusSample> {
     }
 }
 
-/// Returns false for the Voowork agent itself, file managers, and system pickers.
+/// Returns false for the Voowork desktop app itself, file managers, and system pickers.
 pub fn should_track_app_focus(sample: &AppFocusSample) -> bool {
     !is_self_app(sample) && !is_excluded_system_ui(sample)
 }

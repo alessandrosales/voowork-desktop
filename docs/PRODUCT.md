@@ -75,7 +75,7 @@ Mantém o app desktop, integra com a API cloud, evolui as camadas anti-fraude e 
 │                                    ┌────────────▼─────────────┐  │
 │                                    │  SQLite local (WAL)      │  │
 │                                    │  ~/.local/share/         │  │
-│                                    │    voowork-agent/        │  │
+│                                    │    voowork-desktop/        │  │
 │                                    └────────────┬─────────────┘  │
 └─────────────────────────────────────────────────┼────────────────┘
                                                   │ HTTPS + assinatura Ed25519
@@ -203,7 +203,7 @@ Chave Ed25519 gerada no primeiro uso, armazenada em `device_metadata`. Cada payl
 
 | Medida | Status |
 |--------|--------|
-| Diretório protegido do SO (`~/.local/share/voowork-agent/`) | ✅ |
+| Diretório protegido do SO (`~/.local/share/voowork-desktop/`) | ✅ |
 | Criptografia em repouso (SQLCipher) | ⏳ Planejado |
 | Nunca confiar em dados locais para faturamento | ✅ (backend é fonte de verdade) |
 
@@ -251,8 +251,8 @@ A UI usa o hook `useTrackingSession()` — nunca `invoke()` direto nos component
 ### Localização
 
 ```
-~/.local/share/voowork-agent/
-├── voowork-agent.db      # SQLite (WAL mode)
+~/.local/share/voowork-desktop/
+├── voowork-desktop.db      # SQLite (WAL mode)
 └── screenshots/          # PNGs capturados
 ```
 

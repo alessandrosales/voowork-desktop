@@ -56,7 +56,7 @@ A tabela `sync_queue` não reescreve payloads após envio — apenas atualiza st
 
 | Medida | Status |
 |--------|--------|
-| Diretório protegido do SO (`~/.local/share/voowork-agent/`) | ✅ |
+| Diretório protegido do SO (`~/.local/share/voowork-desktop/`) | ✅ |
 | Criptografia em repouso (SQLCipher) | ⏳ Planejado |
 | Chave privada Ed25519 nunca sai do dispositivo | ✅ |
 | Keychain do SO para chave privada | ⏳ Planejado |

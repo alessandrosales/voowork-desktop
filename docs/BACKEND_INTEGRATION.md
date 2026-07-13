@@ -124,7 +124,7 @@ pub const BACKEND_SYNC_ENABLED: bool = false;
 
 ## Features locais (sem dependência de API)
 
-Tudo abaixo funciona **sem backend** — dados ficam em `~/.local/share/voowork-agent/`:
+Tudo abaixo funciona **sem backend** — dados ficam em `~/.local/share/voowork-desktop/`:
 
 | Feature | Tabela / diretório |
 |---------|-------------------|

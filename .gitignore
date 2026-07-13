@@ -68,7 +68,7 @@ Desktop.ini
 *.msi
 *.exe
 
-# --- Runtime local data (never commit agent DB or screenshots) ---
-voowork-agent.db
-voowork-agent.db-*
+# --- Runtime local data (never commit desktop DB or screenshots) ---
+voowork-desktop.db
+voowork-desktop.db-*
 screenshots/

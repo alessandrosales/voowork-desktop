@@ -50,7 +50,7 @@ Tabela `screenshots`:
 ## Armazenamento local
 
 ```
-~/.local/share/voowork-agent/screenshots/
+~/.local/share/voowork-desktop/screenshots/
 └── {session_id}_{timestamp}.png
 ```
 

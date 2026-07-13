@@ -61,7 +61,7 @@ pub fn run() {
         .setup(|app| {
             let app_data_dir = dirs::data_dir()
                 .unwrap_or_else(std::env::temp_dir)
-                .join("voowork-agent");
+                .join("voowork-desktop");
 
             let db = Database::open(app_data_dir.clone())?;
             let device_name = std::env::var("HOSTNAME").unwrap_or_else(|_| "voowork-device".into());
