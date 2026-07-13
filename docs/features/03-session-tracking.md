@@ -104,6 +104,8 @@ Máquina de estados integrada à sessão:
 | `resume_prompt` | Input retornou; pede classificação |
 | `manual_paused` | Pausa explícita do colaborador |
 
+**Regra de descarte:** ao expirar o countdown, o timer congela e um registro provisório é criado com o tempo até aquele momento (threshold + countdown). Quando o usuário retorna, **todo o intervalo desde `idle_started_at` até o retorno** é consolidado como `discarded_seconds` — incluindo o tempo em `paused_idle` sem input.
+
 **Perfis de threshold** (`idle_profile`):
 
 | Perfil | Threshold |

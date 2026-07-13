@@ -10,8 +10,8 @@ use super::constants::{
     MANUAL_PAUSE_AUTO_RESUME_SECS,
 };
 use super::persistence::{
-    classify_idle_period_record, discard_idle_period_record, insert_paused_idle_period,
-    mark_idle_period_resumed,
+    classify_idle_period_record, discard_idle_period_record, finalize_idle_period_on_resume,
+    insert_paused_idle_period,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,12 +133,12 @@ impl IdleController {
         let phase = *self.phase.lock();
 
         if phase == IdlePhase::ManualPaused || phase == IdlePhase::ManualWorkCheck {
-            self.detect_input(conn)?;
+            self.detect_input(conn, device_keys)?;
             self.tick_manual_pause()?;
             return Ok(());
         }
 
-        self.detect_input(conn)?;
+        self.detect_input(conn, device_keys)?;
 
         if *self.meeting_exempt.lock() {
             return Ok(());
@@ -421,7 +421,7 @@ impl IdleController {
         *self.last_manual_input_at.lock() = now;
     }
 
-    fn detect_input(&self, conn: &Connection) -> AgentResult<()> {
+    fn detect_input(&self, conn: &Connection, device_keys: &DeviceKeys) -> AgentResult<()> {
         let current = *self.last_input_at.lock();
         let previous = *self.last_polled_input.lock();
         if current <= previous {
@@ -441,7 +441,12 @@ impl IdleController {
             }
             IdlePhase::PausedIdle => {
                 if let Some(period_id) = self.pending_period_id.lock().clone() {
-                    mark_idle_period_resumed(conn, &period_id)?;
+                    let (total, previous) =
+                        finalize_idle_period_on_resume(conn, &period_id, device_keys)?;
+                    let additional = total.saturating_sub(previous);
+                    if additional > 0 {
+                        *self.idle_discarded_seconds.lock() += additional;
+                    }
                 }
                 *self.phase.lock() = IdlePhase::ResumePrompt;
             }

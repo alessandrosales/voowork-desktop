@@ -84,13 +84,50 @@ pub fn insert_paused_idle_period(
     Ok(period_id)
 }
 
-pub fn mark_idle_period_resumed(conn: &Connection, period_id: &str) -> AgentResult<()> {
-    let resumed_at = chrono::Utc::now().to_rfc3339();
-    conn.execute(
-        "UPDATE idle_periods SET resumed_at = ?1, updated_at = ?1 WHERE id = ?2",
-        params![resumed_at, period_id],
+/// Finaliza o período ocioso ao retorno do usuário.
+/// Todo o intervalo desde `idle_started_at` até agora é descartado (não faturável).
+pub fn finalize_idle_period_on_resume(
+    conn: &Connection,
+    period_id: &str,
+    device_keys: &DeviceKeys,
+) -> AgentResult<(u64, u64)> {
+    let (idle_started_at, previous_discarded): (String, i64) = conn.query_row(
+        "SELECT idle_started_at, discarded_seconds FROM idle_periods WHERE id = ?1",
+        [period_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
-    Ok(())
+
+    let resumed_at = chrono::Utc::now();
+    let total_discarded = chrono::DateTime::parse_from_rfc3339(&idle_started_at)
+        .ok()
+        .map(|start| {
+            resumed_at
+                .signed_duration_since(start.with_timezone(&chrono::Utc))
+                .num_seconds()
+                .max(0) as u64
+        })
+        .unwrap_or(previous_discarded.max(0) as u64);
+
+    let previous = previous_discarded.max(0) as u64;
+    let resumed_at_str = resumed_at.to_rfc3339();
+
+    conn.execute(
+        "UPDATE idle_periods SET resumed_at = ?1, duration_seconds = ?2,
+            discarded_seconds = ?2, updated_at = ?1
+         WHERE id = ?3",
+        params![resumed_at_str, total_discarded as i64, period_id],
+    )?;
+
+    let payload = serde_json::json!({
+        "idlePeriodId": period_id,
+        "resumedAt": resumed_at_str,
+        "discardedSeconds": total_discarded,
+        "durationSeconds": total_discarded,
+        "status": "resumed",
+    });
+    SyncOutbox::enqueue(conn, ENTITY_IDLE_PERIOD, period_id, payload, device_keys)?;
+
+    Ok((total_discarded, previous))
 }
 
 pub fn classify_idle_period_record(
