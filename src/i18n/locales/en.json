@@ -1,0 +1,67 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "hello": "Hello",
+    "call": "Call"
+  },
+  "auth": {
+    "tagline": "Sign in to track your Voowork.",
+    "email": "Email",
+    "emailPlaceholder": "my@email.com",
+    "password": "Password",
+    "signIn": "Sign in"
+  },
+  "profile": {
+    "menuLabel": "Profile menu",
+    "logout": "Sign out"
+  },
+  "timer": {
+    "clickToStart": "Click to start your work session",
+    "resume": "Resume",
+    "pause": "Pause",
+    "stopSession": "End session",
+    "startSession": "Start session",
+    "project": "Project",
+    "task": "Task",
+    "noTask": "No task",
+    "noProjects": "No assigned projects. Ask your manager for access or sync after signing in.",
+    "openWebPanel": "Open web dashboard"
+  },
+  "idle": {
+    "phase": {
+      "warning": "Warning",
+      "paused": "Paused",
+      "resume": "Resuming",
+      "active": "Active"
+    },
+    "noActivityTitle": "No activity detected",
+    "noActivityDescription": "Confirm that you are still working. Otherwise, the session will be paused automatically.",
+    "autoPauseIn": "Auto-pause in",
+    "stillWorking": "I'm still working",
+    "pausedTitle": "Session paused due to inactivity",
+    "pausedDescription": "Time is not being tracked. Return to your computer to resume.",
+    "returnedTitle": "You're back",
+    "returnedAway": "You were away for {{duration}}.",
+    "returnedPeriod": "That time",
+    "returnedSuffix": "in your session.",
+    "notCounted": "was not counted",
+    "continueWorking": "Continue working",
+    "manualWorkTitle": "Are you working?",
+    "manualWorkDescription": "We detected activity on your computer while the timer was paused. Resume tracking and count this time?",
+    "manualWorkConfirm": "Yes, I'm working",
+    "manualWorkDismiss": "No, stay paused",
+    "lessThanMinute": "less than 1 minute",
+    "minute_one": "1 minute",
+    "minute_other": "{{count}} minutes"
+  },
+  "theme": {
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme"
+  },
+  "language": {
+    "label": "Language",
+    "pt-BR": "Português",
+    "en": "English",
+    "es": "Español"
+  }
+}

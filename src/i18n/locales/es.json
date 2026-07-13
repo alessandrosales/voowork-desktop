@@ -1,0 +1,67 @@
+{
+  "common": {
+    "loading": "Cargando...",
+    "hello": "Hola",
+    "call": "Llamada"
+  },
+  "auth": {
+    "tagline": "Accede a tu cuenta Voowork.",
+    "email": "Correo electrónico",
+    "emailPlaceholder": "tu@email.com",
+    "password": "Contraseña",
+    "signIn": "Iniciar sesión"
+  },
+  "profile": {
+    "menuLabel": "Menú de perfil",
+    "logout": "Cerrar sesión"
+  },
+  "timer": {
+    "clickToStart": "Haz clic para iniciar tu sesión de trabajo",
+    "resume": "Reanudar",
+    "pause": "Pausar",
+    "stopSession": "Finalizar sesión",
+    "startSession": "Iniciar sesión",
+    "project": "Proyecto",
+    "task": "Tarea",
+    "noTask": "Sin tarea",
+    "noProjects": "No hay proyectos asignados. Pide acceso a tu gestor o sincroniza después de iniciar sesión.",
+    "openWebPanel": "Abrir panel web"
+  },
+  "idle": {
+    "phase": {
+      "warning": "Aviso",
+      "paused": "Pausado",
+      "resume": "Reanudando",
+      "active": "Activo"
+    },
+    "noActivityTitle": "Sin actividad detectada",
+    "noActivityDescription": "Confirma que sigues trabajando. De lo contrario, la sesión se pausará automáticamente.",
+    "autoPauseIn": "Pausa automática en",
+    "stillWorking": "Sigo trabajando",
+    "pausedTitle": "Sesión pausada por inactividad",
+    "pausedDescription": "El tiempo no se está contabilizando. Vuelve al ordenador para reanudar.",
+    "returnedTitle": "Has vuelto",
+    "returnedAway": "Estuviste ausente durante {{duration}}.",
+    "returnedPeriod": "Ese período",
+    "returnedSuffix": "en tu sesión.",
+    "notCounted": "no se contabilizó",
+    "continueWorking": "Seguir trabajando",
+    "manualWorkTitle": "¿Estás trabajando?",
+    "manualWorkDescription": "Detectamos actividad en tu ordenador mientras el temporizador estaba pausado. ¿Reanudar y contabilizar ese tiempo?",
+    "manualWorkConfirm": "Sí, estoy trabajando",
+    "manualWorkDismiss": "No, sigo pausado",
+    "lessThanMinute": "menos de 1 minuto",
+    "minute_one": "1 minuto",
+    "minute_other": "{{count}} minutos"
+  },
+  "theme": {
+    "switchToLight": "Activar tema claro",
+    "switchToDark": "Activar tema oscuro"
+  },
+  "language": {
+    "label": "Idioma",
+    "pt-BR": "Português",
+    "en": "English",
+    "es": "Español"
+  }
+}
