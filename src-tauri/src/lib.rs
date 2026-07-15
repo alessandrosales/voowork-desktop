@@ -1,43 +1,54 @@
 mod activity;
-mod app_focus;
+mod tracking_focus;
 mod app_state;
 mod auth;
-mod clock;
 mod commands;
 mod crypto;
 mod db;
 mod env;
 mod error;
-mod idle;
-mod integrity;
+mod icons;
+mod tracking_inactivity;
+mod locale;
 mod models;
 mod navigation;
-mod permissions;
 mod screenshot;
-mod seed;
-mod session;
 mod projects;
 mod sync;
+mod tracking;
 mod tray;
+mod windows;
 
 use app_state::AppState;
 use auth::{get_auth_state, login, logout, validate_auth_session};
 use commands::{
-    classify_idle_period, confirm_manual_work, confirm_still_working, dismiss_manual_work_check,
-    get_activity_chart, get_app_status, get_app_version, get_dashboard_summary, get_idle_config,
-    get_session_status, get_setting, get_tracking_capabilities, get_tracking_config,
-    list_activity_ticks, list_app_focus, list_projects, list_recent_sessions, list_screenshots,
-    list_sessions, list_sync_queue, open_data_directory, pause_session, resume_session,
-    set_setting, skip_idle_classification, start_session, stop_session, sync_projects,
+    classify_tracking_inactivity_period, confirm_manual_work, confirm_still_working, dismiss_activity_buffer,
+    dismiss_manual_work_check, get_activity_chart, get_app_status, get_app_version,
+    get_dashboard_summary, get_tracking_inactivity_config, get_tracking_screenshot_image, get_setting, get_task_elapsed_seconds,
+    get_tracking_capabilities, get_tracking_config, get_tracking_status, list_tracking_inactivity_periods,
+    list_tracking_peripheral_events, list_projects, list_sync_queue, list_tracking_apps,
+    list_tracking_screenshots, list_tracking_sites, list_trackings, open_data_directory, open_external_url,
+    open_web_panel, pause_tracking,
+    resume_tracking, restart_tracking, set_setting, skip_tracking_inactivity_classification, start_tracking, stop_tracking,
+    sync_projects,
 };
 use crypto::DeviceKeys;
 use db::Database;
 use navigation::external_navigation_plugin;
 use screenshot::ScreenshotCapture;
 use tauri::webview::PageLoadEvent;
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 use tauri_plugin_log::{Target, TargetKind};
-use tray::setup_tray;
+use tray::{handle_tray_menu_event, setup_tray_from_state, spawn_refresh_loop};
+use windows::{
+    begin_mini_widget_drag, open_main_window, reset_mini_widget_position, setup_windows,
+};
+
+use crate::tracking_inactivity::{
+    DEFAULT_INACTIVITY_THRESHOLD_MINUTES, SETTING_INACTIVITY_THRESHOLD_MINUTES,
+};
+use crate::tracking::{SCREENSHOT_BASE_INTERVAL_SECS, SETTING_SCREENSHOT_INTERVAL_SECS};
+use crate::screenshot::{SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY, DEFAULT_JPEG_QUALITY};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -58,6 +69,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(external_navigation_plugin())
+        .on_menu_event(|app, event| handle_tray_menu_event(app, event.id().as_ref()))
         .setup(|app| {
             let app_data_dir = dirs::data_dir()
                 .unwrap_or_else(std::env::temp_dir)
@@ -65,72 +77,89 @@ pub fn run() {
 
             let db = Database::open(app_data_dir.clone())?;
             let device_name = std::env::var("HOSTNAME").unwrap_or_else(|_| "voowork-device".into());
-            let device_keys = DeviceKeys::ensure(db.conn(), &device_name)?;
+            let _device_keys = DeviceKeys::ensure(db.conn(), &device_name)?;
 
+            // Default settings
             if db.get_setting("theme")?.is_none() {
                 db.set_setting("theme", "dark")?;
             }
-
             if db.get_setting("locale")?.is_none() {
-                db.set_setting("locale", "pt-BR")?;
+                db.set_setting("locale", locale::detect_system_locale())?;
             }
-
-            if db.get_setting(idle::SETTING_THRESHOLD_MINUTES)?.is_none() {
+            if db.get_setting(SETTING_INACTIVITY_THRESHOLD_MINUTES)?.is_none() {
                 db.set_setting(
-                    idle::SETTING_THRESHOLD_MINUTES,
-                    &idle::DEFAULT_IDLE_THRESHOLD_MINUTES.to_string(),
+                    SETTING_INACTIVITY_THRESHOLD_MINUTES,
+                    &DEFAULT_INACTIVITY_THRESHOLD_MINUTES.to_string(),
                 )?;
             }
-
-            seed::ensure_demo_data(&db)?;
+            if db.get_setting(SETTING_SCREENSHOT_INTERVAL_SECS)?.is_none() {
+                db.set_setting(SETTING_SCREENSHOT_INTERVAL_SECS, &SCREENSHOT_BASE_INTERVAL_SECS.to_string())?;
+            }
+            if db.get_setting(windows::SETTING_MINI_WIDGET_ENABLED)?.is_none() {
+                db.set_setting(windows::SETTING_MINI_WIDGET_ENABLED, "true")?;
+            }
 
             let screenshot_dir = app_data_dir.join("screenshots");
             let mut screenshot = ScreenshotCapture::new(screenshot_dir)?;
             let blur_enabled = db
-                .get_setting("screenshot_blur_enabled")?
+                .get_setting(SETTING_BLUR_ENABLED)?
                 .is_some_and(|v| v == "true" || v == "1");
             screenshot.set_blur(blur_enabled);
+            let jpeg_quality = db
+                .get_setting(SETTING_JPEG_QUALITY)?
+                .and_then(|value| value.parse::<u8>().ok())
+                .unwrap_or(DEFAULT_JPEG_QUALITY);
+            screenshot.set_jpeg_quality(jpeg_quality);
 
             let api_base_url = auth::configured_api_base_url();
             log::info!("Voowork API: {api_base_url}");
 
-            let state = AppState::new(db, device_keys, screenshot, app.handle().clone());
-            if let Ok(count) = state.session_manager.recover_orphaned_sessions() {
+            let state = AppState::new(db, _device_keys, screenshot, app.handle().clone());
+            if let Ok(count) = state.tracking_manager.initialize_session() {
                 if count > 0 {
-                    log::warn!("recovered {count} orphaned session(s) from previous run");
+                    log::warn!("discarded {count} orphaned tracking(s) from previous run");
                 }
             }
+            state.tracking_manager.set_app_handle(app.handle().clone());
+            let authenticated = {
+                let db = state.db.lock();
+                auth::read_auth_state(&db)?.is_authenticated
+            };
             state
-                .session_manager
-                .set_app_handle(app.handle().clone());
+                .tracking_manager
+                .set_session_authenticated(authenticated);
+            state.tracking_manager.start_background_services();
             app.manage(state);
 
-            setup_tray(app)?;
+            setup_tray_from_state(app)?;
+            spawn_refresh_loop(app.handle().clone());
+            setup_windows(app)?;
 
             if let Some(window) = app.get_webview_window("main") {
-                let window_clone = window.clone();
-                window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        let _ = window_clone.hide();
-                    }
-                });
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            } else {
+                log::error!("main window not found during setup");
             }
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            start_session,
-            stop_session,
-            pause_session,
-            resume_session,
-            get_session_status,
+            start_tracking,
+            restart_tracking,
+            pause_tracking,
+            resume_tracking,
+            stop_tracking,
+            get_tracking_status,
+            get_task_elapsed_seconds,
+            dismiss_activity_buffer,
             confirm_still_working,
             confirm_manual_work,
             dismiss_manual_work_check,
-            classify_idle_period,
-            skip_idle_classification,
-            get_idle_config,
+            classify_tracking_inactivity_period,
+            skip_tracking_inactivity_classification,
+            get_tracking_inactivity_config,
             get_app_status,
             get_setting,
             set_setting,
@@ -142,23 +171,54 @@ pub fn run() {
             validate_auth_session,
             get_dashboard_summary,
             get_activity_chart,
-            list_recent_sessions,
-            list_sessions,
-            list_activity_ticks,
-            list_screenshots,
+            list_trackings,
+            list_tracking_peripheral_events,
+            list_tracking_inactivity_periods,
+            list_tracking_screenshots,
+            get_tracking_screenshot_image,
             list_sync_queue,
+            list_tracking_apps,
+            list_tracking_sites,
             get_app_version,
             open_data_directory,
-            list_app_focus,
+            open_web_panel,
+            open_external_url,
             get_tracking_config,
             get_tracking_capabilities,
+            open_main_window,
+            begin_mini_widget_drag,
+            reset_mini_widget_position,
         ])
         .on_page_load(|webview, payload| {
-            if webview.label() == "main" && matches!(payload.event(), PageLoadEvent::Finished) {
-                log::info!("main webview finished loading");
-                let _ = webview.window().show();
+            if webview.label() != "main" {
+                return;
+            }
+
+            log::info!(
+                "main webview {:?} loading {}",
+                payload.event(),
+                payload.url()
+            );
+
+            if matches!(
+                payload.event(),
+                PageLoadEvent::Started | PageLoadEvent::Finished
+            ) {
+                let window = webview.window();
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let RunEvent::Exit = event {
+                if let Some(state) = app_handle.try_state::<AppState>() {
+                    if let Err(err) = state.tracking_manager.shutdown_for_quit() {
+                        log::error!("failed to reset tracking on exit: {err}");
+                    }
+                }
+            }
+        });
 }

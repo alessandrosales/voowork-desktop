@@ -1,4 +1,20 @@
+use super::constants::ACTIVITY_SCORE_THRESHOLD;
 use std::collections::VecDeque;
+
+/// Maps raw mouse/keyboard event counts to a 0–100 activity score for the interval.
+pub fn compute_activity_score(mouse: u64, keyboard: u64) -> u8 {
+    let combined = mouse.saturating_add(keyboard);
+    let score = combined
+        .saturating_mul(100)
+        .saturating_div(ACTIVITY_SCORE_THRESHOLD.max(1));
+    score.min(100) as u8
+}
+
+/// Applies anti-automation confidence as a multiplier on the raw score.
+pub fn apply_activity_confidence(score: u8, confidence: f64) -> u8 {
+    let adjusted = f64::from(score) * confidence.clamp(0.0, 1.0);
+    adjusted.round().clamp(0.0, 100.0) as u8
+}
 
 #[derive(Debug, Clone)]
 pub struct EventSample {
@@ -108,5 +124,38 @@ impl SampleBuffer {
         analyze_samples(
             &self.samples.iter().cloned().collect::<Vec<_>>(),
         )
+    }
+}
+
+#[cfg(test)]
+mod score_tests {
+    use super::*;
+
+    #[test]
+    fn zero_events_score_zero() {
+        assert_eq!(compute_activity_score(0, 0), 0);
+    }
+
+    #[test]
+    fn at_threshold_scores_100() {
+        assert_eq!(compute_activity_score(ACTIVITY_SCORE_THRESHOLD, 0), 100);
+        assert_eq!(compute_activity_score(250, 250), 100);
+    }
+
+    #[test]
+    fn above_threshold_clamps_to_100() {
+        assert_eq!(compute_activity_score(ACTIVITY_SCORE_THRESHOLD * 2, 0), 100);
+    }
+
+    #[test]
+    fn partial_activity_scales_linearly() {
+        assert_eq!(compute_activity_score(ACTIVITY_SCORE_THRESHOLD / 2, 0), 50);
+    }
+
+    #[test]
+    fn confidence_multiplies_score() {
+        assert_eq!(apply_activity_confidence(80, 0.5), 40);
+        assert_eq!(apply_activity_confidence(100, 0.1), 10);
+        assert_eq!(apply_activity_confidence(50, 1.0), 50);
     }
 }

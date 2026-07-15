@@ -1,0 +1,150 @@
+use crate::activity::ActivityTracker;
+use crate::tracking_focus::ActiveWindowSample;
+use crate::db::Database;
+use crate::tracking_inactivity::{TrackingInactivityController, TrackingInactivityPhase};
+use crate::screenshot::ScreenshotCapture;
+use parking_lot::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+use tauri::AppHandle;
+
+use super::capture::{
+    capture_screenshot, close_open_apps, close_open_sites, record_tracking_app_and_site,
+    screenshot_time_category,
+};
+use super::constants::{
+    load_screenshot_interval_secs, screenshot_interval_source_label, APP_FOCUS_POLL_SECS,
+};
+use super::inactivity_ui::handle_inactivity_phase_transition;
+use super::{ActiveTracking, TrackingTotals};
+
+pub(crate) struct TrackingWorkerContext {
+    pub worker_running: Arc<AtomicBool>,
+    pub active: Arc<Mutex<Option<ActiveTracking>>>,
+    pub tracker: Arc<Mutex<ActivityTracker>>,
+    pub db: Arc<Mutex<Database>>,
+    pub screenshot: Arc<Mutex<ScreenshotCapture>>,
+    pub totals: Arc<Mutex<TrackingTotals>>,
+    pub last_active_window: Arc<Mutex<Option<ActiveWindowSample>>>,
+    pub active_app_id: Arc<Mutex<Option<String>>>,
+    pub active_site_id: Arc<Mutex<Option<String>>>,
+    pub last_site_address: Arc<Mutex<Option<String>>>,
+    pub inactivity_controller: Arc<Mutex<Option<Arc<TrackingInactivityController>>>>,
+    pub app_handle: Arc<Mutex<Option<AppHandle>>>,
+}
+
+pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()> {
+    let TrackingWorkerContext {
+        worker_running,
+        active,
+        tracker,
+        db,
+        screenshot,
+        totals,
+        last_active_window,
+        active_app_id,
+        active_site_id,
+        last_site_address,
+        inactivity_controller,
+        app_handle,
+    } = ctx;
+
+    thread::spawn(move || {
+        let mut screenshot_elapsed = Duration::ZERO;
+        let mut tracking_focus_elapsed = Duration::ZERO;
+        let tracking_focus_interval = Duration::from_secs(APP_FOCUS_POLL_SECS);
+        let screenshot_base_interval = {
+            let db_guard = db.lock();
+            load_screenshot_interval_secs(db_guard.conn())
+        };
+        log::info!(
+            "screenshot capture interval: {screenshot_base_interval}s from {}",
+            screenshot_interval_source_label()
+        );
+        let screenshot_interval = Duration::from_secs(screenshot_base_interval);
+        let mut period_start = chrono::Utc::now().to_rfc3339();
+
+        while worker_running.load(Ordering::SeqCst) {
+            thread::sleep(Duration::from_secs(1));
+            screenshot_elapsed += Duration::from_secs(1);
+            tracking_focus_elapsed += Duration::from_secs(1);
+
+            let tracking = active.lock().clone();
+            let Some(tracking) = tracking else {
+                break;
+            };
+
+            if tracking_focus_elapsed >= tracking_focus_interval {
+                tracking_focus_elapsed = Duration::ZERO;
+                if let Err(err) = record_tracking_app_and_site(
+                    &db,
+                    &tracking,
+                    &last_active_window,
+                    &active_app_id,
+                    &active_site_id,
+                    &last_site_address,
+                    &inactivity_controller,
+                ) {
+                    log::warn!("failed to record tracking app/site focus: {err}");
+                }
+            }
+
+            let inactivity_transition = if let Some(idle_ctrl) = inactivity_controller.lock().clone() {
+                let phase_before = idle_ctrl.snapshot().phase;
+                let tick_result = {
+                    let db_guard = db.lock();
+                    idle_ctrl.tick(db_guard.conn(), &tracking.tracking_id)
+                };
+                if let Err(err) = tick_result {
+                    log::warn!("idle tick failed: {err}");
+                    None
+                } else if phase_before != idle_ctrl.snapshot().phase {
+                    Some((phase_before, idle_ctrl.snapshot().phase))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let (Some(app), Some((before, after))) =
+                (app_handle.lock().clone(), inactivity_transition)
+            {
+                handle_inactivity_phase_transition(&app, before, after);
+            }
+
+            if screenshot_elapsed >= screenshot_interval {
+                screenshot_elapsed = Duration::ZERO;
+                let screenshot_phase = inactivity_controller
+                    .lock()
+                    .clone()
+                    .map(|ctrl| ctrl.snapshot().phase)
+                    .unwrap_or(TrackingInactivityPhase::Active);
+                let time_category = screenshot_time_category(screenshot_phase);
+                match capture_screenshot(
+                    &db,
+                    &screenshot,
+                    &tracker,
+                    &totals,
+                    &tracking,
+                    &period_start,
+                    time_category,
+                ) {
+                    Ok(record) => {
+                        period_start = record.captured_at.clone();
+                        if let Some(active_tracking) = active.lock().as_mut() {
+                            active_tracking.last_screenshot_at = Some(record.captured_at.clone());
+                            active_tracking.current_period_start = record.captured_at;
+                        }
+                    }
+                    Err(err) => log::warn!("screenshot capture failed: {err}"),
+                }
+            }
+        }
+
+        let _ = close_open_apps(&db, &active_app_id);
+        let _ = close_open_sites(&db, &active_site_id, &last_site_address);
+    })
+}

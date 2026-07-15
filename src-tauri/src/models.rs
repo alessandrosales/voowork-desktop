@@ -2,44 +2,49 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionStatus {
+pub struct TrackingStatus {
     pub active: bool,
-    pub session_id: Option<String>,
+    pub tracking_id: Option<String>,
     pub project_id: Option<String>,
     pub task_id: Option<String>,
     pub started_at: Option<String>,
     pub elapsed_seconds: u64,
+    pub inactivity_seconds: u64,
+    pub task_accumulated_seconds: u64,
+    pub activity_buffer_seconds: u64,
+    pub activity_buffer_alert: bool,
     pub mouse_events: u64,
     pub keyboard_events: u64,
     pub clock_skew_detected: bool,
     pub activity_confidence: f64,
+    pub activity_score: u8,
     pub tracker_mode: Option<String>,
     pub current_app: Option<String>,
     pub current_window_title: Option<String>,
     pub screenshot_count: u64,
     pub last_screenshot_at: Option<String>,
-    pub idle: IdleStatus,
+    pub inactivity: TrackingInactivityStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct IdleStatus {
+pub struct TrackingInactivityStatus {
     pub phase: String,
     pub threshold_secs: u64,
     pub countdown_secs: u64,
     pub countdown_remaining_secs: Option<u64>,
     pub countdown_ends_at: Option<String>,
-    pub idle_started_at: Option<String>,
+    pub inactivity_started_at: Option<String>,
     pub paused_at: Option<String>,
     pub away_seconds: Option<u64>,
     pub pending_period_id: Option<String>,
     pub meeting_exempt: bool,
     pub active_seconds: u64,
-    pub idle_discarded_seconds: u64,
-    pub idle_reclassified_seconds: u64,
+    pub inactivity_discarded_seconds: u64,
+    pub inactivity_reclassified_seconds: u64,
 }
 
-impl Default for IdleStatus {
+impl Default for TrackingInactivityStatus {
     fn default() -> Self {
         Self {
             phase: "active".into(),
@@ -47,21 +52,21 @@ impl Default for IdleStatus {
             countdown_secs: 60,
             countdown_remaining_secs: None,
             countdown_ends_at: None,
-            idle_started_at: None,
+            inactivity_started_at: None,
             paused_at: None,
             away_seconds: None,
             pending_period_id: None,
             meeting_exempt: false,
             active_seconds: 0,
-            idle_discarded_seconds: 0,
-            idle_reclassified_seconds: 0,
+            inactivity_discarded_seconds: 0,
+            inactivity_reclassified_seconds: 0,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct IdleConfig {
+pub struct TrackingInactivityConfig {
     pub threshold_minutes: u64,
     pub profile: String,
     pub countdown_secs: u64,
@@ -69,7 +74,7 @@ pub struct IdleConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ClassifyIdleRequest {
+pub struct ClassifyTrackingInactivityRequest {
     pub period_id: String,
     pub category: String,
 }
@@ -77,7 +82,7 @@ pub struct ClassifyIdleRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppStatus {
-    pub session: SessionStatus,
+    pub tracking: TrackingStatus,
     pub sync_pending: i64,
     pub sync_failed: i64,
     pub sync_confirmed: i64,
@@ -87,15 +92,15 @@ pub struct AppStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StartSessionRequest {
+pub struct StartTrackingRequest {
     pub project_id: String,
-    pub task_id: Option<String>,
+    pub task_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StartSessionResponse {
-    pub session_id: String,
+pub struct StartTrackingResponse {
+    pub tracking_id: String,
     pub started_at: String,
 }
 
@@ -116,7 +121,7 @@ pub struct TaskOption {
 #[serde(rename_all = "camelCase")]
 pub struct DashboardSummary {
     pub hours_today_seconds: u64,
-    pub sessions_today: i64,
+    pub trackings_today: i64,
     pub avg_activity_confidence: f64,
     pub sync_pending: i64,
     pub sync_confirmed: i64,
@@ -132,12 +137,12 @@ pub struct ActivityChartPoint {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionRow {
+pub struct TrackingRow {
     pub id: String,
     pub project_id: String,
     pub project_name: String,
-    pub task_id: Option<String>,
-    pub task_name: Option<String>,
+    pub task_id: String,
+    pub task_name: String,
     pub started_at: String,
     pub ended_at: Option<String>,
     pub duration_seconds: Option<u64>,
@@ -147,31 +152,62 @@ pub struct SessionRow {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ActivityTickRow {
+pub struct TrackingInactivityPeriodRow {
     pub id: String,
-    pub session_id: String,
-    pub bucket_start: String,
-    pub bucket_end: String,
-    pub mouse_events: i64,
-    pub keyboard_events: i64,
-    pub activity_score_confidence: f64,
-    pub record_hash: String,
+    pub tracking_id: String,
+    pub inactivity_started_at: String,
+    pub paused_at: Option<String>,
+    pub resumed_at: Option<String>,
+    pub duration_seconds: u64,
+    pub discarded_seconds: u64,
+    pub reclassified_seconds: u64,
+    pub category: Option<String>,
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ScreenshotRow {
+pub struct TrackingPeripheralEventRow {
     pub id: String,
-    pub user_id: Option<String>,
-    pub project_id: Option<String>,
-    pub task_id: Option<String>,
-    pub session_id: String,
+    pub tracking_id: String,
+    pub event: String,
+    pub count: f64,
+    pub screenshot_original_id: Option<String>,
+    pub started_at: String,
+    pub ended_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackingScreenshotRow {
+    pub id: String,
+    pub tracking_id: String,
+    pub original_id: String,
     pub captured_at: String,
-    pub sha256_hash: String,
-    pub width: Option<i64>,
-    pub height: Option<i64>,
-    pub blur_applied: bool,
+    pub path: String,
+    pub remote_path: Option<String>,
+    pub synced_at: Option<String>,
     pub sync_status: String,
+    pub has_local_file: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct TrackingScreenshotAccess {
+    #[allow(dead_code)]
+    pub id: String,
+    pub tracking_id: String,
+    pub path: String,
+    #[allow(dead_code)]
+    pub remote_path: Option<String>,
+    pub synced_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackingScreenshotImage {
+    pub source: String,
+    pub file_path: Option<String>,
+    pub download_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,26 +224,30 @@ pub struct SyncQueueRow {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AppFocusRow {
+pub struct TrackingSiteRow {
     pub id: String,
-    pub session_id: String,
-    pub app_name: String,
-    pub window_title: Option<String>,
-    pub process_path: Option<String>,
-    pub process_id: Option<i64>,
-    pub captured_at: String,
+    pub tracking_id: String,
+    pub address: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackingAppRow {
+    pub id: String,
+    pub tracking_id: String,
+    pub name: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackingConfig {
-    pub activity_tick_interval_secs: u64,
-    pub first_activity_tick_secs: u64,
-    pub first_screenshot_secs: u64,
-    pub screenshot_base_interval_secs: u64,
-    pub screenshot_jitter_secs: u64,
-    pub app_focus_poll_interval_secs: u64,
-    pub idle: IdleConfig,
+    pub screenshot_interval_secs: u64,
+    pub active_window_poll_interval_secs: u64,
+    pub inactivity: TrackingInactivityConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,16 +1,16 @@
-use crate::auth;
 use crate::crypto::DeviceKeys;
 use crate::db::Database;
 use crate::screenshot::ScreenshotCapture;
-use crate::session::SessionManager;
 use crate::sync::worker::SyncWorker;
+use crate::tracking::TrackingManager;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tauri::AppHandle;
 
+#[derive(Clone)]
 pub struct AppState {
     pub db: Arc<Mutex<Database>>,
-    pub session_manager: Arc<SessionManager>,
+    pub tracking_manager: Arc<TrackingManager>,
     pub api_base_url: String,
 }
 
@@ -23,12 +23,12 @@ impl AppState {
     ) -> Self {
         let db = Arc::new(Mutex::new(db));
         let device_keys = Arc::new(device_keys);
-        let session_manager = Arc::new(SessionManager::new(
+        let tracking_manager = Arc::new(TrackingManager::new(
             Arc::clone(&db),
             Arc::clone(&device_keys),
             screenshot,
         ));
-        let api_base_url = auth::configured_api_base_url();
+        let api_base_url = crate::auth::configured_api_base_url();
         let sync_worker = Arc::new(SyncWorker::new(api_base_url.clone()));
         if sync_worker.is_enabled() {
             sync_worker.clone().start(Arc::clone(&db), app);
@@ -39,7 +39,7 @@ impl AppState {
 
         Self {
             db,
-            session_manager,
+            tracking_manager,
             api_base_url,
         }
     }

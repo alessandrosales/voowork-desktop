@@ -1,6 +1,6 @@
+/// Combined mouse+keyboard events in a screenshot interval that map to activity score 100.
+pub const ACTIVITY_SCORE_THRESHOLD: u64 = 500;
+
 pub const SAMPLE_BUFFER_CAPACITY: usize = 32;
 pub const MAX_MOUSE_POSITIONS: usize = 20;
-pub const HARDWARE_PROBE_SECS: u64 = 2;
 pub const HARDWARE_LISTENER_POLL_MS: u64 = 200;
-pub const SIMULATED_TICK_MS: u64 = 800;
-pub const SIMULATED_CONFIDENCE: f64 = 0.85;

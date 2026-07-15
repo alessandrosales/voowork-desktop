@@ -17,10 +17,7 @@ pub enum AgentError {
     #[error("session error: {0}")]
     Session(String),
 
-    #[error("crypto error: {0}")]
-    Crypto(String),
-
-    #[error("auth error: {0}")]
+    #[error("{0}")]
     Auth(String),
 
     #[error("{0}")]

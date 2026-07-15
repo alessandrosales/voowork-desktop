@@ -1,8 +1,5 @@
 use super::automation::SampleBuffer;
-use super::constants::{
-    HARDWARE_LISTENER_POLL_MS, HARDWARE_PROBE_SECS, MAX_MOUSE_POSITIONS,
-    SAMPLE_BUFFER_CAPACITY, SIMULATED_CONFIDENCE, SIMULATED_TICK_MS,
-};
+use super::constants::{HARDWARE_LISTENER_POLL_MS, MAX_MOUSE_POSITIONS, SAMPLE_BUFFER_CAPACITY};
 use parking_lot::Mutex;
 use rdev::{listen, Event, EventType, Key};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,7 +10,6 @@ use std::time::{Duration, Instant};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackerMode {
     Hardware,
-    Simulated,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -40,7 +36,7 @@ impl ActivityTracker {
         Self {
             running: Arc::new(AtomicBool::new(false)),
             bucket: Arc::new(Mutex::new(ActivityBucket::default())),
-            mode: Arc::new(Mutex::new(TrackerMode::Simulated)),
+            mode: Arc::new(Mutex::new(TrackerMode::Hardware)),
             last_input_at: Arc::new(Mutex::new(now)),
             last_input_wall_at: Arc::new(Mutex::new(chrono::Utc::now().to_rfc3339())),
             handle: None,
@@ -71,7 +67,7 @@ impl ActivityTracker {
 
         self.running.store(true, Ordering::SeqCst);
         *self.bucket.lock() = ActivityBucket::default();
-        *self.mode.lock() = TrackerMode::Simulated;
+        *self.mode.lock() = TrackerMode::Hardware;
         Self::touch_input(&self.last_input_at, &self.last_input_wall_at);
 
         let running = Arc::clone(&self.running);
@@ -81,16 +77,11 @@ impl ActivityTracker {
         let last_input_wall_at = Arc::clone(&self.last_input_wall_at);
 
         let handle = thread::spawn(move || {
-            let hardware_used = Arc::new(AtomicBool::new(false));
-            let hw_flag = Arc::clone(&hardware_used);
-            let bucket_hw = Arc::clone(&bucket);
             let running_hw = Arc::clone(&running);
-            let running_wait = Arc::clone(&running);
+            let bucket_hw = Arc::clone(&bucket);
             let mode_hw = Arc::clone(&mode);
             let last_input_at_hw = Arc::clone(&last_input_at);
             let last_input_wall_at_hw = Arc::clone(&last_input_wall_at);
-            let running_sim = Arc::clone(&running);
-            let bucket_sim = Arc::clone(&bucket);
 
             let _hw_thread = thread::spawn(move || {
                 let mut sample_buffer = SampleBuffer::new(SAMPLE_BUFFER_CAPACITY);
@@ -98,37 +89,23 @@ impl ActivityTracker {
                     if !running_hw.load(Ordering::SeqCst) {
                         return;
                     }
-                    hw_flag.store(true, Ordering::SeqCst);
                     *mode_hw.lock() = TrackerMode::Hardware;
                     ActivityTracker::touch_input(&last_input_at_hw, &last_input_wall_at_hw);
                     handle_event(&bucket_hw, &mut sample_buffer, event);
                 });
-                if result.is_err() {
-                    log::warn!("rdev listen failed: {:?}", result);
+                if let Err(err) = result {
+                    log::error!(
+                        "rdev listen failed: {err:?}. Mouse/keyboard capture requires Linux input group access (sudo usermod -aG input $USER)."
+                    );
                 }
             });
 
-            thread::sleep(Duration::from_secs(HARDWARE_PROBE_SECS));
-            if !hardware_used.load(Ordering::SeqCst) {
-                log::info!("hardware tracker unavailable, using simulated mode");
-                simulated_listener(running_sim, bucket_sim);
-            } else {
-                // Keep the listener alive until running=false; don't join a blocking rdev thread.
-                while running_wait.load(Ordering::SeqCst) {
-                    thread::sleep(Duration::from_millis(HARDWARE_LISTENER_POLL_MS));
-                }
+            while running.load(Ordering::SeqCst) {
+                thread::sleep(Duration::from_millis(HARDWARE_LISTENER_POLL_MS));
             }
         });
 
         self.handle = Some(handle);
-    }
-
-    pub fn stop(&mut self) {
-        self.running.store(false, Ordering::SeqCst);
-        // rdev::listen blocks indefinitely — detach instead of joining to avoid freezing stop_session.
-        if let Some(handle) = self.handle.take() {
-            drop(handle);
-        }
     }
 
     pub fn drain_bucket(&self) -> ActivityBucket {
@@ -164,27 +141,6 @@ fn handle_event(bucket: &Arc<Mutex<ActivityBucket>>, sample_buffer: &mut SampleB
     let analysis = sample_buffer.analyze();
     guard.confidence = analysis.confidence;
     guard.automation_flags = analysis.flags;
-}
-
-fn simulated_listener(running: Arc<AtomicBool>, bucket: Arc<Mutex<ActivityBucket>>) {
-    let mut rng_state = 0u64;
-    while running.load(Ordering::SeqCst) {
-        thread::sleep(Duration::from_millis(SIMULATED_TICK_MS));
-        rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1);
-
-        let mut guard = bucket.lock();
-        if rng_state % 3 == 0 {
-            guard.keyboard_events += 1;
-        } else {
-            guard.mouse_events += 1;
-            let x = (rng_state % 1920) as f64;
-            let y = ((rng_state >> 16) % 1080) as f64;
-            if guard.positions.len() < MAX_MOUSE_POSITIONS {
-                guard.positions.push((x, y));
-            }
-        }
-        guard.confidence = SIMULATED_CONFIDENCE;
-    }
 }
 
 fn is_modifier_key(key: Key) -> bool {

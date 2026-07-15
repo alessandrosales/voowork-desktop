@@ -1,43 +1,52 @@
-use crate::clock::system_time_millis;
 use crate::crypto::DeviceKeys;
 use crate::error::{guard_native, AgentError, AgentResult};
 use chrono::{SecondsFormat, Utc};
 use rusqlite::{params, Connection};
+use std::io::Cursor;
 use std::path::PathBuf;
 use uuid::Uuid;
 
 mod constants;
+mod process;
+mod remote;
+mod storage;
 
-use constants::{JITTER_RANGE_SECS, JITTER_SECS, SCREENSHOT_FILE_EXTENSION};
+pub use constants::{
+    DEFAULT_JPEG_QUALITY, SCREENSHOT_FILE_EXTENSION, SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY,
+};
+pub use process::normalize_jpeg_quality;
+pub use remote::resolve_screenshot_image;
+pub use storage::upload_capture;
 
+use process::process_capture_bytes;
+use std::path::Path;
+
+/// Captura o monitor que contém o centro da janela ativa (`Monitor::from_point`).
+/// Fallback: monitor primário, depois o primeiro disponível.
 pub struct ScreenshotCapture {
     output_dir: PathBuf,
     blur_enabled: bool,
+    jpeg_quality: u8,
 }
 
 #[derive(Debug, Clone)]
-pub struct ScreenshotCaptureContext<'a> {
-    pub user_id: &'a str,
-    pub project_id: &'a str,
-    pub task_id: Option<&'a str>,
-    pub session_id: &'a str,
-    pub activity_tick_id: Option<&'a str>,
+pub struct TrackingScreenshotCaptureContext<'a> {
+    pub tracking_id: &'a str,
+    pub period_start: &'a str,
+    pub time_category: &'a str,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ScreenshotRecord {
+pub struct TrackingScreenshotRecord {
     pub id: String,
-    pub user_id: String,
-    pub project_id: String,
-    pub task_id: Option<String>,
-    pub session_id: String,
+    pub tracking_id: String,
+    pub original_id: String,
     pub file_path: String,
     pub sha256_hash: String,
     pub width: i32,
     pub height: i32,
     pub captured_at: String,
-    pub activity_tick_id: Option<String>,
     pub blur_applied: bool,
 }
 
@@ -47,6 +56,7 @@ impl ScreenshotCapture {
         Ok(Self {
             output_dir,
             blur_enabled: false,
+            jpeg_quality: DEFAULT_JPEG_QUALITY,
         })
     }
 
@@ -54,81 +64,80 @@ impl ScreenshotCapture {
         self.blur_enabled = enabled;
     }
 
+    pub fn set_jpeg_quality(&mut self, quality: u8) {
+        self.jpeg_quality = normalize_jpeg_quality(quality);
+    }
+
     pub fn capture_pixels(&self) -> AgentResult<(i32, i32, Vec<u8>)> {
-        capture_screen_bytes()
+        capture_screen_png()
     }
 
     pub fn persist_capture(
         &self,
         conn: &Connection,
-        context: &ScreenshotCaptureContext<'_>,
+        context: &TrackingScreenshotCaptureContext<'_>,
         width: i32,
         height: i32,
         image_bytes: &[u8],
-    ) -> AgentResult<ScreenshotRecord> {
+    ) -> AgentResult<TrackingScreenshotRecord> {
         let id = Uuid::new_v4().to_string();
+        let original_id = id.clone();
         let captured_at = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
         let file_name = format!("{id}.{SCREENSHOT_FILE_EXTENSION}");
         let file_path = self.output_dir.join(&file_name);
 
-        let sha256_hash = DeviceKeys::hash_bytes(image_bytes);
-        let stored_bytes = if self.blur_enabled {
-            apply_blur_placeholder(image_bytes)
-        } else {
-            image_bytes.to_vec()
-        };
+        let (stored_width, stored_height, stored_bytes) =
+            process_capture_bytes(image_bytes, self.blur_enabled, self.jpeg_quality)?;
+        let width = if stored_width > 0 { stored_width } else { width };
+        let height = if stored_height > 0 { stored_height } else { height };
 
-        std::fs::write(&file_path, &stored_bytes)?;
+        let sha256_hash = DeviceKeys::hash_bytes(&stored_bytes);
 
-        let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        // Write DB record FIRST, then file. This way if the process crashes
+        // between the two operations, the orphan record has no matching file
+        // (harmless) rather than the reverse (an orphan file with no DB
+        // record that would never be cleaned up).
+        let now = captured_at.clone();
         conn.execute(
-            "INSERT INTO screenshots (
-                id, user_id, project_id, task_id, session_id, file_path, sha256_hash,
-                width, height, captured_at, activity_tick_id, blur_applied, created_at
+            "INSERT INTO tracking_screenshots (
+                id, path, tracking_id, original_id, captured_at,
+                period_started_at, time_category, created_at, updated_at
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
             params![
                 id,
-                context.user_id,
-                context.project_id,
-                context.task_id,
-                context.session_id,
                 file_path.to_string_lossy().to_string(),
-                sha256_hash,
-                width,
-                height,
+                context.tracking_id,
+                original_id,
                 captured_at,
-                context.activity_tick_id,
-                if self.blur_enabled { 1 } else { 0 },
+                context.period_start,
+                context.time_category,
                 now
             ],
         )?;
 
-        Ok(ScreenshotRecord {
+        // File write AFTER DB insert — if it fails, the DB record is a
+        // harmless orphan (path points to a non-existent file) and the
+        // sync worker will handle the error gracefully.
+        std::fs::write(&file_path, &stored_bytes)?;
+
+        Ok(TrackingScreenshotRecord {
             id,
-            user_id: context.user_id.to_string(),
-            project_id: context.project_id.to_string(),
-            task_id: context.task_id.map(str::to_string),
-            session_id: context.session_id.to_string(),
+            tracking_id: context.tracking_id.to_string(),
+            original_id,
             file_path: file_path.to_string_lossy().to_string(),
             sha256_hash,
             width,
             height,
             captured_at,
-            activity_tick_id: context.activity_tick_id.map(str::to_string),
             blur_applied: self.blur_enabled,
         })
     }
 }
 
-fn capture_screen_bytes() -> AgentResult<(i32, i32, Vec<u8>)> {
+fn capture_screen_png() -> AgentResult<(i32, i32, Vec<u8>)> {
     guard_native("screenshot", || {
-        let monitors = xcap::Monitor::all().map_err(|e| AgentError::Other(e.to_string()))?;
-        let monitor = monitors
-            .into_iter()
-            .next()
-            .ok_or_else(|| AgentError::Other("no monitor found".into()))?;
-
+        let monitor = select_capture_monitor()?;
         let image = monitor
             .capture_image()
             .map_err(|e| AgentError::Other(e.to_string()))?;
@@ -136,7 +145,7 @@ fn capture_screen_bytes() -> AgentResult<(i32, i32, Vec<u8>)> {
         let height = image.height() as i32;
 
         let mut png_bytes: Vec<u8> = Vec::new();
-        let mut cursor = std::io::Cursor::new(&mut png_bytes);
+        let mut cursor = Cursor::new(&mut png_bytes);
         image
             .write_to(&mut cursor, xcap::image::ImageFormat::Png)
             .map_err(|e| AgentError::Other(e.to_string()))?;
@@ -145,12 +154,52 @@ fn capture_screen_bytes() -> AgentResult<(i32, i32, Vec<u8>)> {
     })
 }
 
-fn apply_blur_placeholder(data: &[u8]) -> Vec<u8> {
-    // v1 skeleton: blur real implementation deferred; hash still computed on original bytes
-    data.to_vec()
+fn select_capture_monitor() -> AgentResult<xcap::Monitor> {
+    if let Ok(window) = active_win_pos_rs::get_active_window() {
+        let center_x = (window.position.x + window.position.width / 2.0) as i32;
+        let center_y = (window.position.y + window.position.height / 2.0) as i32;
+        if let Ok(monitor) = xcap::Monitor::from_point(center_x, center_y) {
+            return Ok(monitor);
+        }
+    }
+
+    let monitors = xcap::Monitor::all().map_err(|e| AgentError::Other(e.to_string()))?;
+    monitors
+        .iter()
+        .find(|monitor| monitor.is_primary().unwrap_or(false))
+        .or(monitors.first())
+        .cloned()
+        .ok_or_else(|| AgentError::Other("no monitor found".into()))
 }
 
-pub fn random_interval_secs(base_secs: u64) -> u64 {
-    let jitter = (system_time_millis() % JITTER_RANGE_SECS) as u64;
-    base_secs + jitter % JITTER_SECS
+pub fn cache_dir_for_db(db_path: &Path) -> PathBuf {
+    db_path
+        .parent()
+        .map(|dir| dir.join("screenshots").join("cache"))
+        .unwrap_or_else(|| PathBuf::from("screenshots/cache"))
+}
+
+pub fn cache_file_path(db_path: &Path, screenshot_id: &str) -> PathBuf {
+    cache_dir_for_db(db_path).join(format!("{screenshot_id}.{SCREENSHOT_FILE_EXTENSION}"))
+}
+
+pub fn purge_local_file(path: &str) -> AgentResult<()> {
+    let file = Path::new(path);
+    if !file.is_file() {
+        return Ok(());
+    }
+
+    let parent = file
+        .parent()
+        .and_then(|dir| dir.file_name())
+        .and_then(|name| name.to_str());
+    if parent != Some("screenshots") {
+        return Err(AgentError::Other(format!(
+            "refusing to delete screenshot outside screenshots dir: {path}"
+        )));
+    }
+
+    std::fs::remove_file(file)?;
+    log::info!("purged local screenshot {path}");
+    Ok(())
 }
