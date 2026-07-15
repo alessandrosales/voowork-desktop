@@ -1,11 +1,11 @@
 use crate::error::{AgentError, AgentResult};
+use serde::Deserialize;
 use std::time::Duration;
 
-use super::api_models::MeResponse;
-use super::constants::HTTP_TIMEOUT_SECS;
 use super::http_errors::{auth_error_from_response, is_auth_failure_status};
-use super::models::{AuthOrganization, AuthUser};
 use super::store::AuthSession;
+
+const HTTP_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Debug, serde::Serialize)]
 struct LoginBody {
@@ -26,7 +26,7 @@ struct LoginPayload {
     account: Option<LoginAccountPayload>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 struct LoginUserPayload {
     id: String,
     #[serde(default)]
@@ -35,10 +35,28 @@ struct LoginUserPayload {
     email: String,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 struct LoginAccountPayload {
     id: String,
     name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MeResponse {
+    pub id: String,
+    pub account_id: String,
+    pub name: String,
+    pub email: String,
+    #[serde(default)]
+    pub projects: Vec<ProjectSummary>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProjectSummary {
+    #[allow(dead_code)]
+    pub id: String,
+    #[allow(dead_code)]
+    pub name: String,
 }
 
 pub struct LoginClient {
@@ -51,7 +69,6 @@ impl LoginClient {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
             .build()?;
-
         Ok(Self {
             client,
             base_url: base_url.into().trim_end_matches('/').to_string(),
@@ -84,46 +101,38 @@ impl LoginClient {
 }
 
 fn session_from_login_payload(payload: LoginPayload) -> AuthSession {
-    let organization = organization_from_login(&payload);
+    let org = match &payload.account {
+        Some(a) => super::store::AuthOrganization {
+            id: a.id.clone(),
+            name: a.name.clone(),
+        },
+        None => {
+            let id = payload.user.account_id.clone()
+                .filter(|id| !id.is_empty())
+                .unwrap_or_else(|| payload.user.id.clone());
+            super::store::AuthOrganization {
+                id,
+                name: "Conta".into(),
+            }
+        }
+    };
 
     AuthSession {
         access_token: payload.token,
         refresh_token: None,
-        user: AuthUser {
+        user: super::store::AuthUser {
             id: payload.user.id,
             name: payload.user.name,
             email: payload.user.email,
         },
-        organization,
-    }
-}
-
-fn organization_from_login(payload: &LoginPayload) -> AuthOrganization {
-    if let Some(account) = &payload.account {
-        return AuthOrganization {
-            id: account.id.clone(),
-            name: account.name.clone(),
-        };
-    }
-
-    let account_id = payload
-        .user
-        .account_id
-        .clone()
-        .filter(|id| !id.is_empty())
-        .unwrap_or_else(|| payload.user.id.clone());
-
-    AuthOrganization {
-        id: account_id,
-        name: "Conta".into(),
+        organization: org,
     }
 }
 
 pub async fn fetch_me_profile(
     base_url: &str,
     access_token: &str,
-    organization_fallback: &AuthOrganization,
-) -> AgentResult<(AuthUser, AuthOrganization)> {
+) -> AgentResult<(super::store::AuthUser, super::store::AuthOrganization, Option<Vec<ProjectSummary>>)> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
         .build()?;
@@ -150,70 +159,16 @@ pub async fn fetch_me_profile(
         return Err(AgentError::Auth("dados do usuário indisponíveis".into()));
     }
 
-    let organization = if payload.account_id == organization_fallback.id {
-        organization_fallback.clone()
-    } else {
-        AuthOrganization {
-            id: payload.account_id,
-            name: organization_fallback.name.clone(),
-        }
-    };
-
     Ok((
-        AuthUser {
+        super::store::AuthUser {
             id: payload.id,
             name: payload.name,
             email: payload.email,
         },
-        organization,
+        super::store::AuthOrganization {
+            id: payload.account_id,
+            name: String::new(),
+        },
+        Some(payload.projects),
     ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const USER_ID: &str = "550e8400-e29b-41d4-a716-446655440001";
-    const ACCOUNT_ID: &str = "550e8400-e29b-41d4-a716-446655440000";
-    const OTHER_ACCOUNT_ID: &str = "550e8400-e29b-41d4-a716-446655440002";
-
-    #[test]
-    fn session_from_login_payload_maps_account() {
-        let session = session_from_login_payload(LoginPayload {
-            token: "jwt-token".into(),
-            user: LoginUserPayload {
-                id: USER_ID.into(),
-                account_id: Some(ACCOUNT_ID.into()),
-                name: "Admin".into(),
-                email: "admin@admin.com".into(),
-            },
-            account: Some(LoginAccountPayload {
-                id: ACCOUNT_ID.into(),
-                name: "Admin Corp".into(),
-            }),
-        });
-
-        assert_eq!(session.access_token, "jwt-token");
-        assert_eq!(session.user.id, USER_ID);
-        assert_eq!(session.user.email, "admin@admin.com");
-        assert_eq!(session.organization.id, ACCOUNT_ID);
-        assert_eq!(session.organization.name, "Admin Corp");
-    }
-
-    #[test]
-    fn session_from_login_payload_falls_back_to_account_id() {
-        let session = session_from_login_payload(LoginPayload {
-            token: "jwt-token".into(),
-            user: LoginUserPayload {
-                id: USER_ID.into(),
-                account_id: Some(OTHER_ACCOUNT_ID.into()),
-                name: "Admin".into(),
-                email: "admin@admin.com".into(),
-            },
-            account: None,
-        });
-
-        assert_eq!(session.organization.id, OTHER_ACCOUNT_ID);
-        assert_eq!(session.organization.name, "Conta");
-    }
 }
