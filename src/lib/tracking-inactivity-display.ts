@@ -5,7 +5,7 @@ export function idlePhaseLabel(phase: string, t: TFunction) {
     case "warning":
     case "countdown":
       return t("idle.phase.warning")
-    case "paused_idle":
+    case "paused_inactivity":
     case "manual_paused":
     case "manual_work_check":
       return t("idle.phase.paused")
@@ -21,7 +21,7 @@ export function idlePhaseClassName(phase: string) {
     case "warning":
     case "countdown":
       return "voowork-live-pill--warning"
-    case "paused_idle":
+    case "paused_inactivity":
     case "manual_paused":
     case "manual_work_check":
       return "voowork-live-pill--paused"
@@ -32,6 +32,9 @@ export function idlePhaseClassName(phase: string) {
   }
 }
 
+export const trackingInactivityPhaseLabel = idlePhaseLabel
+export const trackingInactivityPhaseClassName = idlePhaseClassName
+
 export function timerRingClassName(phase: string, active: boolean) {
   if (!active) {
     return ""
@@ -40,7 +43,7 @@ export function timerRingClassName(phase: string, active: boolean) {
     case "warning":
     case "countdown":
       return "voowork-timer-ring--warning"
-    case "paused_idle":
+    case "paused_inactivity":
     case "manual_paused":
     case "manual_work_check":
     case "resume_prompt":

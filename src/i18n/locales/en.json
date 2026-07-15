@@ -16,16 +16,22 @@
     "logout": "Sign out"
   },
   "timer": {
-    "clickToStart": "Click to start your work session",
+    "clickToStart": "Select project and task to start",
     "resume": "Resume",
     "pause": "Pause",
-    "stopSession": "End session",
-    "startSession": "Start session",
+    "start": "Start",
+    "selectTask": "Select a task",
+    "selectProject": "Select a project",
     "project": "Project",
     "task": "Task",
     "noTask": "No task",
     "noProjects": "No assigned projects. Ask your manager for access or sync after signing in.",
     "openWebPanel": "Open web dashboard"
+  },
+  "widget": {
+    "expand": "Open full app",
+    "openApp": "Open Voowork",
+    "drag": "Drag widget"
   },
   "idle": {
     "phase": {
@@ -35,11 +41,11 @@
       "active": "Active"
     },
     "noActivityTitle": "No activity detected",
-    "noActivityDescription": "Confirm that you are still working. Otherwise, the session will be paused automatically.",
-    "autoPauseIn": "Auto-pause in",
+    "noActivityDescription": "Confirm that you are still working. Otherwise, time will count as inactive.",
+    "autoPauseIn": "Inactive time in",
     "stillWorking": "I'm still working",
-    "pausedTitle": "Session paused due to inactivity",
-    "pausedDescription": "Time is not being tracked. Return to your computer to resume.",
+    "pausedTitle": "Inactive time",
+    "pausedDescription": "Tracking continues, but this period counts as inactive — not active work.",
     "returnedTitle": "You're back",
     "returnedAway": "You were away for {{duration}}.",
     "returnedPeriod": "That time",
@@ -53,6 +59,12 @@
     "lessThanMinute": "less than 1 minute",
     "minute_one": "1 minute",
     "minute_other": "{{count}} minutes"
+  },
+  "buffer": {
+    "title": "Are you still working?",
+    "description": "We detected about {{minutes}} min of activity with the app open. Start the timer to log this time to the selected task.",
+    "startNow": "Start timer now",
+    "dismiss": "Dismiss"
   },
   "theme": {
     "switchToLight": "Switch to light theme",

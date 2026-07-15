@@ -1,6 +1,6 @@
 import { useState, type SyntheticEvent } from "react"
 import { ExternalLinkIcon, LoaderIcon, LogInIcon } from "lucide-react"
-import { openUrl } from "@tauri-apps/plugin-opener"
+import { openWebPanel } from "@/lib/navigation"
 import { useTranslation } from "react-i18next"
 
 import { AppMeta } from "@/components/app-meta"
@@ -15,8 +15,8 @@ import { Label } from "@/components/ui/label"
 export function CompactLogin() {
   const { t } = useTranslation()
   const { login, loading, error } = useAuth()
-  const [email, setEmail] = useState("admin@admin.com")
-  const [password, setPassword] = useState("12345678")
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -97,8 +97,9 @@ export function CompactLogin() {
             variant="ghost"
             size="sm"
             className="text-muted-foreground h-9 w-full justify-center gap-2 text-xs"
+            disabled={loading}
             onClick={() => {
-              openUrl("https://app.voowork.com").catch(() => undefined)
+              openWebPanel().catch(() => undefined)
             }}
           >
             <ExternalLinkIcon className="size-3.5" />

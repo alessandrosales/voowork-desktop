@@ -179,6 +179,35 @@ body,
       var(--background);
   }
 
+  .voowork-timer-play-surface {
+    isolation: isolate;
+    overflow: hidden;
+    background-color: var(--card);
+    border-color: rgba(0, 0, 0, 0.06);
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  .voowork-timer-play-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: var(--foreground);
+    opacity: 0.2;
+    mask: url("/bg-timer.svg") center / cover no-repeat;
+    -webkit-mask: url("/bg-timer.svg") center / cover no-repeat;
+    pointer-events: none;
+  }
+
+  .dark .voowork-timer-play-surface {
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.35);
+  }
+
+  .dark .voowork-timer-play-surface::before {
+    opacity: 0.34;
+  }
+
   .voowork-timer-ring {
     border: 2px solid rgba(0, 0, 0, 0.06);
     transition: border-color 0.4s ease, box-shadow 0.4s ease;
@@ -336,4 +365,42 @@ body,
     opacity: 0.55;
     transform: scale(0.85);
   }
+}
+
+html.voowork-mini-surface,
+html.voowork-mini-surface body,
+html.voowork-mini-surface #root {
+  background: transparent !important;
+  overflow: hidden;
+  height: 100%;
+}
+
+.voowork-mini-widget {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.voowork-mini-shell {
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.05),
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 6px 16px -4px rgba(15, 23, 42, 0.12),
+    0 14px 32px -10px rgba(15, 23, 42, 0.1);
+}
+
+.dark .voowork-mini-shell {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 2px 6px rgba(0, 0, 0, 0.22),
+    0 10px 24px -6px rgba(0, 0, 0, 0.34);
+}
+
+.voowork-mini-drag-handle {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.voowork-mini-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }

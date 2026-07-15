@@ -1,10 +1,11 @@
-import { ExternalLinkIcon, PauseIcon, PlayIcon, SquareIcon } from "lucide-react"
-import { openUrl } from "@tauri-apps/plugin-opener"
+import { PauseIcon, PlayIcon } from "lucide-react"
 import type { TFunction } from "i18next"
 
 import type { ProjectOption } from "@/hooks/use-tracking-session"
+import { openWebPanel } from "@/lib/navigation"
 import { AppMeta } from "@/components/app-meta"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -23,92 +24,47 @@ const selectContentProps = {
   className: "z-[200]",
 }
 
-type TimerSessionControlsProps = Readonly<{
+type TimerControlsProps = Readonly<{
   active: boolean
   loading: boolean
-  canPause: boolean
-  manuallyPaused: boolean
+  canStart: boolean
+  canResume: boolean
   resolvedProjectId: string
+  resolvedTaskId: string
   t: TFunction
-  onTogglePause: () => Promise<void>
-  onStop: () => Promise<void>
-  onStart: () => Promise<void>
+  onToggle: () => Promise<void>
 }>
 
 export function TimerSessionControls({
   active,
   loading,
-  canPause,
-  manuallyPaused,
-  resolvedProjectId,
+  canStart,
+  canResume,
   t,
-  onTogglePause,
-  onStop,
-  onStart,
-}: TimerSessionControlsProps) {
-  if (!active) {
-    return (
-      <>
-        <p className="text-muted-foreground mt-5 text-center text-sm">
-          {t("timer.clickToStart")}
-        </p>
-        <Button
-          size="lg"
-          className="voowork-start-btn mt-5 h-12 w-full max-w-xs rounded-2xl text-base font-semibold text-primary-foreground shadow-lg transition-all"
-          onClick={() => {
-            onStart().catch(() => undefined)
-          }}
-          disabled={loading || !resolvedProjectId}
-        >
-          <PlayIcon className="size-5" />
-          {t("timer.startSession")}
-        </Button>
-      </>
-    )
-  }
+  onToggle,
+}: TimerControlsProps) {
+  const disabled = loading || (!active && !canStart && !canResume)
 
   return (
-    <div className="mt-5 flex w-full max-w-xs flex-col gap-2">
-      {(canPause || manuallyPaused) && (
-        <Button
-          size="lg"
-          className={cn(
-            "h-12 w-full rounded-2xl text-base font-semibold shadow-lg transition-all",
-            manuallyPaused
-              ? "voowork-start-btn text-primary-foreground"
-              : "voowork-stop-btn text-foreground"
-          )}
-          onClick={() => {
-            onTogglePause().catch(() => undefined)
-          }}
-          disabled={loading}
-        >
-          {manuallyPaused ? (
-            <>
-              <PlayIcon className="size-5" />
-              {t("timer.resume")}
-            </>
-          ) : (
-            <>
-              <PauseIcon className="size-5" />
-              {t("timer.pause")}
-            </>
-          )}
-        </Button>
+    <button
+      type="button"
+      aria-label={active ? t("timer.pause") : t("timer.start")}
+      className={cn(
+        "voowork-timer-play-surface absolute inset-0 z-10 m-auto flex size-[82%] max-w-[180px] items-center justify-center rounded-full border transition-transform",
+        !disabled && "hover:scale-[1.02] active:scale-[0.98]",
+        disabled && "cursor-not-allowed opacity-60"
       )}
-      <Button
-        size="lg"
-        variant="outline"
-        className="h-11 w-full rounded-2xl text-sm font-medium"
-        onClick={() => {
-          onStop().catch(() => undefined)
-        }}
-        disabled={loading}
-      >
-        <SquareIcon className="size-4" />
-        {t("timer.stopSession")}
-      </Button>
-    </div>
+      disabled={disabled}
+      onClick={() => {
+        onToggle().catch(() => undefined)
+      }}
+    >
+      {active ? (
+        <PauseIcon className="text-primary relative z-10 size-14 fill-current" />
+      ) : (
+        <PlayIcon className="text-primary relative z-10 size-14 fill-current" />
+      )}
+    </button>
   )
 }
 
@@ -119,9 +75,10 @@ type ProjectSelectorsProps = Readonly<{
   resolvedProjectId: string
   resolvedTaskId: string
   loading: boolean
+  disabled?: boolean
   t: TFunction
-  onProjectChange: (projectId: string) => void
-  onTaskChange: (taskId: string) => void
+  onProjectChange: (projectId: string) => void | Promise<void>
+  onTaskChange: (taskId: string) => void | Promise<void>
 }>
 
 export function ProjectSelectors({
@@ -131,6 +88,7 @@ export function ProjectSelectors({
   resolvedProjectId,
   resolvedTaskId,
   loading,
+  disabled = false,
   t,
   onProjectChange,
   onTaskChange,
@@ -143,49 +101,59 @@ export function ProjectSelectors({
     )
   }
 
-  const taskLabel =
-    resolvedTaskId === NO_TASK_ID
-      ? t("timer.noTask")
-      : selectedTask?.name
+  const taskLabel = selectedTask?.name ?? t("timer.selectTask")
 
   return (
-    <div className="space-y-2.5 border-t py-4">
-      <Select
-        value={resolvedProjectId}
-        onValueChange={(value) => onProjectChange(value ?? "")}
-        disabled={loading}
-      >
-        <SelectTrigger className="h-10 w-full rounded-xl text-sm">
-          <SelectValue placeholder={t("timer.project")}>
-            {selectedProject?.name}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent {...selectContentProps}>
-          {projects.map((project) => (
-            <SelectItem key={project.id} value={project.id}>
-              {project.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {selectedProject ? (
+    <div className="space-y-3 border-t py-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="timer-project" className="text-muted-foreground text-xs">
+          {t("timer.project")}
+        </Label>
         <Select
-          value={resolvedTaskId}
-          onValueChange={(value) => onTaskChange(value ?? NO_TASK_ID)}
-          disabled={loading}
+          value={resolvedProjectId}
+          onValueChange={(value) => {
+            void onProjectChange(value ?? "")
+          }}
+          disabled={loading || disabled}
         >
-          <SelectTrigger className="h-10 w-full rounded-xl text-sm">
-            <SelectValue placeholder={t("timer.task")}>{taskLabel}</SelectValue>
+          <SelectTrigger id="timer-project" className="h-10 w-full rounded-xl text-sm">
+            <SelectValue placeholder={t("timer.selectProject")}>
+              {selectedProject?.name}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent {...selectContentProps}>
-            <SelectItem value={NO_TASK_ID}>{t("timer.noTask")}</SelectItem>
-            {selectedProject.tasks.map((task) => (
-              <SelectItem key={task.id} value={task.id}>
-                {task.name}
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+      </div>
+      {selectedProject ? (
+        <div className="space-y-1.5">
+          <Label htmlFor="timer-task" className="text-muted-foreground text-xs">
+            {t("timer.task")}
+          </Label>
+          <Select
+            value={resolvedTaskId}
+            onValueChange={(value) => {
+              void onTaskChange(value ?? NO_TASK_ID)
+            }}
+            disabled={loading || disabled}
+          >
+            <SelectTrigger id="timer-task" className="h-10 w-full rounded-xl text-sm">
+              <SelectValue placeholder={t("timer.selectTask")}>{taskLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent {...selectContentProps}>
+              {selectedProject.tasks.map((task) => (
+                <SelectItem key={task.id} value={task.id}>
+                  {task.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       ) : null}
     </div>
   )
@@ -203,10 +171,9 @@ export function TimerFooter({ t }: TimerFooterProps) {
         size="sm"
         className="text-muted-foreground h-9 w-full justify-center gap-2 text-xs"
         onClick={() => {
-          openUrl("https://app.voowork.com").catch(() => undefined)
+          openWebPanel().catch(() => undefined)
         }}
       >
-        <ExternalLinkIcon className="size-3.5" />
         {t("timer.openWebPanel")}
       </Button>
       <AppMeta className="mt-3" />

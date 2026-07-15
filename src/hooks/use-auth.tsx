@@ -4,7 +4,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react"
@@ -37,6 +36,9 @@ const EMPTY_AUTH: AuthState = {
 
 type AuthContextValue = {
   auth: AuthState
+  /** True only while validating the stored session on app start. */
+  initializing: boolean
+  /** True while login or logout is in progress. */
   loading: boolean
   error: string | null
   login: (email: string, password: string) => Promise<AuthState>
@@ -44,6 +46,27 @@ type AuthContextValue = {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 15_000
+
+let authBootstrapPromise: Promise<AuthState> | null = null
+
+function bootstrapAuthSession(): Promise<AuthState> {
+  authBootstrapPromise ??= trackedInvoke<AuthState>("validate_auth_session")
+  return authBootstrapPromise
+}
+
+function bootstrapAuthSessionWithTimeout(): Promise<AuthState> {
+  return Promise.race([
+    bootstrapAuthSession(),
+    new Promise<AuthState>((_, reject) => {
+      window.setTimeout(
+        () => reject(new Error("Tempo esgotado ao validar sessão.")),
+        AUTH_BOOTSTRAP_TIMEOUT_MS
+      )
+    }),
+  ])
+}
 
 function applyAuthState(state: AuthState): AuthState {
   return {
@@ -55,34 +78,40 @@ function applyAuthState(state: AuthState): AuthState {
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [auth, setAuth] = useState<AuthState>(EMPTY_AUTH)
-  const [loading, setLoading] = useState(true)
+  const [initializing, setInitializing] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const bootstrappedRef = useRef(false)
 
   useEffect(() => {
     if (!isTauriReady()) {
-      setLoading(false)
+      setInitializing(false)
       return
     }
 
-    if (bootstrappedRef.current) {
-      return
-    }
-    bootstrappedRef.current = true
+    let active = true
 
     const bootstrap = async () => {
       try {
-        const state = await trackedInvoke<AuthState>("validate_auth_session")
+        const state = await bootstrapAuthSessionWithTimeout()
+        if (!active) return
         setAuth(applyAuthState(state))
         setError(null)
       } catch (err) {
+        if (!active) return
+        setAuth(EMPTY_AUTH)
         setError(err instanceof Error ? err.message : String(err))
       } finally {
-        setLoading(false)
+        if (active) {
+          setInitializing(false)
+        }
       }
     }
 
     void bootstrap()
+
+    return () => {
+      active = false
+    }
   }, [])
 
   useEffect(() => {
@@ -90,19 +119,30 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       return
     }
 
-    let unlisten: (() => void) | undefined
-    listen("auth-session-expired", () => {
+    let unlistenExpired: (() => void) | undefined
+    let unlistenLoggedOut: (() => void) | undefined
+
+    const clearAuth = () => {
       setAuth(EMPTY_AUTH)
       setError(null)
       setLoading(false)
-    })
+    }
+
+    listen("auth-session-expired", clearAuth)
       .then((dispose) => {
-        unlisten = dispose
+        unlistenExpired = dispose
+      })
+      .catch(() => undefined)
+
+    listen("auth-logged-out", clearAuth)
+      .then((dispose) => {
+        unlistenLoggedOut = dispose
       })
       .catch(() => undefined)
 
     return () => {
-      unlisten?.()
+      unlistenExpired?.()
+      unlistenLoggedOut?.()
     }
   }, [])
 
@@ -141,12 +181,13 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const value = useMemo(
     () => ({
       auth,
+      initializing,
       loading,
       error,
       login,
       logout,
     }),
-    [auth, loading, error, login, logout]
+    [auth, initializing, loading, error, login, logout]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

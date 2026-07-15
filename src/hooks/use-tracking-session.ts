@@ -1,41 +1,47 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
 
+import { useDisplayElapsed } from "@/hooks/use-display-elapsed"
 import { trackedInvoke, isTauriReady } from "@/lib/tauri"
 
-export type IdleStatus = {
+export type TrackingInactivityStatus = {
   phase: string
   thresholdSecs: number
   countdownSecs: number
   countdownRemainingSecs: number | null
   countdownEndsAt: string | null
-  idleStartedAt: string | null
+  inactivityStartedAt: string | null
   pausedAt: string | null
   awaySeconds: number | null
   pendingPeriodId: string | null
   meetingExempt: boolean
   activeSeconds: number
-  idleDiscardedSeconds: number
-  idleReclassifiedSeconds: number
+  inactivityDiscardedSeconds: number
+  inactivityReclassifiedSeconds: number
 }
 
-export type SessionStatus = {
+export type TrackingStatus = {
   active: boolean
-  sessionId: string | null
+  trackingId: string | null
   projectId: string | null
   taskId: string | null
   startedAt: string | null
   elapsedSeconds: number
+  inactivitySeconds: number
+  taskAccumulatedSeconds: number
+  activityBufferSeconds: number
+  activityBufferAlert: boolean
   mouseEvents: number
   keyboardEvents: number
   clockSkewDetected: boolean
   activityConfidence: number
+  activityScore: number
   trackerMode: string | null
   currentApp: string | null
   currentWindowTitle: string | null
   screenshotCount: number
   lastScreenshotAt: string | null
-  idle: IdleStatus
+  inactivity: TrackingInactivityStatus
 }
 
 export type ProjectOption = {
@@ -49,59 +55,97 @@ export type TaskOption = {
   name: string
 }
 
-const EMPTY_IDLE: IdleStatus = {
+const EMPTY_INACTIVITY: TrackingInactivityStatus = {
   phase: "active",
   thresholdSecs: 120,
   countdownSecs: 60,
   countdownRemainingSecs: null,
   countdownEndsAt: null,
-  idleStartedAt: null,
+  inactivityStartedAt: null,
   pausedAt: null,
   awaySeconds: null,
   pendingPeriodId: null,
   meetingExempt: false,
   activeSeconds: 0,
-  idleDiscardedSeconds: 0,
-  idleReclassifiedSeconds: 0,
+  inactivityDiscardedSeconds: 0,
+  inactivityReclassifiedSeconds: 0,
 }
 
-const EMPTY_SESSION: SessionStatus = {
+const EMPTY_TRACKING: TrackingStatus = {
   active: false,
-  sessionId: null,
+  trackingId: null,
   projectId: null,
   taskId: null,
   startedAt: null,
   elapsedSeconds: 0,
+  inactivitySeconds: 0,
+  taskAccumulatedSeconds: 0,
+  activityBufferSeconds: 0,
+  activityBufferAlert: false,
   mouseEvents: 0,
   keyboardEvents: 0,
   clockSkewDetected: false,
   activityConfidence: 1,
+  activityScore: 0,
   trackerMode: null,
   currentApp: null,
   currentWindowTitle: null,
   screenshotCount: 0,
   lastScreenshotAt: null,
-  idle: EMPTY_IDLE,
+  inactivity: EMPTY_INACTIVITY,
 }
 
-function pollIntervalMs(session: SessionStatus) {
-  if (!session.active) {
-    return 2000
+/** Timer ativo: poll rápido para fases de inatividade e pausa manual. */
+const ACTIVE_TRACKING_REFRESH_MS = 1_000
+const IDLE_REFRESH_MS = 5_000
+
+function backgroundRefreshIntervalMs(tracking: TrackingStatus) {
+  if (!tracking.active) {
+    return IDLE_REFRESH_MS
   }
-  if (
-    session.idle.phase !== "active" &&
-    session.idle.phase !== "manual_paused"
-  ) {
-    return 500
-  }
-  return 1000
+
+  return ACTIVE_TRACKING_REFRESH_MS
 }
 
 export function useTrackingSession() {
-  const [session, setSession] = useState<SessionStatus>(EMPTY_SESSION)
+  const [tracking, setTracking] = useState<TrackingStatus>(EMPTY_TRACKING)
   const [projects, setProjects] = useState<ProjectOption[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [taskElapsedSeconds, setTaskElapsedSeconds] = useState(0)
+
+  const { displayElapsedSeconds, freezeDisplayElapsed } =
+    useDisplayElapsed(tracking)
+
+  const refreshTaskElapsed = useCallback(async (taskId: string | null) => {
+    if (!isTauriReady() || !taskId || taskId === "__none__") {
+      setTaskElapsedSeconds(0)
+      return
+    }
+    try {
+      const seconds = await trackedInvoke<number>("get_task_elapsed_seconds", {
+        task_id: taskId,
+      })
+      setTaskElapsedSeconds(seconds)
+    } catch {
+      setTaskElapsedSeconds(0)
+    }
+  }, [])
+
+  const refreshTrackingStatus = useCallback(async () => {
+    if (!isTauriReady()) {
+      return
+    }
+
+    try {
+      const trackingStatus = await trackedInvoke<TrackingStatus>("get_tracking_status")
+      setTracking(trackingStatus)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     if (!isTauriReady()) {
@@ -109,11 +153,11 @@ export function useTrackingSession() {
     }
 
     try {
-      const [sessionStatus, projectList] = await Promise.all([
-        trackedInvoke<SessionStatus>("get_session_status"),
+      const [trackingStatus, projectList] = await Promise.all([
+        trackedInvoke<TrackingStatus>("get_tracking_status"),
         trackedInvoke<ProjectOption[]>("list_projects"),
       ])
-      setSession(sessionStatus)
+      setTracking(trackingStatus)
       setProjects(projectList)
       setError(null)
     } catch (err) {
@@ -121,20 +165,41 @@ export function useTrackingSession() {
     }
   }, [])
 
-  const pollMs = pollIntervalMs(session)
+  const pollBackground = useCallback(async () => {
+    if (!isTauriReady()) {
+      return
+    }
+
+    try {
+      if (tracking.active) {
+        const trackingStatus = await trackedInvoke<TrackingStatus>(
+          "get_tracking_status"
+        )
+        setTracking(trackingStatus)
+      } else {
+        await refresh()
+        return
+      }
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [refresh, tracking.active])
+
+  const refreshMs = backgroundRefreshIntervalMs(tracking)
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       refresh().catch(() => undefined)
     }, 0)
     const interval = window.setInterval(() => {
-      refresh().catch(() => undefined)
-    }, pollMs)
+      pollBackground().catch(() => undefined)
+    }, refreshMs)
     return () => {
       window.clearTimeout(timer)
       window.clearInterval(interval)
     }
-  }, [refresh, pollMs])
+  }, [refresh, pollBackground, refreshMs])
 
   useEffect(() => {
     if (!isTauriReady()) {
@@ -142,8 +207,8 @@ export function useTrackingSession() {
     }
 
     let unlisten: (() => void) | undefined
-    listen("idle-changed", () => {
-      refresh().catch(() => undefined)
+    listen("tracking-inactivity-changed", () => {
+      refreshTrackingStatus().catch(() => undefined)
     })
       .then((dispose) => {
         unlisten = dispose
@@ -153,17 +218,17 @@ export function useTrackingSession() {
     return () => {
       unlisten?.()
     }
-  }, [refresh])
+  }, [refreshTrackingStatus])
 
-  const startSession = useCallback(
-    async (projectId: string, taskId?: string) => {
+  const startTracking = useCallback(
+    async (projectId: string, taskId: string) => {
       setLoading(true)
       setError(null)
       try {
-        await trackedInvoke("start_session", {
-          request: { projectId, taskId: taskId ?? null },
+        await trackedInvoke("start_tracking", {
+          request: { projectId, taskId },
         })
-        await refresh()
+        await refreshTrackingStatus()
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
         throw err
@@ -171,46 +236,94 @@ export function useTrackingSession() {
         setLoading(false)
       }
     },
-    [refresh]
+    [refreshTrackingStatus]
   )
 
-  const stopSession = useCallback(async () => {
+  const restartTracking = useCallback(
+    async (projectId: string, taskId: string) => {
+      setLoading(true)
+      setError(null)
+      try {
+        await trackedInvoke("restart_tracking", {
+          request: { projectId, taskId },
+        })
+        await refreshTrackingStatus()
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err))
+        throw err
+      } finally {
+        setLoading(false)
+      }
+    },
+    [refreshTrackingStatus]
+  )
+
+  const pauseTracking = useCallback(async () => {
+    setError(null)
+    freezeDisplayElapsed()
+    try {
+      await trackedInvoke("pause_tracking")
+      await refreshTrackingStatus()
+      await refreshTaskElapsed(
+        tracking.taskId && tracking.taskId !== "__none__" ? tracking.taskId : null
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      throw err
+    }
+  }, [freezeDisplayElapsed, refreshTrackingStatus, refreshTaskElapsed, tracking.taskId])
+
+  const resumeTracking = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      await trackedInvoke("stop_session")
-      await refresh()
+      await trackedInvoke("resume_tracking")
+      await refreshTrackingStatus()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
       setLoading(false)
     }
-  }, [refresh])
+  }, [refreshTrackingStatus])
+
+  const stopTracking = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      await trackedInvoke("stop_tracking")
+      await refreshTrackingStatus()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [refreshTrackingStatus])
 
   const confirmStillWorking = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       await trackedInvoke("confirm_still_working")
-      await refresh()
+      await refreshTrackingStatus()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
       setLoading(false)
     }
-  }, [refresh])
+  }, [refreshTrackingStatus])
 
-  const classifyIdlePeriod = useCallback(
+  const classifyTrackingInactivityPeriod = useCallback(
     async (periodId: string, category: string) => {
       setLoading(true)
       setError(null)
       try {
-        await trackedInvoke("classify_idle_period", {
+        await trackedInvoke("classify_tracking_inactivity_period", {
           request: { periodId, category },
         })
-        await refresh()
+        await refreshTrackingStatus()
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err))
         throw err
@@ -218,39 +331,29 @@ export function useTrackingSession() {
         setLoading(false)
       }
     },
-    [refresh]
+    [refreshTrackingStatus]
   )
 
-  const skipIdleClassification = useCallback(async () => {
+  const skipTrackingInactivityClassification = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      await trackedInvoke("skip_idle_classification")
-      await refresh()
+      await trackedInvoke("skip_tracking_inactivity_classification")
+      await refreshTrackingStatus()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
       setLoading(false)
     }
-  }, [refresh])
-
-  const pauseSession = useCallback(async () => {
-    await trackedInvoke("pause_session")
-    await refresh()
-  }, [refresh])
-
-  const resumeSession = useCallback(async () => {
-    await trackedInvoke("resume_session")
-    await refresh()
-  }, [refresh])
+  }, [refreshTrackingStatus])
 
   const confirmManualWork = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       await trackedInvoke("confirm_manual_work")
-      await refresh()
+      await refreshTrackingStatus()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
@@ -264,31 +367,50 @@ export function useTrackingSession() {
     setError(null)
     try {
       await trackedInvoke("dismiss_manual_work_check")
-      await refresh()
+      await refreshTrackingStatus()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       throw err
     } finally {
       setLoading(false)
     }
-  }, [refresh])
+  }, [refreshTrackingStatus])
 
-  const displaySession = useMemo(() => session, [session])
+  const dismissActivityBuffer = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      await trackedInvoke("dismiss_activity_buffer")
+      await refreshTrackingStatus()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [refreshTrackingStatus])
+
+  const displayTracking = useMemo(() => tracking, [tracking])
 
   return {
-    session: displaySession,
+    tracking: displayTracking,
+    displayElapsedSeconds,
+    taskElapsedSeconds,
+    refreshTaskElapsed,
     projects,
     loading,
     error,
     refresh,
-    startSession,
-    stopSession,
-    pauseSession,
-    resumeSession,
+    startTracking,
+    restartTracking,
+    pauseTracking,
+    resumeTracking,
+    stopTracking,
     confirmStillWorking,
-    classifyIdlePeriod,
-    skipIdleClassification,
+    classifyTrackingInactivityPeriod,
+    skipTrackingInactivityClassification,
     confirmManualWork,
     dismissManualWorkCheck,
+    dismissActivityBuffer,
   }
 }

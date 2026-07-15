@@ -2,7 +2,6 @@
 
 import { useEffect } from "react"
 
-const DEBUG_EVENT_NAME = "ctui:debug"
 const EXTERNAL_PROTOCOLS = new Set(["http:", "https:", "mailto:", "tel:"])
 
 function isModifiedClick(event: MouseEvent) {
@@ -40,27 +39,7 @@ function shouldOpenExternally(anchor: HTMLAnchorElement) {
   }
 }
 
-async function openExternalLink(href: string) {
-  const { openUrl } = await import("@tauri-apps/plugin-opener")
-  await openUrl(href)
-}
-
-function emitExternalLinkDebugEvent(href: string) {
-  if (typeof window === "undefined") {
-    return
-  }
-
-  window.dispatchEvent(
-    new CustomEvent(DEBUG_EVENT_NAME, {
-      detail: {
-        id: crypto.randomUUID(),
-        kind: "external-link",
-        href,
-        timestamp: new Date().toISOString(),
-      },
-    })
-  )
-}
+import { openExternalUrl } from "@/lib/navigation"
 
 export function ExternalLinkGuard() {
   useEffect(() => {
@@ -86,8 +65,7 @@ export function ExternalLinkGuard() {
       }
 
       event.preventDefault()
-      emitExternalLinkDebugEvent(anchor.href)
-      void openExternalLink(anchor.href)
+      void openExternalUrl(anchor.href)
     }
 
     document.addEventListener("click", handleClick, true)

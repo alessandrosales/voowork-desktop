@@ -16,16 +16,22 @@
     "logout": "Sair"
   },
   "timer": {
-    "clickToStart": "Clique para iniciar sua sessão de trabalho",
+    "clickToStart": "Selecione projeto e tarefa para iniciar",
     "resume": "Retomar",
     "pause": "Pausar",
-    "stopSession": "Encerrar sessão",
-    "startSession": "Iniciar sessão",
+    "start": "Iniciar",
+    "selectTask": "Selecione uma tarefa",
+    "selectProject": "Selecione um projeto",
     "project": "Projeto",
     "task": "Tarefa",
     "noTask": "Sem tarefa",
     "noProjects": "Nenhum projeto atribuído. Peça ao gestor para liberar seu acesso ou sincronize após o login.",
     "openWebPanel": "Abrir painel web"
+  },
+  "widget": {
+    "expand": "Abrir app completo",
+    "openApp": "Abrir Voowork",
+    "drag": "Arrastar widget"
   },
   "idle": {
     "phase": {
@@ -35,11 +41,11 @@
       "active": "Ativo"
     },
     "noActivityTitle": "Sem atividade detectada",
-    "noActivityDescription": "Confirme que você ainda está trabalhando. Caso contrário, a sessão será pausada automaticamente.",
-    "autoPauseIn": "Pausa automática em",
+    "noActivityDescription": "Confirme que você ainda está trabalhando. Caso contrário, o tempo passará a contar como inativo.",
+    "autoPauseIn": "Tempo inativo em",
     "stillWorking": "Ainda estou trabalhando",
-    "pausedTitle": "Sessão pausada por inatividade",
-    "pausedDescription": "O tempo não está sendo contabilizado. Volte ao computador para retomar.",
+    "pausedTitle": "Tempo inativo",
+    "pausedDescription": "O tracking continua, mas este período conta como tempo inativo — não como trabalho ativo.",
     "returnedTitle": "Você voltou",
     "returnedAway": "Você esteve ausente por {{duration}}.",
     "returnedPeriod": "Esse período",
@@ -53,6 +59,12 @@
     "lessThanMinute": "menos de 1 minuto",
     "minute_one": "1 minuto",
     "minute_other": "{{count}} minutos"
+  },
+  "buffer": {
+    "title": "Você ainda está trabalhando?",
+    "description": "Detectamos cerca de {{minutes}} min de atividade com o app aberto. Inicie o timer para registrar esse tempo na tarefa selecionada.",
+    "startNow": "Iniciar timer agora",
+    "dismiss": "Ignorar"
   },
   "theme": {
     "switchToLight": "Ativar tema claro",

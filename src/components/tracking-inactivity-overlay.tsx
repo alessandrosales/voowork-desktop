@@ -3,12 +3,12 @@ import { AlertTriangleIcon, PauseCircleIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
 
-import type { IdleStatus } from "@/hooks/use-tracking-session"
+import type { TrackingInactivityStatus } from "@/hooks/use-tracking-session"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
-type IdleOverlayProps = Readonly<{
-  idle: IdleStatus
+type TrackingInactivityOverlayProps = Readonly<{
+  inactivity: TrackingInactivityStatus
   onConfirmStillWorking: () => void | Promise<void>
   onAcknowledgeReturn: () => void | Promise<void>
   onConfirmManualWork: () => void | Promise<void>
@@ -24,7 +24,7 @@ function formatAwayMinutes(seconds: number | null, t: TFunction) {
   return t("idle.minute", { count: minutes })
 }
 
-function IdleCountdownPanel({
+function TrackingInactivityCountdownPanel({
   countdownSecs,
   initial,
 }: Readonly<{
@@ -63,21 +63,22 @@ function IdleCountdownPanel({
   )
 }
 
-export function IdleOverlay({
-  idle,
+export function TrackingInactivityOverlay({
+  inactivity,
   onConfirmStillWorking,
   onAcknowledgeReturn,
   onConfirmManualWork,
   onDismissManualWork,
   loading = false,
-}: IdleOverlayProps) {
+}: TrackingInactivityOverlayProps) {
   const { t } = useTranslation()
   const showWarning =
-    idle.phase === "countdown" || idle.phase === "warning"
-  const showPaused = idle.phase === "paused_idle"
-  const showResume = idle.phase === "resume_prompt"
-  const showManualWork = idle.phase === "manual_work_check"
-  const countdownSeed = idle.countdownRemainingSecs ?? idle.countdownSecs
+    inactivity.phase === "countdown" || inactivity.phase === "warning"
+  const showPaused = inactivity.phase === "paused_inactivity"
+  const showResume = inactivity.phase === "resume_prompt"
+  const showManualWork = inactivity.phase === "manual_work_check"
+  const countdownSeed =
+    inactivity.countdownRemainingSecs ?? inactivity.countdownSecs
 
   if (!showWarning && !showPaused && !showResume && !showManualWork) {
     return null
@@ -117,10 +118,10 @@ export function IdleOverlay({
               </div>
             </div>
 
-            {idle.phase === "countdown" ? (
-              <IdleCountdownPanel
+            {inactivity.phase === "countdown" ? (
+              <TrackingInactivityCountdownPanel
                 key={countdownSeed}
-                countdownSecs={idle.countdownSecs}
+                countdownSecs={inactivity.countdownSecs}
                 initial={countdownSeed}
               />
             ) : null}
@@ -162,7 +163,7 @@ export function IdleOverlay({
               </p>
               <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
                 {t("idle.returnedAway", {
-                  duration: formatAwayMinutes(idle.awaySeconds, t),
+                  duration: formatAwayMinutes(inactivity.awaySeconds, t),
                 })}{" "}
                 {t("idle.returnedPeriod")}{" "}
                 <span className="text-foreground font-medium">

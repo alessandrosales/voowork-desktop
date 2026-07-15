@@ -19,13 +19,19 @@
     "clickToStart": "Haz clic para iniciar tu sesión de trabajo",
     "resume": "Reanudar",
     "pause": "Pausar",
-    "stopSession": "Finalizar sesión",
-    "startSession": "Iniciar sesión",
+    "start": "Iniciar",
+    "selectTask": "Selecciona una tarea",
+    "selectProject": "Selecciona un proyecto",
     "project": "Proyecto",
     "task": "Tarea",
     "noTask": "Sin tarea",
     "noProjects": "No hay proyectos asignados. Pide acceso a tu gestor o sincroniza después de iniciar sesión.",
     "openWebPanel": "Abrir panel web"
+  },
+  "widget": {
+    "expand": "Abrir app completo",
+    "openApp": "Abrir Voowork",
+    "drag": "Arrastrar widget"
   },
   "idle": {
     "phase": {
@@ -35,11 +41,11 @@
       "active": "Activo"
     },
     "noActivityTitle": "Sin actividad detectada",
-    "noActivityDescription": "Confirma que sigues trabajando. De lo contrario, la sesión se pausará automáticamente.",
-    "autoPauseIn": "Pausa automática en",
+    "noActivityDescription": "Confirma que sigues trabajando. De lo contrario, el tiempo contará como inactivo.",
+    "autoPauseIn": "Tiempo inactivo en",
     "stillWorking": "Sigo trabajando",
-    "pausedTitle": "Sesión pausada por inactividad",
-    "pausedDescription": "El tiempo no se está contabilizando. Vuelve al ordenador para reanudar.",
+    "pausedTitle": "Tiempo inactivo",
+    "pausedDescription": "El tracking continúa, pero este período cuenta como tiempo inactivo — no como trabajo activo.",
     "returnedTitle": "Has vuelto",
     "returnedAway": "Estuviste ausente durante {{duration}}.",
     "returnedPeriod": "Ese período",
@@ -53,6 +59,12 @@
     "lessThanMinute": "menos de 1 minuto",
     "minute_one": "1 minuto",
     "minute_other": "{{count}} minutos"
+  },
+  "buffer": {
+    "title": "¿Sigues trabajando?",
+    "description": "Detectamos unos {{minutes}} min de actividad con la app abierta. Inicia el temporizador para registrar ese tiempo en la tarea seleccionada.",
+    "startNow": "Iniciar temporizador",
+    "dismiss": "Ignorar"
   },
   "theme": {
     "switchToLight": "Activar tema claro",

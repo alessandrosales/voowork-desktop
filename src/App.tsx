@@ -1,15 +1,25 @@
 import { useTranslation } from "react-i18next"
 
 import { CompactLogin } from "@/components/compact-login"
+import { MiniTimerWidget } from "@/components/mini-timer-widget"
 import { TimerApp } from "@/components/timer-app"
 import { useAuth } from "@/hooks/use-auth"
 import { Toaster } from "@/components/ui/sonner"
 
+function isMiniTimerView() {
+  return new URLSearchParams(window.location.search).get("view") === "mini"
+}
+
 export default function App() {
   const { t } = useTranslation()
-  const { auth, loading } = useAuth()
+  const isMini = isMiniTimerView()
+  const { auth, initializing } = useAuth()
 
-  if (loading) {
+  if (isMini) {
+    return <MiniTimerWidget />
+  }
+
+  if (initializing) {
     return (
       <div className="voowork-shell text-muted-foreground flex h-full items-center justify-center text-sm">
         {t("common.loading")}
