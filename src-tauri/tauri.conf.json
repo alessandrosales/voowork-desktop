@@ -5,9 +5,9 @@
   "version": "0.1.0",
   "identifier": "com.voowork.desktop",
   "build": {
-    "beforeDevCommand": "bun run dev",
+    "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "bun run build",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist",
     "removeUnusedCommands": true
   },
@@ -15,6 +15,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "Voowork",
         "width": 480,
         "height": 700,
@@ -23,17 +24,33 @@
         "resizable": true,
         "decorations": true,
         "center": true,
-        "visible": false
+        "visible": true
+      },
+      {
+        "label": "mini-timer",
+        "title": "Voowork",
+        "url": "index.html?view=mini",
+        "width": 200,
+        "height": 48,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "shadow": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' tauri: ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: http://asset.localhost https://asset.localhost; font-src 'self' data:; connect-src 'self' tauri: ipc: http://ipc.localhost https://api.voowork.com http://localhost:3000 http://127.0.0.1:3000 http://localhost:1420 ws://localhost:1420 ws://127.0.0.1:1420"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
     "icon": [
+      "icons/icon.png",
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",

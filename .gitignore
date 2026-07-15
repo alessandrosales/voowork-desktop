@@ -1,5 +1,5 @@
 # =============================================================================
-# voowork-desktop — Bun + Vite + React + Tauri 2 + Rust
+# voowork-desktop — npm + Vite + React + Tauri 2 + Rust
 # =============================================================================
 
 # --- Dependencies ---
@@ -48,7 +48,7 @@ Desktop.ini
 .vscode/*
 !.vscode/extensions.json
 .idea/
-.cursor/
+.cursor/mcp.json
 *.suo
 *.ntvs*
 *.njsproj

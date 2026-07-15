@@ -1,19 +1,35 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "Capability for main and mini timer windows",
   "windows": [
-    "main"
+    "main",
+    "mini-timer"
   ],
   "permissions": [
     "core:default",
     "core:window:default",
     "core:window:allow-show",
+    "core:window:allow-hide",
     "core:window:allow-unminimize",
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-focus",
+    "core:window:allow-set-position",
+    "core:window:allow-start-dragging",
     "core:window:allow-request-user-attention",
-    "opener:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://app.voowork.com" },
+        { "url": "https://app.voowork.com/*" },
+        { "url": "http://localhost:5173" },
+        { "url": "http://localhost:5173/*" },
+        { "url": "http://127.0.0.1:5173" },
+        { "url": "http://127.0.0.1:5173/*" },
+        { "url": "mailto:*" },
+        { "url": "tel:*" }
+      ]
+    },
     "log:default",
     "notification:default"
   ]
