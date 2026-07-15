@@ -1,161 +1,146 @@
 erDiagram
     %% ========================================================================
-    %% voowork-desktop — SQLite Entity-Relationship Diagram
-    %% Fonte: src-tauri/src/db/schema.rs (+ migration programática em db/mod.rs)
-    %% Arquivo: ~/.local/share/voowork-desktop/voowork-desktop.db (WAL mode)
-    %% Atualizado: 2026-07-12
+    %% voowork-desktop — SQLite local (offline-first)
+    %% Domínio espelhado de voowork-backend/docs/db.mermaid + extensões locais
     %% ========================================================================
 
-    %% ========================================================================
-    %% ENTITIES
-    %% ========================================================================
+  device_metadata {
+    text id PK
+    text device_name
+    text public_key
+    text private_key_b64
+    text registered_at
+    text created_at
+    text updated_at
+  }
 
-    device_metadata {
-        text id PK "UUID — chave Ed25519 do dispositivo"
-        text device_name "Nome da máquina"
-        text public_key "Chave pública Ed25519 (base64)"
-        text private_key_b64 "Chave privada local (base64)"
-        text registered_at "Quando registrado na API (futuro)"
-        text created_at "ISO 8601 UTC"
-        text updated_at "ISO 8601 UTC"
-    }
+  settings {
+    text key PK
+    text value
+    text updated_at
+  }
 
-    settings {
-        text key PK "Chave de configuração"
-        text value "Valor serializado"
-        text updated_at "ISO 8601 UTC"
-    }
+  sync_queue {
+    text id PK
+    text entity_type "tracking | tracking_screenshot | tracking_peripheral_event | tracking_app | tracking_site | tracking_inactivity_period"
+    text entity_id
+    text payload_json
+    text signature
+    text status
+    integer attempts
+    text last_attempt_at
+    text next_retry_at
+    text error_message
+    text created_at
+    text confirmed_at
+  }
 
-    project_cache {
-        text id PK "projects.id da API (UUID)"
-        text name "Nome exibido no seletor"
-        text tasks_json "Array JSON de tasks [{id, name}]"
-        integer sort_order "Ordem no seletor"
-        text updated_at "Última sync com API"
-    }
+  projects {
+    text id PK
+    text account_id
+    text name
+    integer featured
+    text created_at
+    text updated_at
+  }
 
-    sessions {
-        text id PK "UUID — mesmo ID enviado ao servidor"
-        text project_id "FK lógica → project_cache.id"
-        text task_id "FK lógica → task dentro de tasks_json (nullable)"
-        text started_at "ISO 8601 UTC"
-        text ended_at "ISO 8601 UTC (nullable enquanto ativa)"
-        integer monotonic_started_ns "Relógio monotônico no start"
-        integer monotonic_ended_ns "Relógio monotônico no stop"
-        text status "active | stopped"
-        text prev_hash "Hash chain — registro anterior"
-        text record_hash "SHA-256 deste registro"
-        integer clock_skew_flags "Flags de manipulação de relógio"
-        text created_at "ISO 8601 UTC"
-    }
+  tasks {
+    text id PK
+    text account_id
+    text project_id FK
+    text name
+    text description
+    integer position
+    text created_at
+    text updated_at
+  }
 
-    activity_ticks {
-        text id PK "UUID"
-        text session_id FK "sessions.id"
-        text bucket_start "Início do bucket (ISO 8601 UTC)"
-        text bucket_end "Fim do bucket (ISO 8601 UTC)"
-        integer mouse_events "Contagem agregada"
-        integer keyboard_events "Contagem agregada"
-        text mouse_positions_json "Amostras de posição (nullable)"
-        real activity_score_confidence "0.0–1.0"
-        integer automation_flags "Flags de mouse jiggler etc."
-        integer monotonic_elapsed_ns "Elapsed monotônico no tick"
-        text wall_clock_at_tick "Wall-clock no tick"
-        integer clock_skew_detected "0 | 1"
-        text prev_hash "Hash chain"
-        text record_hash "SHA-256 deste registro"
-        text created_at "ISO 8601 UTC"
-    }
+  trackings {
+    text id PK
+    text account_id
+    text project_id FK
+    text task_id FK
+    text user_id
+    text status "active | inactive"
+    text device
+    text edition_reason
+    text started_at
+    text ended_at
+    text created_at
+    text updated_at
+  }
 
-    screenshots {
-        text id PK "UUID"
-        text user_id "users.id da API (auth_user_json)"
-        text project_id "projects.id — denormalizado da sessão"
-        text task_id "tasks.id — denormalizado da sessão (nullable)"
-        text session_id FK "sessions.id"
-        text file_path "Caminho local do PNG"
-        text sha256_hash "Hash do original (antes do blur)"
-        integer width "Largura em pixels"
-        integer height "Altura em pixels"
-        text captured_at "Timestamp exato UTC com ms"
-        text activity_tick_id "FK lógica → activity_ticks.id (nullable)"
-        integer blur_applied "0 | 1"
-        text synced_at "Após upload confirmado (nullable)"
-        text created_at "ISO 8601 UTC"
-    }
+  tracking_screenshots {
+    text id PK
+    text path
+    text tracking_id FK
+    text original_id
+    text captured_at
+    text period_started_at "local only"
+    text time_category "local only: active | inactivity"
+    text remote_path "local only"
+    text synced_at "local only"
+    text created_at
+    text updated_at
+  }
 
-    app_focus_events {
-        text id PK "UUID"
-        text session_id FK "sessions.id"
-        text app_name "Nome do aplicativo em foco"
-        text window_title "Título da janela (nullable)"
-        text process_path "Caminho do executável (nullable)"
-        integer process_id "PID do processo (nullable)"
-        text captured_at "ISO 8601 UTC"
-        text created_at "ISO 8601 UTC"
-    }
+  tracking_peripheral_events {
+    text id PK
+    text event "mouse_activity | keyboard_activity"
+    real count
+    text tracking_id FK
+    text screenshot_original_id
+    text started_at
+    text ended_at
+    text created_at
+    text updated_at
+  }
 
-    idle_periods {
-        text id PK "UUID"
-        text session_id FK "sessions.id"
-        text idle_started_at "Início da inatividade"
-        text paused_at "Quando timer pausou (nullable)"
-        text resumed_at "Quando retomou (nullable)"
-        integer duration_seconds "Duração total (nullable)"
-        integer discarded_seconds "Segundos descartados"
-        integer reclassified_seconds "Segundos reclassificados"
-        text category "Categoria escolhida pelo usuário (nullable)"
-        text status "paused | resumed | classified | ..."
-        text created_at "ISO 8601 UTC"
-        text updated_at "ISO 8601 UTC"
-    }
+  tracking_apps {
+    text id PK
+    text name
+    text tracking_id FK
+    text started_at
+    text ended_at
+    text created_at
+    text updated_at
+  }
 
-    sync_queue {
-        text id PK "UUID do item na fila"
-        text entity_type "session | activity_tick | screenshot | idle_period | app_focus"
-        text entity_id "ID da entidade referenciada (polimórfico)"
-        text payload_json "Dados serializados para a API"
-        text signature "Assinatura Ed25519 do payload"
-        text status "pending | sending | confirmed | failed"
-        integer attempts "Tentativas de envio"
-        text last_attempt_at "Última tentativa (nullable)"
-        text next_retry_at "Próximo retry com backoff (nullable)"
-        text error_message "Último erro (nullable)"
-        text created_at "ISO 8601 UTC"
-        text confirmed_at "Confirmação do servidor (nullable)"
-    }
+  tracking_sites {
+    text id PK
+    text address
+    text tracking_id FK
+    text started_at
+    text ended_at
+    text created_at
+    text updated_at
+  }
 
-    %% ========================================================================
-    %% RELATIONSHIPS (FK declaradas no SQLite)
-    %% ========================================================================
+  tracking_inactivity_periods {
+    text id PK
+    text tracking_id FK
+    text inactivity_started_at
+    text paused_at
+    text resumed_at
+    integer duration_seconds
+    integer discarded_seconds
+    integer reclassified_seconds
+    text category
+    text status
+    text created_at
+    text updated_at
+  }
 
-    sessions ||--o{ activity_ticks : "session_id"
-    sessions ||--o{ screenshots : "session_id"
-    sessions ||--o{ app_focus_events : "session_id"
-    sessions ||--o{ idle_periods : "session_id"
+  task_time_totals {
+    text task_id PK
+    integer active_seconds
+    text updated_at
+  }
 
-    %% ========================================================================
-    %% RELATIONSHIPS LÓGICAS (sem FK no SQLite)
-    %% ========================================================================
-    %%
-    %% project_cache.id  ←──  sessions.project_id
-    %% project_cache.tasks_json[].id  ←──  sessions.task_id
-    %% project_cache.id  ←──  screenshots.project_id
-    %% activity_ticks.id  ←──  screenshots.activity_tick_id
-    %% settings.auth_user_json.id  ←──  screenshots.user_id
-    %%
-    %% sync_queue.entity_id aponta para a entidade conforme entity_type:
-    %%   session      → sessions.id
-    %%   activity_tick → activity_ticks.id
-    %%   screenshot   → screenshots.id
-    %%   idle_period  → idle_periods.id
-    %%   app_focus    → app_focus_events.id
-    %%
-    %% Arquivos de screenshot ficam fora do banco:
-    %%   ~/.local/share/voowork-desktop/screenshots/{id}.png
-    %%
-    %% Chaves conhecidas em settings:
-    %%   auth_authenticated, auth_access_token, auth_refresh_token,
-    %%   auth_user_json, auth_org_json,
-    %%   idle_threshold_minutes, idle_profile,
-    %%   theme, locale, demo_seeded, screenshot_blur_enabled
+  trackings ||--o{ tracking_screenshots : contains
+  trackings ||--o{ tracking_peripheral_events : contains
+  trackings ||--o{ tracking_apps : contains
+  trackings ||--o{ tracking_sites : contains
+  trackings ||--o{ tracking_inactivity_periods : contains
+  projects ||--o{ tasks : contains
+  projects ||--o{ trackings : has
