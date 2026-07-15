@@ -6,15 +6,31 @@ use rusqlite::{params, OptionalExtension};
 impl Database {
     pub fn list_projects(&self) -> AgentResult<Vec<ProjectOption>> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, name, tasks_json FROM project_cache ORDER BY sort_order ASC, name ASC",
+            "SELECT id, name FROM projects ORDER BY featured DESC, name ASC",
         )?;
-        let rows = stmt.query_map([], |row| {
-            let id: String = row.get(0)?;
-            let name: String = row.get(1)?;
-            let tasks_json: String = row.get(2)?;
-            let tasks: Vec<TaskOption> =
-                serde_json::from_str(&tasks_json).unwrap_or_default();
-            Ok(ProjectOption { id, name, tasks })
+        let project_rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        let mut projects = Vec::new();
+        for row in project_rows {
+            let (id, name) = row?;
+            let tasks = self.list_tasks_for_project(&id)?;
+            projects.push(ProjectOption { id, name, tasks });
+        }
+
+        Ok(projects)
+    }
+
+    fn list_tasks_for_project(&self, project_id: &str) -> AgentResult<Vec<TaskOption>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, name FROM tasks WHERE project_id = ?1 ORDER BY position ASC, name ASC",
+        )?;
+        let rows = stmt.query_map(params![project_id], |row| {
+            Ok(TaskOption {
+                id: row.get(0)?,
+                name: row.get(1)?,
+            })
         })?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(AgentError::from)
@@ -22,23 +38,64 @@ impl Database {
 
     pub fn upsert_project(
         &self,
+        account_id: &str,
         id: &str,
         name: &str,
         tasks: &[TaskOption],
-        sort_order: i64,
+        featured: bool,
     ) -> AgentResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        let tasks_json = serde_json::to_string(tasks)?;
         self.conn.execute(
-            "INSERT INTO project_cache (id, name, tasks_json, sort_order, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)
+            "INSERT INTO projects (id, account_id, name, featured, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?5)
              ON CONFLICT(id) DO UPDATE SET
                name = excluded.name,
-               tasks_json = excluded.tasks_json,
-               sort_order = excluded.sort_order,
+               featured = excluded.featured,
                updated_at = excluded.updated_at",
-            params![id, name, tasks_json, sort_order, now],
+            params![id, account_id, name, featured as i64, now],
         )?;
+
+        let mut keep_task_ids = Vec::with_capacity(tasks.len());
+        for (position, task) in tasks.iter().enumerate() {
+            keep_task_ids.push(task.id.clone());
+            self.conn.execute(
+                "INSERT INTO tasks (id, account_id, project_id, name, position, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)
+                 ON CONFLICT(id) DO UPDATE SET
+                   name = excluded.name,
+                   position = excluded.position,
+                   updated_at = excluded.updated_at",
+                params![
+                    task.id,
+                    account_id,
+                    id,
+                    task.name,
+                    position as i64,
+                    now
+                ],
+            )?;
+        }
+
+        if keep_task_ids.is_empty() {
+            self.conn.execute(
+                "DELETE FROM tasks WHERE project_id = ?1",
+                params![id],
+            )?;
+        } else {
+            let placeholders = std::iter::repeat_n("?", keep_task_ids.len())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let sql = format!(
+                "DELETE FROM tasks WHERE project_id = ?1 AND id NOT IN ({placeholders})"
+            );
+            let mut sql_params: Vec<&dyn rusqlite::ToSql> =
+                vec![&id as &dyn rusqlite::ToSql];
+            for task_id in &keep_task_ids {
+                sql_params.push(task_id);
+            }
+            self.conn.execute(&sql, sql_params.as_slice())?;
+        }
+
         Ok(())
     }
 
@@ -46,7 +103,7 @@ impl Database {
         let name: Option<String> = self
             .conn
             .query_row(
-                "SELECT name FROM project_cache WHERE id = ?1",
+                "SELECT name FROM projects WHERE id = ?1",
                 params![project_id],
                 |row| row.get(0),
             )
@@ -55,35 +112,37 @@ impl Database {
     }
 
     pub fn task_name(&self, project_id: &str, task_id: &str) -> AgentResult<Option<String>> {
-        let projects = self.list_projects()?;
-        Ok(projects
-            .into_iter()
-            .find(|p| p.id == project_id)
-            .and_then(|p| p.tasks.into_iter().find(|t| t.id == task_id))
-            .map(|t| t.name))
-    }
-
-    pub fn project_cache_count(&self) -> AgentResult<i64> {
         self.conn
-            .query_row("SELECT COUNT(*) FROM project_cache", [], |row| row.get(0))
+            .query_row(
+                "SELECT name FROM tasks WHERE project_id = ?1 AND id = ?2",
+                params![project_id, task_id],
+                |row| row.get(0),
+            )
+            .optional()
             .map_err(AgentError::from)
     }
 
-    pub fn clear_project_cache(&self) -> AgentResult<()> {
-        self.conn.execute("DELETE FROM project_cache", [])?;
+    pub fn project_count(&self) -> AgentResult<i64> {
+        self.conn
+            .query_row("SELECT COUNT(*) FROM projects", [], |row| row.get(0))
+            .map_err(AgentError::from)
+    }
+
+    pub fn clear_projects(&self) -> AgentResult<()> {
+        self.conn.execute("DELETE FROM tasks", [])?;
+        self.conn.execute("DELETE FROM projects", [])?;
         Ok(())
     }
 
     pub fn remove_projects_not_in(&self, ids: &[String]) -> AgentResult<()> {
         if ids.is_empty() {
-            self.clear_project_cache()?;
-            return Ok(());
+            return self.clear_projects();
         }
 
         let placeholders = std::iter::repeat_n("?", ids.len())
             .collect::<Vec<_>>()
             .join(", ");
-        let sql = format!("DELETE FROM project_cache WHERE id NOT IN ({placeholders})");
+        let sql = format!("DELETE FROM projects WHERE id NOT IN ({placeholders})");
         self.conn.execute(&sql, rusqlite::params_from_iter(ids.iter()))?;
         Ok(())
     }

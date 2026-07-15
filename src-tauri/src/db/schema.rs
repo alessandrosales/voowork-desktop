@@ -1,4 +1,5 @@
 pub const MIGRATIONS: &[&str] = &[
+    // Infraestrutura local do agente (fora do DER, necessária para operação offline).
     r#"
     CREATE TABLE IF NOT EXISTS device_metadata (
         id TEXT PRIMARY KEY NOT NULL,
@@ -16,60 +17,6 @@ pub const MIGRATIONS: &[&str] = &[
         updated_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS sessions (
-        id TEXT PRIMARY KEY NOT NULL,
-        project_id TEXT NOT NULL,
-        task_id TEXT,
-        started_at TEXT NOT NULL,
-        ended_at TEXT,
-        monotonic_started_ns INTEGER NOT NULL,
-        monotonic_ended_ns INTEGER,
-        status TEXT NOT NULL DEFAULT 'active',
-        prev_hash TEXT NOT NULL DEFAULT 'genesis',
-        record_hash TEXT NOT NULL,
-        clock_skew_flags INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS activity_ticks (
-        id TEXT PRIMARY KEY NOT NULL,
-        session_id TEXT NOT NULL REFERENCES sessions(id),
-        bucket_start TEXT NOT NULL,
-        bucket_end TEXT NOT NULL,
-        mouse_events INTEGER NOT NULL DEFAULT 0,
-        keyboard_events INTEGER NOT NULL DEFAULT 0,
-        mouse_positions_json TEXT,
-        activity_score_confidence REAL NOT NULL DEFAULT 1.0,
-        automation_flags INTEGER NOT NULL DEFAULT 0,
-        monotonic_elapsed_ns INTEGER NOT NULL,
-        wall_clock_at_tick TEXT NOT NULL,
-        clock_skew_detected INTEGER NOT NULL DEFAULT 0,
-        prev_hash TEXT NOT NULL,
-        record_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_activity_ticks_session ON activity_ticks(session_id);
-
-    CREATE TABLE IF NOT EXISTS screenshots (
-        id TEXT PRIMARY KEY NOT NULL,
-        user_id TEXT,
-        project_id TEXT,
-        task_id TEXT,
-        session_id TEXT NOT NULL REFERENCES sessions(id),
-        file_path TEXT NOT NULL,
-        sha256_hash TEXT NOT NULL,
-        width INTEGER,
-        height INTEGER,
-        captured_at TEXT NOT NULL,
-        activity_tick_id TEXT,
-        blur_applied INTEGER NOT NULL DEFAULT 0,
-        synced_at TEXT,
-        created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_screenshots_session ON screenshots(session_id);
-
     CREATE TABLE IF NOT EXISTS sync_queue (
         id TEXT PRIMARY KEY NOT NULL,
         entity_type TEXT NOT NULL,
@@ -86,46 +33,132 @@ pub const MIGRATIONS: &[&str] = &[
     );
 
     CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, next_retry_at);
-
-    CREATE TABLE IF NOT EXISTS project_cache (
+    "#,
+    // Domínio alinhado a voowork-backend/docs/db.mermaid
+    r#"
+    CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY NOT NULL,
+        account_id TEXT NOT NULL,
         name TEXT NOT NULL,
-        tasks_json TEXT NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL
-    );
-    "#,
-    r#"
-    CREATE TABLE IF NOT EXISTS app_focus_events (
-        id TEXT PRIMARY KEY NOT NULL,
-        session_id TEXT NOT NULL REFERENCES sessions(id),
-        app_name TEXT NOT NULL,
-        window_title TEXT,
-        process_path TEXT,
-        process_id INTEGER,
-        captured_at TEXT NOT NULL,
-        created_at TEXT NOT NULL
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_app_focus_session ON app_focus_events(session_id);
-    CREATE INDEX IF NOT EXISTS idx_app_focus_captured ON app_focus_events(captured_at);
-    "#,
-    r#"
-    CREATE TABLE IF NOT EXISTS idle_periods (
-        id TEXT PRIMARY KEY NOT NULL,
-        session_id TEXT NOT NULL REFERENCES sessions(id),
-        idle_started_at TEXT NOT NULL,
-        paused_at TEXT,
-        resumed_at TEXT,
-        duration_seconds INTEGER,
-        discarded_seconds INTEGER NOT NULL DEFAULT 0,
-        reclassified_seconds INTEGER NOT NULL DEFAULT 0,
-        category TEXT,
-        status TEXT NOT NULL DEFAULT 'paused',
+        featured INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_idle_periods_session ON idle_periods(session_id);
+    CREATE INDEX IF NOT EXISTS idx_projects_account ON projects(account_id);
+
+    CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY NOT NULL,
+        account_id TEXT NOT NULL,
+        project_id TEXT NOT NULL REFERENCES projects(id),
+        name TEXT NOT NULL,
+        description TEXT,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id, position);
+
+    CREATE TABLE IF NOT EXISTS trackings (
+        id TEXT PRIMARY KEY NOT NULL,
+        account_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        task_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        device TEXT,
+        edition_reason TEXT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_trackings_status ON trackings(status, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_trackings_project ON trackings(project_id, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS tracking_screenshots (
+        id TEXT PRIMARY KEY NOT NULL,
+        path TEXT NOT NULL,
+        tracking_id TEXT NOT NULL REFERENCES trackings(id),
+        original_id TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tracking_screenshots_tracking ON tracking_screenshots(tracking_id, captured_at);
+
+    CREATE TABLE IF NOT EXISTS tracking_peripheral_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        event TEXT NOT NULL,
+        count REAL NOT NULL DEFAULT 0.0,
+        tracking_id TEXT NOT NULL REFERENCES trackings(id),
+        screenshot_original_id TEXT,
+        started_at TEXT NOT NULL,
+        ended_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tracking_peripheral_tracking ON tracking_peripheral_events(tracking_id, started_at);
+
+    CREATE TABLE IF NOT EXISTS tracking_apps (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        tracking_id TEXT NOT NULL REFERENCES trackings(id),
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tracking_apps_tracking ON tracking_apps(tracking_id, started_at);
+
+    CREATE TABLE IF NOT EXISTS tracking_sites (
+        id TEXT PRIMARY KEY NOT NULL,
+        address TEXT NOT NULL,
+        tracking_id TEXT NOT NULL REFERENCES trackings(id),
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tracking_sites_tracking ON tracking_sites(tracking_id, started_at);
+    "#,
+    r#"
+    DROP TABLE IF EXISTS app_focus_events;
+    DROP TABLE IF EXISTS activity_ticks;
+    DROP TABLE IF EXISTS screenshots;
+    DROP TABLE IF EXISTS sessions;
+    DROP TABLE IF EXISTS project_cache;
+    "#,
+    // Tabelas locais de inatividade e agregação de tempo (criadas anteriormente em db/mod.rs).
+    r#"
+    CREATE TABLE IF NOT EXISTS tracking_inactivity_periods (
+        id TEXT PRIMARY KEY NOT NULL,
+        tracking_id TEXT NOT NULL REFERENCES trackings(id),
+        inactivity_started_at TEXT NOT NULL,
+        paused_at TEXT,
+        resumed_at TEXT,
+        duration_seconds INTEGER NOT NULL DEFAULT 0,
+        discarded_seconds INTEGER NOT NULL DEFAULT 0,
+        reclassified_seconds INTEGER NOT NULL DEFAULT 0,
+        category TEXT,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tracking_inactivity_periods_tracking
+        ON tracking_inactivity_periods(tracking_id, inactivity_started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS task_time_totals (
+        task_id TEXT PRIMARY KEY NOT NULL,
+        active_seconds INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+    );
     "#,
 ];
