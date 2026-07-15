@@ -1,0 +1,44 @@
+# SQLite Local Schema
+
+O desktop usa SQLite local (`rusqlite`, modo WAL) como fonte de verdade offline. Schema documentado em `docs/db.mermaid`.
+
+## Regras para agentes
+
+1. **Novas tabelas/colunas** — somente no SQLite do desktop, nunca no PostgreSQL do backend.
+2. **Documentar** mudanças de schema em `docs/db.mermaid` no mesmo PR/commit.
+3. **Migrations** — implementar em `src-tauri/src/db/schema.rs` (ou módulo de migração existente); seguir padrão do projeto.
+4. **Dados de runtime** — ficam em `~/.local/share/voowork-desktop/voowork-desktop.db` — nunca commitar.
+
+## Fluxo de alteração de schema
+
+1. Ler `docs/db.mermaid` e `src-tauri/src/db/schema.rs` atuais.
+2. Propor alteração local com justificativa (feature, performance, persistência).
+3. Atualizar schema Rust + `docs/db.mermaid`.
+4. Ajustar queries em `src-tauri/src/db/` conforme necessário.
+5. Verificar se sync/outbox precisa de mudança — **sem** alterar API backend.
+
+## Entidades com sync
+
+| Entidade local | Sync para API |
+|----------------|---------------|
+| `tracking` | ✅ POST/PATCH |
+| `screenshot` | ✅ multipart |
+| `peripheral_event` | ✅ POST |
+| `tracking_app` | ✅ POST |
+| `tracking_site` | ✅ POST |
+| `idle_period` | ❌ local only |
+
+Novas entidades locais que **não** sobem na API devem ser explicitamente marcadas como local-only no plano.
+
+## Segurança de dados
+
+- Não apagar dados de produção — o SQLite local é do usuário.
+- Migrations devem ser **aditivas** quando possível (ADD COLUMN, CREATE TABLE).
+- Testar com DB de dev em `~/.local/share/voowork-desktop/` ou cópia isolada.
+
+## Verificação
+
+```bash
+cargo check --manifest-path src-tauri/Cargo.toml
+# Smoke: npm run tauri dev — login, start tracking, verificar persistência
+```

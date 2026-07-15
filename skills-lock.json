@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "skills": {
+    "adding-tauri-system-tray": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-system-tray/SKILL.md",
+      "computedHash": "597e0fa835fa2b90f28cd6628fc17f65a8fdf6e505b17d4549429512c58245b0"
+    },
+    "calling-rust-from-tauri-frontend": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-calling-rust/SKILL.md",
+      "computedHash": "384db541a0a09f2890227e95f17c82e5b50470eb2dd4b7b51cedb19a2f8de3e0"
+    },
+    "configuring-tauri-permissions": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-permissions/SKILL.md",
+      "computedHash": "7d97da37393a64773d9375af3512440b36f5269ab5cc9a20532e340b3d494dae"
+    },
+    "debugging-tauri-apps": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-debugging/SKILL.md",
+      "computedHash": "fbc8c3ecac07c458f3fe3177668dd52489218b64e0b6af5b016dc057d6295ff3"
+    },
+    "integrating-tauri-js-frontends": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-frontend-js/SKILL.md",
+      "computedHash": "2d1d85c04a4dd25e55ae49fb35df3907b1ad8a3b2ca652d4cd6b9cecde7c4cab"
+    },
+    "listening-to-tauri-events": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-frontend-events/SKILL.md",
+      "computedHash": "30f60a654e8379b775c3282c3a54f9b03df7179a3098882cb984a32ffceb7d90"
+    },
+    "packaging-tauri-for-linux": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-linux-packaging/SKILL.md",
+      "computedHash": "2db820608374308e8dfdd73b312068649e06ad7ff5403cc5b4cb92a5c2aa42d2"
+    },
+    "rust-async-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/systems-programming/skills/rust-async-patterns/SKILL.md",
+      "computedHash": "20d32ef58158c94eb4dfc4aaf19bec7ae2a025ae5d42da7b49ccfbaeda389273"
+    },
+    "shadcn": {
+      "source": "shadcn/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "d81caa0f86aabab65b25e302d454f23a3328760386ed9078345584c0d5c8058e"
+    },
+    "tailwind-v4-shadcn": {
+      "source": "secondsky/claude-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/tailwind-v4-shadcn/skills/tailwind-v4-shadcn/SKILL.md",
+      "computedHash": "c2b354b64cbd922c8d93121091d079026e2c8a3ca81c07c4f31b6e738c2695f1"
+    },
+    "testing-tauri-apps": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-testing/SKILL.md",
+      "computedHash": "12084f72d1e7c13dc0c11e882df9a65b252cdb8184fb1e93bc06a4516a4c3a35"
+    },
+    "understanding-tauri-ipc": {
+      "source": "dchuk/claude-code-tauri-skills",
+      "sourceType": "github",
+      "skillPath": "tauri/tauri-ipc/SKILL.md",
+      "computedHash": "68777dc9bd8b156b2cc081a38fac5a317e202f71be8be7f6da0f60a4c0091bd7"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "ca7b0c0c6e5f2750043f7f0cd72d16ac4e2abc48f9b5500d047a4b77a2506212"
+    }
+  }
+}

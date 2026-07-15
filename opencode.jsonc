@@ -1,0 +1,62 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  "default_agent": "desktop-agent-orchestrator",
+
+  "instructions": [
+    "AGENTS.md",
+    ".opencode/rules/backend-boundary.md",
+    ".opencode/rules/tauri-dev-cli.md",
+    ".opencode/rules/sqlite-local-schema.md"
+  ],
+
+  "agent": {
+    "desktop-agent-orchestrator": {
+      "description": "Orquestrador multi-agente do voowork-desktop. Coordena subagentes, preserva contexto e valida entrega via desktop-implementation-auditor.",
+      "mode": "primary",
+      "prompt": "{file:.opencode/agents/desktop-agent-orchestrator.md}"
+    },
+    "desktop-implementation-planner": {
+      "description": "Planejamento técnico read-only. Analisa o codebase Tauri/Rust/React e produz plano de execução antes de codar.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/desktop-implementation-planner.md}",
+      "tools": {
+        "write": false,
+        "edit": false
+      }
+    },
+    "desktop-implementation-auditor": {
+      "description": "Auditoria read-only. Valida implementação contra demanda, plano e restrições do projeto. Retorna PASS/FAIL.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/desktop-implementation-auditor.md}",
+      "tools": {
+        "write": false,
+        "edit": false
+      }
+    },
+    "desktop-rust-specialist": {
+      "description": "Especialista Rust/Tauri core. Módulos em src-tauri: tracking, sync, db, activity, screenshot, idle, auth, commands.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/desktop-rust-specialist.md}"
+    },
+    "desktop-react-ui-specialist": {
+      "description": "Especialista React/TypeScript UI. Componentes timer, hooks, i18n, integração via invoke Tauri.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/desktop-react-ui-specialist.md}"
+    },
+    "desktop-verification-specialist": {
+      "description": "Verificação e validação. cargo check/clippy, bun typecheck, smoke manual do agente desktop.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/desktop-verification-specialist.md}"
+    },
+    "desktop-implementation-specialist": {
+      "description": "Roteador de implementação quando o escopo cruza Rust + React ou está ambíguo.",
+      "mode": "subagent",
+      "prompt": "{file:.opencode/agents/desktop-implementation-specialist.md}"
+    }
+  },
+
+  "skills": {
+    "paths": [".opencode/skills"]
+  }
+}

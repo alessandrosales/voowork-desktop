@@ -1,0 +1,38 @@
+# Backend Boundary (CRITICAL)
+
+O desktop é um **cliente offline-first** da API Rails. O domínio de negócio vive no backend — o desktop persiste localmente e sincroniza.
+
+## Regras para agentes
+
+1. **Nunca** alterar `voowork-backend/` — models, migrations, controllers, routes, serializers, jobs, specs.
+2. **Nunca** criar novos endpoints ou campos na API Rails para features do desktop.
+3. **Nunca** editar `voowork-backend/docs/db.mermaid` — schema PostgreSQL é responsabilidade do backend.
+4. **Nunca** propor mudanças no contrato REST sem confirmação explícita do usuário — o desktop consome a API existente.
+
+## O que é permitido no desktop
+
+| Permitido | Exemplo |
+|-----------|---------|
+| Tabelas/colunas **locais** no SQLite | `idle_periods`, `activity_buffer_state` |
+| Usar entidades existentes de forma criativa | `peripheral_events.count` → activity score |
+| Sync via endpoints já integrados | Ver `docs/BACKEND_INTEGRATION.md` |
+| Dados que ficam só localmente | `idle_period` (sync ignorado) |
+
+## Integração existente
+
+Consulte `docs/BACKEND_INTEGRATION.md` antes de propor sync ou novos payloads.
+
+- Auth: `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- Tracking: `POST/PATCH /api/v1/trackings`
+- Nested: screenshots, peripheral_events, apps, sites
+
+## Quando a demanda exige backend
+
+1. **Pare** e documente o gap.
+2. Informe que a mudança pertence ao `voowork-backend`.
+3. Proponha workaround local **somente** se couber nas restrições acima.
+4. Não implemente no backend neste repositório.
+
+## Referência de escopo
+
+Ver restrições em `docs/IMPLEMENTATION_PLAN.md` — fechar gargalos do agente **sem alterar** o domínio do backend.
