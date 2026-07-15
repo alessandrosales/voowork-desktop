@@ -1,11 +1,13 @@
-/// Sincronização remota com o backend fica desligada até a integração ser definida.
-pub const BACKEND_SYNC_ENABLED: bool = false;
+/// Sincronização remota com a API Rails de trackings.
+pub const BACKEND_SYNC_ENABLED: bool = true;
 
 /// Tipos de entidade enfileirados para sincronização com a API.
-pub const ENTITY_SESSION: &str = "session";
-pub const ENTITY_ACTIVITY_TICK: &str = "activity_tick";
-pub const ENTITY_IDLE_PERIOD: &str = "idle_period";
-pub const ENTITY_SCREENSHOT: &str = "screenshot";
+pub const ENTITY_TRACKING: &str = "tracking";
+pub const ENTITY_TRACKING_PERIPHERAL_EVENT: &str = "tracking_peripheral_event";
+pub const ENTITY_TRACKING_INACTIVITY_PERIOD: &str = "tracking_inactivity_period";
+pub const ENTITY_TRACKING_SCREENSHOT: &str = "tracking_screenshot";
+pub const ENTITY_TRACKING_APP: &str = "tracking_app";
+pub const ENTITY_TRACKING_SITE: &str = "tracking_site";
 
 /// Tamanho máximo de lote por ciclo do worker.
 pub const PENDING_BATCH_SIZE: usize = 10;

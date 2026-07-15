@@ -1,12 +1,15 @@
 mod api;
 mod constants;
+pub mod finalize;
 mod outbox;
-mod validation;
 pub mod worker;
 
-pub use constants::{ENTITY_ACTIVITY_TICK, ENTITY_IDLE_PERIOD, ENTITY_SCREENSHOT, ENTITY_SESSION};
+pub use constants::{
+    ENTITY_TRACKING_INACTIVITY_PERIOD, ENTITY_TRACKING, ENTITY_TRACKING_APP, ENTITY_TRACKING_PERIPHERAL_EVENT,
+    ENTITY_TRACKING_SCREENSHOT, ENTITY_TRACKING_SITE,
+};
 pub use outbox::{
-    fetch_pending_batch, mark_screenshot_synced, screenshot_file_path, PendingSyncItem, SyncOutbox,
+    fetch_pending_batch, mark_tracking_screenshot_synced, tracking_screenshot_file_path,
+    PendingSyncItem, SyncOutbox,
 };
 pub use api::send_sync_item;
-pub use validation::validate_entity_before_sync;

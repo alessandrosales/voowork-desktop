@@ -9,7 +9,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 pub use api::ProjectsClient;
-pub use cache::ensure_can_start_session;
+pub use cache::ensure_can_start_tracking;
 
 pub fn invalidate_project_cache_if_org_changed(
     db: &Database,
@@ -50,8 +50,8 @@ pub async fn sync_project_cache(
     {
         let db_guard = db.lock();
         cache::invalidate_if_org_changed(&db_guard, &organization_id)?;
-        for (id, name, tasks, sort_order) in entries {
-            db_guard.upsert_project(&id, &name, &tasks, sort_order)?;
+        for (id, name, tasks, _sort_order) in entries {
+            db_guard.upsert_project(&organization_id, &id, &name, &tasks, false)?;
         }
         db_guard.remove_projects_not_in(&fetched_ids)?;
         cache::mark_cache_synced(&db_guard, &organization_id)?;

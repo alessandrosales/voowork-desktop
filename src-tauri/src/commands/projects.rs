@@ -4,9 +4,14 @@ use crate::models::ProjectOption;
 use std::sync::Arc;
 
 #[tauri::command]
-pub fn list_projects(state: tauri::State<'_, AppState>) -> AgentResult<Vec<ProjectOption>> {
-    let db = state.db.lock();
-    db.list_projects()
+pub async fn list_projects(state: tauri::State<'_, AppState>) -> AgentResult<Vec<ProjectOption>> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = app_state.db.lock();
+        db.list_projects()
+    })
+    .await
+    .map_err(|err| crate::error::AgentError::Other(format!("list projects worker failed: {err}")))?
 }
 
 #[tauri::command]

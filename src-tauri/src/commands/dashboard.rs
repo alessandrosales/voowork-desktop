@@ -1,14 +1,15 @@
 use crate::app_state::AppState;
+use crate::auth::read_access_token;
 use crate::error::AgentResult;
 use crate::models::{
-    ActivityChartPoint, ActivityTickRow, AppFocusRow, DashboardSummary, ScreenshotRow,
-    SessionRow, SyncQueueRow,
+    ActivityChartPoint, DashboardSummary, TrackingInactivityPeriodRow, SyncQueueRow, TrackingAppRow,
+    TrackingPeripheralEventRow, TrackingRow, TrackingScreenshotImage, TrackingScreenshotRow,
+    TrackingSiteRow,
 };
+use crate::screenshot::resolve_screenshot_image;
 
 #[tauri::command]
-pub fn get_dashboard_summary(
-    state: tauri::State<'_, AppState>,
-) -> AgentResult<DashboardSummary> {
+pub fn get_dashboard_summary(state: tauri::State<'_, AppState>) -> AgentResult<DashboardSummary> {
     let db = state.db.lock();
     db.dashboard_summary()
 }
@@ -24,42 +25,64 @@ pub fn get_activity_chart(
 }
 
 #[tauri::command]
-pub fn list_recent_sessions(
-    state: tauri::State<'_, AppState>,
-    limit: Option<i64>,
-) -> AgentResult<Vec<SessionRow>> {
-    let db = state.db.lock();
-    db.list_recent_sessions(limit.unwrap_or(20))
-}
-
-#[tauri::command]
-pub fn list_sessions(
+pub fn list_trackings(
     state: tauri::State<'_, AppState>,
     limit: Option<i64>,
     offset: Option<i64>,
-) -> AgentResult<Vec<SessionRow>> {
+) -> AgentResult<Vec<TrackingRow>> {
     let db = state.db.lock();
-    db.list_sessions(limit.unwrap_or(50), offset.unwrap_or(0))
+    db.list_trackings(limit.unwrap_or(50), offset.unwrap_or(0))
 }
 
 #[tauri::command]
-pub fn list_activity_ticks(
+pub fn list_tracking_peripheral_events(
     state: tauri::State<'_, AppState>,
     limit: Option<i64>,
     offset: Option<i64>,
-) -> AgentResult<Vec<ActivityTickRow>> {
+) -> AgentResult<Vec<TrackingPeripheralEventRow>> {
     let db = state.db.lock();
-    db.list_activity_ticks(limit.unwrap_or(50), offset.unwrap_or(0))
+    db.list_tracking_peripheral_events(limit.unwrap_or(50), offset.unwrap_or(0))
 }
 
 #[tauri::command]
-pub fn list_screenshots(
+pub fn list_tracking_screenshots(
     state: tauri::State<'_, AppState>,
     limit: Option<i64>,
     offset: Option<i64>,
-) -> AgentResult<Vec<ScreenshotRow>> {
+) -> AgentResult<Vec<TrackingScreenshotRow>> {
     let db = state.db.lock();
-    db.list_screenshots(limit.unwrap_or(50), offset.unwrap_or(0))
+    db.list_tracking_screenshots(limit.unwrap_or(50), offset.unwrap_or(0))
+}
+
+#[tauri::command]
+pub async fn get_tracking_screenshot_image(
+    state: tauri::State<'_, AppState>,
+    screenshot_id: String,
+) -> AgentResult<TrackingScreenshotImage> {
+    let (db_path, access_token, tracking_id, path, synced_at) = {
+        let db = state.db.lock();
+        let screenshot = db.get_tracking_screenshot_access(&screenshot_id)?;
+        let access_token = read_access_token(&db)?
+            .ok_or_else(|| crate::error::AgentError::Auth("user not authenticated".into()))?;
+        (
+            db.path().clone(),
+            access_token,
+            screenshot.tracking_id,
+            screenshot.path,
+            screenshot.synced_at,
+        )
+    };
+
+    resolve_screenshot_image(
+        &state.api_base_url,
+        &access_token,
+        &db_path,
+        &screenshot_id,
+        &tracking_id,
+        &path,
+        synced_at.as_deref(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -73,16 +96,40 @@ pub fn list_sync_queue(
 }
 
 #[tauri::command]
-pub fn list_app_focus(
+pub fn list_tracking_apps(
     state: tauri::State<'_, AppState>,
     limit: Option<i64>,
     offset: Option<i64>,
-    session_id: Option<String>,
-) -> AgentResult<Vec<AppFocusRow>> {
+    tracking_id: Option<String>,
+) -> AgentResult<Vec<TrackingAppRow>> {
     let db = state.db.lock();
-    db.list_app_focus(
+    db.list_tracking_apps(
         limit.unwrap_or(50),
         offset.unwrap_or(0),
-        session_id.as_deref(),
+        tracking_id.as_deref(),
     )
+}
+
+#[tauri::command]
+pub fn list_tracking_sites(
+    state: tauri::State<'_, AppState>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+    tracking_id: Option<String>,
+) -> AgentResult<Vec<TrackingSiteRow>> {
+    let db = state.db.lock();
+    db.list_tracking_sites(
+        limit.unwrap_or(50),
+        offset.unwrap_or(0),
+        tracking_id.as_deref(),
+    )
+}
+
+#[tauri::command]
+pub fn list_tracking_inactivity_periods(
+    state: tauri::State<'_, AppState>,
+    limit: Option<i64>,
+) -> AgentResult<Vec<TrackingInactivityPeriodRow>> {
+    let db = state.db.lock();
+    db.list_tracking_inactivity_periods(limit.unwrap_or(50))
 }

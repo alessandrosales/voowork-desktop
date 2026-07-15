@@ -1,6 +1,7 @@
-use crate::auth::api_models::{MeResponse, TaskResponse};
-use crate::auth::{auth_error_from_response, HTTP_TIMEOUT_SECS};
+use crate::auth::http_errors::auth_error_from_response;
+use crate::auth::store::HTTP_TIMEOUT_SECS;
 use crate::error::{AgentError, AgentResult};
+use serde::Deserialize;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -13,6 +14,24 @@ pub struct ApiProject {
 pub struct ApiTask {
     pub id: String,
     pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProjectResponse {
+    id: String,
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct MeProjectsResponse {
+    #[serde(default)]
+    projects: Vec<ProjectResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskResponse {
+    id: String,
+    name: String,
 }
 
 pub struct ProjectsClient {
@@ -54,7 +73,7 @@ impl ProjectsClient {
             return Err(auth_error_from_response(status, &body));
         }
 
-        let payload: MeResponse = response.json().await?;
+        let payload: MeProjectsResponse = response.json().await?;
 
         Ok(payload
             .projects

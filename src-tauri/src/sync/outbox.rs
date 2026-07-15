@@ -1,4 +1,3 @@
-use crate::crypto::DeviceKeys;
 use crate::error::AgentResult;
 use rusqlite::{params, Connection, OptionalExtension};
 use uuid::Uuid;
@@ -11,17 +10,15 @@ impl SyncOutbox {
         entity_type: &str,
         entity_id: &str,
         payload: impl serde::Serialize,
-        signing_key: &DeviceKeys,
     ) -> AgentResult<String> {
         let payload_str = serde_json::to_string(&payload)?;
-        let signature = signing_key.sign_payload(&payload_str);
         let id = Uuid::new_v4().to_string();
         let now = chrono::Utc::now().to_rfc3339();
 
         conn.execute(
-            "INSERT INTO sync_queue (id, entity_type, entity_id, payload_json, signature, status, created_at, next_retry_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?6)",
-            params![id, entity_type, entity_id, payload_str, signature, now],
+            "INSERT INTO sync_queue (id, entity_type, entity_id, payload_json, status, created_at, next_retry_at)
+             VALUES (?1, ?2, ?3, ?4, 'pending', ?5, ?5)",
+            params![id, entity_type, entity_id, payload_str, now],
         )?;
 
         Ok(id)
@@ -64,6 +61,7 @@ pub struct PendingSyncItem {
     pub entity_type: String,
     pub entity_id: String,
     pub payload_json: String,
+    #[allow(dead_code)]
     pub signature: Option<String>,
     pub attempts: i64,
 }
@@ -92,9 +90,9 @@ pub fn fetch_pending_batch(conn: &Connection, limit: usize) -> AgentResult<Vec<P
     rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
-pub fn screenshot_file_path(conn: &Connection, screenshot_id: &str) -> AgentResult<Option<String>> {
+pub fn tracking_screenshot_file_path(conn: &Connection, screenshot_id: &str) -> AgentResult<Option<String>> {
     conn.query_row(
-        "SELECT file_path FROM screenshots WHERE id = ?1",
+        "SELECT path FROM tracking_screenshots WHERE id = ?1",
         params![screenshot_id],
         |row| row.get(0),
     )
@@ -102,11 +100,35 @@ pub fn screenshot_file_path(conn: &Connection, screenshot_id: &str) -> AgentResu
     .map_err(Into::into)
 }
 
-pub fn mark_screenshot_synced(conn: &Connection, screenshot_id: &str) -> AgentResult<()> {
+pub fn mark_tracking_screenshot_synced(
+    conn: &Connection,
+    screenshot_id: &str,
+    remote_path: Option<&str>,
+) -> AgentResult<()> {
+    let local_path = tracking_screenshot_file_path(conn, screenshot_id)?;
     let now = chrono::Utc::now().to_rfc3339();
-    conn.execute(
-        "UPDATE screenshots SET synced_at = ?2 WHERE id = ?1",
-        params![screenshot_id, now],
-    )?;
+
+    if let Some(remote_path) = remote_path {
+        conn.execute(
+            "UPDATE tracking_screenshots
+             SET updated_at = ?2, synced_at = ?2, remote_path = ?3, path = ?3
+             WHERE id = ?1",
+            params![screenshot_id, now, remote_path],
+        )?;
+
+        if let Some(local_path) = local_path {
+            if local_path != remote_path {
+                if let Err(err) = crate::screenshot::purge_local_file(&local_path) {
+                    log::warn!("failed to purge local screenshot {local_path}: {err}");
+                }
+            }
+        }
+    } else {
+        conn.execute(
+            "UPDATE tracking_screenshots SET updated_at = ?2, synced_at = ?2 WHERE id = ?1",
+            params![screenshot_id, now],
+        )?;
+    }
+
     Ok(())
 }

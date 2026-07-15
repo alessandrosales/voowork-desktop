@@ -1,17 +1,21 @@
 mod dashboard;
+mod navigation;
 mod projects;
-mod session;
 mod settings;
+mod tracking;
 
 pub use dashboard::{
-    get_activity_chart, get_dashboard_summary, list_activity_ticks, list_app_focus,
-    list_recent_sessions, list_screenshots, list_sessions, list_sync_queue,
+    get_activity_chart, get_dashboard_summary, get_tracking_screenshot_image, list_tracking_inactivity_periods,
+    list_sync_queue, list_tracking_apps, list_tracking_peripheral_events,
+    list_tracking_screenshots, list_tracking_sites, list_trackings,
 };
+pub use navigation::{open_external_url, open_web_panel};
 pub use projects::{list_projects, sync_projects};
-pub use session::{
-    classify_idle_period, confirm_manual_work, confirm_still_working, dismiss_manual_work_check,
-    get_app_status, get_idle_config, get_session_status, pause_session, resume_session,
-    skip_idle_classification, start_session, stop_session,
+pub use tracking::{
+    classify_tracking_inactivity_period, confirm_manual_work, confirm_still_working, dismiss_activity_buffer,
+    dismiss_manual_work_check, get_app_status, get_tracking_inactivity_config, get_task_elapsed_seconds,
+    get_tracking_status, pause_tracking, restart_tracking, resume_tracking, skip_tracking_inactivity_classification, start_tracking,
+    stop_tracking,
 };
 pub use settings::{
     get_app_version, get_setting, get_tracking_capabilities, get_tracking_config, open_data_directory,

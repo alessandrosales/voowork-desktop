@@ -1,28 +1,59 @@
 use crate::app_state::AppState;
+use crate::db::frontend_settings::ensure_frontend_setting_key;
 use crate::error::AgentResult;
-use crate::models::{IdleConfig, TrackingCapabilities, TrackingConfig};
+use crate::locale::LOCALE_SETTING_KEY;
+use crate::models::{TrackingInactivityConfig, TrackingCapabilities, TrackingConfig};
+use crate::screenshot::{normalize_jpeg_quality, SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY};
+use crate::tracking_inactivity::{
+    load_inactivity_threshold_minutes, COUNTDOWN_SECS, SETTING_INACTIVITY_PROFILE,
+};
+use crate::tray::{
+    refresh_tray_menu, schedule_tray_refresh, SETTING_SELECTED_PROJECT_ID, SETTING_SELECTED_TASK_ID,
+};
 
 #[tauri::command]
 pub fn get_setting(state: tauri::State<'_, AppState>, key: String) -> AgentResult<Option<String>> {
+    ensure_frontend_setting_key(&key)?;
     let db = state.db.lock();
     db.get_setting(&key)
 }
 
 #[tauri::command]
 pub fn set_setting(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
     key: String,
     value: String,
 ) -> AgentResult<()> {
-    let apply_blur = key == "screenshot_blur_enabled";
+    ensure_frontend_setting_key(&key)?;
+    let apply_blur = key == SETTING_BLUR_ENABLED;
+    let apply_jpeg_quality = key == SETTING_JPEG_QUALITY;
+    let apply_locale = key == LOCALE_SETTING_KEY;
+    let apply_tray_selection =
+        key == SETTING_SELECTED_PROJECT_ID || key == SETTING_SELECTED_TASK_ID;
     {
         let db = state.db.lock();
         db.set_setting(&key, &value)?;
     }
     if apply_blur {
         state
-            .session_manager
+            .tracking_manager
             .set_screenshot_blur(value == "true" || value == "1");
+    }
+    if apply_jpeg_quality {
+        if let Ok(quality) = value.parse::<u8>() {
+            state
+                .tracking_manager
+                .set_screenshot_jpeg_quality(normalize_jpeg_quality(quality));
+        }
+    }
+    if apply_locale {
+        if let Err(err) = refresh_tray_menu(&app, &value) {
+            log::warn!("failed to refresh tray menu locale: {err}");
+        }
+    }
+    if apply_tray_selection {
+        schedule_tray_refresh(app);
     }
     Ok(())
 }
@@ -41,26 +72,39 @@ pub fn open_data_directory(state: tauri::State<'_, AppState>) -> AgentResult<Str
 #[tauri::command]
 pub fn get_tracking_config(state: tauri::State<'_, AppState>) -> AgentResult<TrackingConfig> {
     let db = state.db.lock();
-    let threshold_minutes = crate::idle::load_idle_threshold_minutes(db.conn());
+    let threshold_minutes = load_inactivity_threshold_minutes(db.conn());
     let profile = db
-        .get_setting(crate::idle::SETTING_PROFILE)?
+        .get_setting(SETTING_INACTIVITY_PROFILE)?
         .unwrap_or_else(|| "standard".into());
     Ok(TrackingConfig {
-        activity_tick_interval_secs: crate::session::TICK_INTERVAL_SECS,
-        first_activity_tick_secs: crate::session::FIRST_TICK_SECS,
-        first_screenshot_secs: crate::session::FIRST_SCREENSHOT_SECS,
-        screenshot_base_interval_secs: crate::session::screenshot_base_interval_secs(),
-        screenshot_jitter_secs: crate::session::SCREENSHOT_JITTER_SECS,
-        app_focus_poll_interval_secs: crate::session::APP_FOCUS_POLL_SECS,
-        idle: IdleConfig {
+        screenshot_interval_secs: crate::tracking::load_screenshot_interval_secs(db.conn()),
+        active_window_poll_interval_secs: crate::tracking::APP_FOCUS_POLL_SECS,
+        inactivity: TrackingInactivityConfig {
             threshold_minutes,
             profile,
-            countdown_secs: crate::idle::COUNTDOWN_SECS,
+            countdown_secs: COUNTDOWN_SECS,
         },
     })
 }
 
 #[tauri::command]
 pub fn get_tracking_capabilities() -> TrackingCapabilities {
-    crate::permissions::probe_tracking_capabilities()
+    TrackingCapabilities {
+        input_capture: crate::models::PermissionCheck {
+            granted: true,
+            label: "Captura de mouse/teclado".into(),
+            action: None,
+        },
+        window_tracking: crate::models::PermissionCheck {
+            granted: true,
+            label: "Janela ativa".into(),
+            action: None,
+        },
+        screenshots: crate::models::PermissionCheck {
+            granted: true,
+            label: "Captura de tela".into(),
+            action: None,
+        },
+        notes: vec!["Permissões verificadas na inicialização.".into()],
+    }
 }

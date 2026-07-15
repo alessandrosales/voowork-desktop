@@ -3,12 +3,12 @@ use crate::db::Database;
 use crate::error::AgentError;
 use crate::sync::{
     constants::{
-        BACKEND_SYNC_ENABLED, ENTITY_SCREENSHOT, EVENT_AUTH_SESSION_EXPIRED, HTTP_TIMEOUT_SECS, PENDING_BATCH_SIZE,
-        WORKER_IDLE_AFTER_SESSION_REVOKED_SECS, WORKER_IDLE_BETWEEN_BATCHES_SECS,
+        BACKEND_SYNC_ENABLED, ENTITY_TRACKING_SCREENSHOT, EVENT_AUTH_SESSION_EXPIRED, HTTP_TIMEOUT_SECS,
+        PENDING_BATCH_SIZE, WORKER_IDLE_AFTER_SESSION_REVOKED_SECS, WORKER_IDLE_BETWEEN_BATCHES_SECS,
         WORKER_IDLE_EMPTY_QUEUE_SECS, WORKER_IDLE_NO_TOKEN_SECS,
     },
-    fetch_pending_batch, mark_screenshot_synced, screenshot_file_path, send_sync_item,
-    validate_entity_before_sync, PendingSyncItem, SyncOutbox,
+    fetch_pending_batch, mark_tracking_screenshot_synced, tracking_screenshot_file_path, send_sync_item,
+    PendingSyncItem, SyncOutbox,
 };
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -137,30 +137,42 @@ fn prepare_item_for_send(
     item: &PendingSyncItem,
 ) -> Option<String> {
     let db_guard = db.lock();
-    let _ = validate_entity_before_sync(db_guard.conn(), &item.entity_type, &item.entity_id);
     let _ = SyncOutbox::mark_sending(db_guard.conn(), &item.id);
 
-    if item.entity_type == ENTITY_SCREENSHOT {
-        screenshot_file_path(db_guard.conn(), &item.entity_id)
+    if item.entity_type == ENTITY_TRACKING_SCREENSHOT || item.entity_type == "screenshot" {
+        tracking_screenshot_file_path(db_guard.conn(), &item.entity_id)
             .ok()
             .flatten()
+            .or_else(|| screenshot_path_from_payload(&item.payload_json))
     } else {
         None
     }
+}
+
+fn screenshot_path_from_payload(payload_json: &str) -> Option<String> {
+    let payload: serde_json::Value = serde_json::from_str(payload_json).ok()?;
+    payload
+        .get("filePath")
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
 }
 
 fn apply_sync_result(
     db: &Arc<Mutex<Database>>,
     app: &AppHandle,
     item: &PendingSyncItem,
-    result: Result<(), AgentError>,
+    result: Result<Option<String>, AgentError>,
 ) -> bool {
     let db_guard = db.lock();
     match result {
-        Ok(()) => {
+        Ok(remote_path) => {
             let _ = SyncOutbox::mark_confirmed(db_guard.conn(), &item.id);
-            if item.entity_type == ENTITY_SCREENSHOT {
-                let _ = mark_screenshot_synced(db_guard.conn(), &item.entity_id);
+            if item.entity_type == ENTITY_TRACKING_SCREENSHOT || item.entity_type == "screenshot" {
+                let _ = mark_tracking_screenshot_synced(
+                    db_guard.conn(),
+                    &item.entity_id,
+                    remote_path.as_deref(),
+                );
             }
             false
         }
