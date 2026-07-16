@@ -60,16 +60,14 @@ impl TrackingManager {
             .clone()
             .ok_or_else(|| AgentError::Session("no active tracking".into()))?;
 
-        let skip_period_flush = self
-            .inactivity_controller
-            .lock()
-            .as_ref()
-            .is_some_and(|controller| {
-                matches!(
-                    controller.snapshot().phase,
-                    TrackingInactivityPhase::ManualPaused | TrackingInactivityPhase::ManualWorkCheck
-                )
-            });
+        let inactivity_controller = self.inactivity_controller.lock().clone();
+
+        let skip_period_flush = inactivity_controller.as_ref().is_some_and(|controller| {
+            matches!(
+                controller.snapshot().phase,
+                TrackingInactivityPhase::ManualPaused | TrackingInactivityPhase::ManualWorkCheck
+            )
+        });
 
         if !skip_period_flush {
             self.flush_open_period(self.open_period_category())?;
@@ -79,16 +77,15 @@ impl TrackingManager {
 
         let _ = close_open_apps(&self.db, &self.active_app_id);
         let _ = close_open_sites(&self.db, &self.active_site_id, &self.last_site_address);
-        if clear_inactivity_controller {
-            *self.inactivity_controller.lock() = None;
-        }
 
         let ended_at = chrono::Utc::now().to_rfc3339();
         {
             let db = self.db.lock();
-            let controller = self.inactivity_controller.lock().clone();
-            let elapsed =
-                super::status_report::snapshot_task_elapsed(&db, &tracking, controller.as_deref())?;
+            let elapsed = super::status_report::snapshot_task_elapsed(
+                &db,
+                &tracking,
+                inactivity_controller.as_deref(),
+            )?;
             db.set_task_active_seconds(&tracking.task_id, elapsed)?;
             db.finalize_tracking(&tracking.tracking_id, &ended_at)?;
 
@@ -102,6 +99,10 @@ impl TrackingManager {
                     "status": "inactive",
                 }),
             )?;
+        }
+
+        if clear_inactivity_controller {
+            *self.inactivity_controller.lock() = None;
         }
 
         *self.active.lock() = None;

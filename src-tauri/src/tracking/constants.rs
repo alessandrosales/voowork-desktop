@@ -8,7 +8,7 @@ use rusqlite::OptionalExtension;
 
 /// Override de desenvolvimento via `.env` — tem prioridade sobre SQLite.
 pub fn screenshot_interval_from_env() -> Option<u64> {
-    std::env::var("VOOWORK_SCREENSHOT_INTERVAL_SECS")
+    std::env::var("SCREENSHOT_INTERVAL_SECS")
         .ok()
         .and_then(|v| v.parse().ok())
         .filter(|&secs| secs >= MIN_SCREENSHOT_INTERVAL_SECS)
@@ -16,7 +16,7 @@ pub fn screenshot_interval_from_env() -> Option<u64> {
 
 pub fn screenshot_interval_source_label() -> &'static str {
     if screenshot_interval_from_env().is_some() {
-        "VOOWORK_SCREENSHOT_INTERVAL_SECS (.env)"
+        "SCREENSHOT_INTERVAL_SECS (.env)"
     } else {
         "settings (SQLite)"
     }

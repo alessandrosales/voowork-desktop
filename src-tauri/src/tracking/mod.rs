@@ -265,6 +265,13 @@ impl TrackingManager {
         task_id: String,
     ) -> AgentResult<ActiveTracking> {
         if self.active.lock().is_some() {
+            if let Err(err) = status_report::persist_task_time_snapshot_state(
+                &self.db,
+                &self.active,
+                &self.inactivity_controller,
+            ) {
+                log::warn!("persist task time snapshot before restart failed: {err}");
+            }
             self.stop_tracking()?;
         }
         self.start_tracking(project_id, task_id)
@@ -286,18 +293,20 @@ impl TrackingManager {
             tracking.current_period_start = chrono::Utc::now().to_rfc3339();
         }
 
+        if let Err(err) = status_report::persist_task_time_snapshot_state(
+            &self.db,
+            &self.active,
+            &self.inactivity_controller,
+        ) {
+            log::warn!("persist task time snapshot on manual pause failed: {err}");
+        }
+
         let db = Arc::clone(&self.db);
         let active = Arc::clone(&self.active);
-        let inactivity_controller = Arc::clone(&self.inactivity_controller);
         let screenshot = Arc::clone(&self.screenshot);
         let tracker = Arc::clone(&self.tracker);
         let totals = Arc::clone(&self.totals);
         std::thread::spawn(move || {
-            if let Err(err) =
-                status_report::persist_task_time_snapshot_state(&db, &active, &inactivity_controller)
-            {
-                log::warn!("persist task time snapshot on manual pause failed: {err}");
-            }
             if let Err(err) = capture::flush_period_screenshot(
                 &db,
                 &screenshot,

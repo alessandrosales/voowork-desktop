@@ -92,14 +92,11 @@ pub fn dismiss_activity_buffer(state: tauri::State<'_, AppState>) -> AgentResult
 }
 
 #[tauri::command]
-pub async fn get_task_elapsed_seconds(
+pub fn get_task_elapsed_seconds(
     state: tauri::State<'_, AppState>,
     task_id: String,
 ) -> AgentResult<u64> {
-    let app_state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || app_state.tracking_manager.task_elapsed_seconds(&task_id))
-        .await
-        .map_err(|err| AgentError::Other(format!("task elapsed worker failed: {err}")))?
+    state.tracking_manager.task_elapsed_seconds(&task_id)
 }
 
 #[tauri::command]
