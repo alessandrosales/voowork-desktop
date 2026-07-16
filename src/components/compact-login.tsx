@@ -1,5 +1,5 @@
 import { useState, type SyntheticEvent } from "react"
-import { ExternalLinkIcon, LoaderIcon, LogInIcon } from "lucide-react"
+import { ExternalLinkIcon, LoaderIcon } from "lucide-react"
 import { openWebPanel } from "@/lib/navigation"
 import { useTranslation } from "react-i18next"
 
@@ -10,7 +10,6 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 
 export function CompactLogin() {
   const { t } = useTranslation()
@@ -25,29 +24,20 @@ export function CompactLogin() {
 
   return (
     <div className="voowork-shell flex h-full min-h-0 flex-col">
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-6">
-        <div className="relative flex flex-col items-center pt-2 text-center">
-          <div className="absolute top-0 right-0 flex items-center gap-1">
-            <LanguageToggle />
-            <ThemeToggle />
-          </div>
-          <VooworkLogo size="lg" className="mb-4" />
-          <p className="text-muted-foreground mt-1 max-w-[280px] text-xs leading-relaxed">
-            {t("auth.tagline")}
-          </p>
-        </div>
+      <div className="mx-auto flex h-full w-full md:min-w-md flex-col px-12">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center pb-4">
+          <div className="flex w-full flex-col items-center">
+            <VooworkLogo size="lg" className="mb-6" />
+            <h1 className="text-center text-lg font-semibold tracking-tight">
+              {t("auth.tagline")}
+            </h1>
 
-        <form
-          className="mt-8 flex min-h-0 flex-1 flex-col"
-          onSubmit={(event) => {
-            handleSubmit(event).catch(() => undefined)
-          }}
-        >
-          <div className="flex flex-1 flex-col justify-center gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="email" className="text-xs">
-                {t("auth.email")}
-              </Label>
+            <form
+              className="mx-auto mt-10 flex w-full max-w-sm flex-col gap-4"
+              onSubmit={(event) => {
+                handleSubmit(event).catch(() => undefined)
+              }}
+            >
               <Input
                 id="email"
                 type="email"
@@ -55,43 +45,47 @@ export function CompactLogin() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder={t("auth.emailPlaceholder")}
                 autoComplete="email"
+                aria-label={t("auth.email")}
                 disabled={loading}
-                className="h-10 rounded-xl"
+                className="h-11 rounded-xl bg-background shadow-sm"
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="password" className="text-xs">
-                {t("auth.password")}
-              </Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder={t("auth.password")}
                 autoComplete="current-password"
+                aria-label={t("auth.password")}
                 disabled={loading}
-                className="h-10 rounded-xl"
+                className="h-11 rounded-xl bg-background shadow-sm"
               />
-            </div>
 
-            {error ? <p className="text-destructive text-xs">{error}</p> : null}
+              {error ? (
+                <p className="text-destructive text-center text-xs">{error}</p>
+              ) : null}
+
+              <Button
+                type="submit"
+                className="voowork-start-btn mt-2 h-11 w-full rounded-xl font-semibold shadow-sm"
+                disabled={loading}
+              >
+                {loading ? (
+                  <LoaderIcon className="size-4 animate-spin" />
+                ) : (
+                  t("auth.signIn")
+                )}
+              </Button>
+            </form>
+          </div>
+        </div>
+
+        <footer className="shrink-0 space-y-4 pb-6 pt-2">
+          <div className="flex items-center justify-center gap-1.5">
+            <LanguageToggle />
+            <ThemeToggle />
           </div>
 
-          <Button
-            type="submit"
-            className="voowork-start-btn mt-4 h-11 shrink-0 rounded-2xl font-semibold"
-            disabled={loading}
-          >
-          {loading ? (
-            <LoaderIcon className="size-4 animate-spin" />
-          ) : (
-            <LogInIcon className="size-4" />
-          )}
-          {t("auth.signIn")}
-        </Button>
-        </form>
-
-        <footer className="mt-auto border-t pt-4 pb-5">
           <Button
             type="button"
             variant="ghost"
@@ -105,7 +99,8 @@ export function CompactLogin() {
             <ExternalLinkIcon className="size-3.5" />
             {t("timer.openWebPanel")}
           </Button>
-          <AppMeta className="mt-3" />
+
+          <AppMeta />
         </footer>
       </div>
     </div>

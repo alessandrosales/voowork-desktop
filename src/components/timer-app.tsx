@@ -1,3 +1,4 @@
+import { FolderIcon, LayoutGridIcon } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -9,12 +10,11 @@ import { ThemeToggle } from "@/components/theme-toggle"
 import { TrackingInactivityOverlay } from "@/components/tracking-inactivity-overlay"
 import { BufferAlert } from "@/components/buffer-alert"
 import {
-  NO_TASK_ID,
-  ProjectSelectors,
   TimerFooter,
   TimerSessionControls,
 } from "@/components/timer-app-sections"
 import { VooworkLogo } from "@/components/voowork-logo"
+import { NO_TASK_ID, WorkspaceView } from "@/components/workspace-view"
 import {
   trackingInactivityPhaseClassName,
   trackingInactivityPhaseLabel,
@@ -37,6 +37,8 @@ function formatElapsed(seconds: number) {
   }
 }
 
+type View = "timer" | "workspace"
+
 export function TimerApp() {
   const { t } = useTranslation()
   const { auth, logout, loading: authLoading } = useAuth()
@@ -58,9 +60,11 @@ export function TimerApp() {
     dismissManualWorkCheck,
     dismissActivityBuffer,
     refresh,
+    loadProjects,
   } = useTrackingSession()
   const [projectId, setProjectId] = useState("")
   const [taskId, setTaskId] = useState(NO_TASK_ID)
+  const [view, setView] = useState<View>("timer")
 
   const persistSelection = async (nextProjectId: string, nextTaskId: string) => {
     await Promise.all([
@@ -106,13 +110,10 @@ export function TimerApp() {
     refresh().catch(() => undefined)
   }, [auth.isAuthenticated, refresh])
 
-  // If the saved projectId doesn't match any known project (e.g. after a
-  // db:seed that regenerated UUIDs), fall back to the first project instead
-  // of showing a stale UUID in the Select trigger.
   const resolvedProjectId = useMemo(() => {
     const saved = projectId
     if (saved && projects.some((p) => p.id === saved)) return saved
-    return projects[0]?.id || ""
+    return ""
   }, [projectId, projects])
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === resolvedProjectId),
@@ -157,26 +158,71 @@ export function TimerApp() {
     idlePhase,
   ])
 
+  // Pré-carrega o tempo acumulado da task selecionada sempre que o selector
+  // muda, mesmo enquanto ativamente trackeando. Quando o usuário pausar ou
+  // trocar de task, o taskElapsedSeconds já estará correto.
+  useEffect(() => {
+    if (resolvedTaskId === NO_TASK_ID) {
+      return
+    }
+    refreshTaskElapsed(resolvedTaskId).catch(() => undefined)
+  }, [resolvedTaskId, refreshTaskElapsed])
+
   const displaySeconds = showLiveSessionTimer
     ? displayElapsedSeconds
     : selectionMatchesSession && manuallyPaused
       ? tracking.elapsedSeconds
       : taskElapsedSeconds
   const time = formatElapsed(displaySeconds)
-  const canStart =
-    !active &&
-    Boolean(resolvedProjectId) &&
-    resolvedTaskId !== NO_TASK_ID
+  const hasSelection =
+    Boolean(resolvedProjectId) && resolvedTaskId !== NO_TASK_ID
+  const canStart = !active && hasSelection
   const handleLogout = async () => {
     await logout()
   }
 
+  const handleSelectTask = (nextProjectId: string, nextTaskId: string) => {
+    setProjectId(nextProjectId)
+    setTaskId(nextTaskId)
+    void persistSelection(nextProjectId, nextTaskId)
+  }
+
+  const handleOpenWorkspace = () => {
+    setView("workspace")
+  }
+
+  const handleBackToTimer = () => {
+    setView("timer")
+  }
+
+  // Carrega projetos apenas quando o usuário abre o workspace de trabalho.
+  useEffect(() => {
+    if (view === "workspace") {
+      loadProjects().catch(() => undefined)
+    }
+  }, [view, loadProjects])
+
+  // ─── Workspace view ───────────────────────────────────────
+  if (view === "workspace") {
+    return (
+      <WorkspaceView
+        projects={projects}
+        resolvedProjectId={resolvedProjectId}
+        resolvedTaskId={resolvedTaskId}
+        disabled={active && !manuallyPaused}
+        onSelect={handleSelectTask}
+        onBack={handleBackToTimer}
+      />
+    )
+  }
+
+  // ─── Timer view ───────────────────────────────────────────
   return (
     <div className="voowork-shell flex h-full min-h-0 flex-col">
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6">
-        <header className="flex items-start justify-between gap-3 pt-5">
+        <header className="flex items-center justify-between gap-3 pt-5">
           <div className="min-w-0 flex-1">
-            <VooworkLogo size="md" />
+            <VooworkLogo size="compact" />
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             {active ? (
@@ -254,35 +300,60 @@ export function TimerApp() {
               <span className="text-muted-foreground">{time.seconds}</span>
             </div>
           </div>
-          {error ? (
-            <p className="text-destructive mt-3 w-full max-w-xs text-center text-xs">
-              {error}
-            </p>
-          ) : null}
-        </div>
 
-        <ProjectSelectors
-          projects={projects}
-          selectedProject={selectedProject}
-          selectedTask={selectedTask}
-          resolvedProjectId={resolvedProjectId}
-          resolvedTaskId={resolvedTaskId}
-          loading={loading}
-          disabled={active && !manuallyPaused}
-          t={t}
-          onProjectChange={(value) => {
-            setProjectId(value)
-            setTaskId(NO_TASK_ID)
-            void persistSelection(value, NO_TASK_ID)
-          }}
-          onTaskChange={(newTaskId) => {
-            setTaskId(newTaskId)
-            void persistSelection(resolvedProjectId, newTaskId)
-          }}
-        />
+          {/* Workspace card */}
+          <div className="mt-6 w-full max-w-xs space-y-2">
+            <p className="text-muted-foreground/60 text-center text-[11px] font-medium uppercase tracking-widest">
+              {hasSelection
+                ? t("workspace.workingOn")
+                : t("workspace.selectWork")}
+            </p>
+
+            <button
+              type="button"
+              onClick={handleOpenWorkspace}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all",
+                hasSelection
+                  ? "border-border bg-card hover:border-muted-foreground/40 hover:shadow-sm"
+                  : "border-dashed border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 hover:text-accent-foreground"
+              )}
+            >
+              <FolderIcon
+                className={cn(
+                  "size-5 shrink-0",
+                  hasSelection
+                    ? "text-primary"
+                    : "text-muted-foreground"
+                )}
+              />
+              <div className="flex-1 truncate">
+                {hasSelection ? (
+                  <>
+                    <p className="truncate text-sm font-medium">
+                      {selectedProject?.name}
+                    </p>
+                    <p className="text-muted-foreground truncate text-xs">
+                      {selectedTask?.name}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm">{t("timer.clickToStart")}</p>
+                )}
+              </div>
+              <LayoutGridIcon className="text-muted-foreground size-4 shrink-0" />
+            </button>
+          </div>
+        </div>
 
         <TimerFooter t={t} />
       </div>
+
+      {error ? (
+        <p className="text-destructive mx-auto mt-1 w-full max-w-xs text-center text-xs">
+          {error}
+        </p>
+      ) : null}
 
       {active &&
       (idlePhase === "manual_work_check" ||
