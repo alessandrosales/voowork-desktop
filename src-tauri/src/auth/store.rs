@@ -11,7 +11,7 @@ pub const KEY_ACCESS_TOKEN: &str = "auth_access_token";
 pub const KEY_USER: &str = "auth_user_json";
 pub const KEY_ORGANIZATION: &str = "auth_org_json";
 
-pub const ENV_API_URL: &str = "VOOWORK_API_URL";
+pub const ENV_API_URL: &str = "VITE_API_URL";
 pub const DEFAULT_API_URL_DEV: &str = "http://localhost:3000";
 pub const DEFAULT_API_URL_PROD: &str = "https://api.voowork.com";
 pub const HTTP_TIMEOUT_SECS: u64 = 30;
@@ -22,6 +22,8 @@ pub struct AuthUser {
     pub id: String,
     pub name: String,
     pub email: String,
+    #[serde(default)]
+    pub profile: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,14 +87,14 @@ pub fn configured_api_base_url() -> String {
     std::env::var(ENV_API_URL).unwrap_or_else(|_| {
         if cfg!(debug_assertions) {
             log::warn!(
-                "VOOWORK_API_URL não definida; usando {DEFAULT_API_URL_DEV}. \
-                 Copie .env.example para .env na raiz do voowork-desktop."
+                "VITE_API_URL não definida; usando {DEFAULT_API_URL_DEV}. \
+                 Copie .env.example para .env no voowork-backend."
             );
             DEFAULT_API_URL_DEV.to_string()
         } else {
             log::warn!(
-                "VOOWORK_API_URL não definida; usando {DEFAULT_API_URL_PROD}. \
-                 Defina .env.production ou variável de ambiente do sistema."
+                "VITE_API_URL não definida; usando {DEFAULT_API_URL_PROD}. \
+                 Defina variável de ambiente do sistema ou .env no voowork-backend."
             );
             DEFAULT_API_URL_PROD.to_string()
         }
@@ -103,7 +105,7 @@ pub fn resolve_api_url(configured_url: &str) -> AgentResult<String> {
     let url = configured_url.trim();
     if url.is_empty() {
         return Err(AgentError::Auth(
-            "API não configurada (defina VOOWORK_API_URL)".into(),
+            "API não configurada (defina VITE_API_URL)".into(),
         ));
     }
     Ok(url.to_string())
@@ -147,13 +149,19 @@ pub fn read_session_identity(db: &Database) -> AgentResult<Option<SessionIdentit
 }
 
 pub fn read_auth_state(db: &Database) -> AgentResult<AuthState> {
-    Ok(read_session_identity(db)?
-        .map(|identity| AuthState {
-            is_authenticated: true,
-            user: Some(identity.user),
-            organization: Some(identity.organization),
-        })
-        .unwrap_or_else(AuthState::signed_out))
+    let Some(identity) = read_session_identity(db)? else {
+        return Ok(AuthState::signed_out());
+    };
+
+    let Some(_access_token) = load_access_token(db)? else {
+        return Ok(AuthState::signed_out());
+    };
+
+    Ok(AuthState {
+        is_authenticated: true,
+        user: Some(identity.user),
+        organization: Some(identity.organization),
+    })
 }
 
 pub fn read_session(db: &Database) -> AgentResult<Option<AuthSession>> {
