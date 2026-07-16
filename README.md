@@ -41,19 +41,22 @@ sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
 
 ```bash
 npm install
-cp .env.example .env
+cp ../voowork-backend/.env.example ../voowork-backend/.env
 npm run tauri dev
 ```
 
-API local padrão: `http://localhost:3000` (`VOOWORK_API_URL`).
+API local padrão: `http://localhost:3000` (`VITE_API_URL` no `.env` do backend).
 
 ## Variáveis de ambiente
 
+O desktop usa a mesma `.env` do `voowork-backend` (ver `.env.example` lá).
+
 | Variável | Descrição |
 |----------|-----------|
-| `VOOWORK_API_URL` | Base da API (login, sync, projetos) |
-| `VITE_VOOWORK_WEB_URL` | Painel web (link no timer) |
-| `VOOWORK_SCREENSHOT_INTERVAL_SECS` | Override de intervalo em dev (mín. 10s) |
+| `VITE_API_URL` | Base da API (login, sync, projetos) |
+| `FRONTEND_URL` | Painel web (link no timer) |
+| `S3_*` | Upload direto de screenshots — definido no `.env` do desktop |
+| `SCREENSHOT_INTERVAL_SECS` | Override de intervalo em dev (mín. 10s) |
 
 ## Estrutura do projeto
 

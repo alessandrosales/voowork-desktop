@@ -6,7 +6,7 @@ Use os comandos oficiais do projeto para desenvolvimento e verificação. Não i
 
 ```bash
 npm install
-cp .env.example .env   # se ainda não existir
+cp ../voowork-backend/.env.example ../voowork-backend/.env   # se ainda não existir
 npm run tauri dev
 ```
 
@@ -41,9 +41,10 @@ Principais:
 
 | Variável | Uso |
 |----------|-----|
-| `VOOWORK_API_URL` | API Rails (Rust lê em runtime) |
-| `VITE_VOOWORK_WEB_URL` | Link para painel web (frontend) |
-| `VOOWORK_SCREENSHOT_INTERVAL_SECS` | Override dev do intervalo de screenshot |
+| `VITE_API_URL` | API Rails (Rust lê em runtime) |
+| `FRONTEND_URL` | Link para painel web |
+| `S3_*` | Upload direto de screenshots |
+| `SCREENSHOT_INTERVAL_SECS` | Override dev do intervalo de screenshot |
 
 ## Pré-requisitos Linux
 

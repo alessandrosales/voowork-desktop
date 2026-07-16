@@ -61,7 +61,7 @@ React UI  ──invoke()──►  Rust Core  ──reqwest──►  API Rails 
 | Comando | Propósito |
 |---------|-----------|
 | `npm install` | Instalar dependências |
-| `cp .env.example .env` | Configurar env |
+| `cp ../voowork-backend/.env.example ../voowork-backend/.env` | Configurar env compartilhada |
 | `npm run tauri dev` | Dev (Vite + Tauri) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run build` | Build frontend |
@@ -70,11 +70,14 @@ React UI  ──invoke()──►  Rust Core  ──reqwest──►  API Rails 
 
 ## Variáveis de ambiente
 
+Compartilhadas com `voowork-backend/.env` (ver `.env.example` do backend).
+
 | Variável | Descrição |
 |----------|-----------|
-| `VOOWORK_API_URL` | Base da API (padrão: `http://localhost:3000`) |
-| `VITE_VOOWORK_WEB_URL` | Painel web (link no timer) |
-| `VOOWORK_SCREENSHOT_INTERVAL_SECS` | Override de intervalo em dev (mín. 10s) |
+| `VITE_API_URL` | Base da API (padrão: `http://localhost:3000`) |
+| `FRONTEND_URL` | Painel web (link no timer) |
+| `S3_*` | S3/Garage para screenshots — `.env` do desktop |
+| `SCREENSHOT_INTERVAL_SECS` | Override de intervalo em dev (mín. 10s) |
 
 ## Restrições de escopo (IMPLEMENTATION_PLAN)
 

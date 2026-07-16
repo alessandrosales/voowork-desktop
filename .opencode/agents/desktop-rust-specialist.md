@@ -41,7 +41,7 @@ Implement backend logic in `src-tauri/` only. The React UI is handled by `@deskt
 ## Sync / API
 
 - Read `docs/BACKEND_INTEGRATION.md` before changing payloads.
-- Base URL from `VOOWORK_API_URL`.
+- Base URL from `VITE_API_URL`.
 - Client-generated UUIDs for idempotent upsert.
 - Do not add new API endpoints — flag backend gap if needed.
 
