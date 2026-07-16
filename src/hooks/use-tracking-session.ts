@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
 
 import { useDisplayElapsed } from "@/hooks/use-display-elapsed"
@@ -114,22 +114,30 @@ export function useTrackingSession() {
   const [error, setError] = useState<string | null>(null)
 
   const [taskElapsedSeconds, setTaskElapsedSeconds] = useState(0)
+  const taskElapsedReqId = useRef(0)
 
   const { displayElapsedSeconds, freezeDisplayElapsed } =
     useDisplayElapsed(tracking)
 
   const refreshTaskElapsed = useCallback(async (taskId: string | null) => {
+    const reqId = ++taskElapsedReqId.current
     if (!isTauriReady() || !taskId || taskId === "__none__") {
-      setTaskElapsedSeconds(0)
+      if (reqId === taskElapsedReqId.current) {
+        setTaskElapsedSeconds(0)
+      }
       return
     }
     try {
       const seconds = await trackedInvoke<number>("get_task_elapsed_seconds", {
-        task_id: taskId,
+        taskId: taskId,
       })
-      setTaskElapsedSeconds(seconds)
+      if (reqId === taskElapsedReqId.current) {
+        setTaskElapsedSeconds(seconds)
+      }
     } catch {
-      setTaskElapsedSeconds(0)
+      if (reqId === taskElapsedReqId.current) {
+        setTaskElapsedSeconds(0)
+      }
     }
   }, [])
 
@@ -147,18 +155,27 @@ export function useTrackingSession() {
     }
   }, [])
 
+  const loadProjects = useCallback(async () => {
+    if (!isTauriReady()) {
+      return
+    }
+
+    try {
+      const projectList = await trackedInvoke<ProjectOption[]>("list_projects")
+      setProjects(projectList)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [])
+
   const refresh = useCallback(async () => {
     if (!isTauriReady()) {
       return
     }
 
     try {
-      const [trackingStatus, projectList] = await Promise.all([
-        trackedInvoke<TrackingStatus>("get_tracking_status"),
-        trackedInvoke<ProjectOption[]>("list_projects"),
-      ])
+      const trackingStatus = await trackedInvoke<TrackingStatus>("get_tracking_status")
       setTracking(trackingStatus)
-      setProjects(projectList)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -171,20 +188,15 @@ export function useTrackingSession() {
     }
 
     try {
-      if (tracking.active) {
-        const trackingStatus = await trackedInvoke<TrackingStatus>(
-          "get_tracking_status"
-        )
-        setTracking(trackingStatus)
-      } else {
-        await refresh()
-        return
-      }
+      const trackingStatus = await trackedInvoke<TrackingStatus>(
+        "get_tracking_status"
+      )
+      setTracking(trackingStatus)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [refresh, tracking.active])
+  }, [])
 
   const refreshMs = backgroundRefreshIntervalMs(tracking)
 
@@ -401,6 +413,7 @@ export function useTrackingSession() {
     loading,
     error,
     refresh,
+    loadProjects,
     startTracking,
     restartTracking,
     pauseTracking,
