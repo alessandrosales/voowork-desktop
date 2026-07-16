@@ -9,12 +9,13 @@ import {
 } from "react"
 import { listen } from "@tauri-apps/api/event"
 
-import { trackedInvoke, isTauriReady } from "@/lib/tauri"
+import { trackedInvoke, waitForTauriReady } from "@/lib/tauri"
 
 export type AuthUser = {
   id: string
   name: string
   email: string
+  profile: string
 }
 
 export type AuthOrganization = {
@@ -49,16 +50,28 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 15_000
 
-let authBootstrapPromise: Promise<AuthState> | null = null
-
-function bootstrapAuthSession(): Promise<AuthState> {
-  authBootstrapPromise ??= trackedInvoke<AuthState>("validate_auth_session")
-  return authBootstrapPromise
+type RawAuthState = AuthState & {
+  is_authenticated?: boolean
 }
 
-function bootstrapAuthSessionWithTimeout(): Promise<AuthState> {
+function normalizeAuthState(state: RawAuthState): AuthState {
+  return {
+    isAuthenticated: Boolean(state.isAuthenticated ?? state.is_authenticated),
+    user: state.user ?? null,
+    organization: state.organization ?? null,
+  }
+}
+
+function requestAuthValidation(): Promise<AuthState> {
+  const promise = trackedInvoke<RawAuthState>("validate_auth_session").then(
+    normalizeAuthState
+  )
+  return promise
+}
+
+function validateAuthSessionWithTimeout(): Promise<AuthState> {
   return Promise.race([
-    bootstrapAuthSession(),
+    requestAuthValidation(),
     new Promise<AuthState>((_, reject) => {
       window.setTimeout(
         () => reject(new Error("Tempo esgotado ao validar sessão.")),
@@ -68,14 +81,6 @@ function bootstrapAuthSessionWithTimeout(): Promise<AuthState> {
   ])
 }
 
-function applyAuthState(state: AuthState): AuthState {
-  return {
-    isAuthenticated: state.isAuthenticated,
-    user: state.user ?? null,
-    organization: state.organization ?? null,
-  }
-}
-
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [auth, setAuth] = useState<AuthState>(EMPTY_AUTH)
   const [initializing, setInitializing] = useState(true)
@@ -83,25 +88,42 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!isTauriReady()) {
-      setInitializing(false)
-      return
-    }
-
-    let active = true
+    let cancelled = false
 
     const bootstrap = async () => {
+      const ready = await waitForTauriReady()
+      if (!ready || cancelled) {
+        if (!cancelled) {
+          setInitializing(false)
+        }
+        return
+      }
+
       try {
-        const state = await bootstrapAuthSessionWithTimeout()
-        if (!active) return
-        setAuth(applyAuthState(state))
-        setError(null)
+        const localState = normalizeAuthState(
+          await trackedInvoke<RawAuthState>("get_auth_state")
+        )
+
+        if (!localState.isAuthenticated) {
+          if (!cancelled) {
+            setAuth(EMPTY_AUTH)
+            setError(null)
+          }
+          return
+        }
+
+        const validated = await validateAuthSessionWithTimeout()
+        if (!cancelled) {
+          setAuth(validated)
+          setError(null)
+        }
       } catch (err) {
-        if (!active) return
-        setAuth(EMPTY_AUTH)
-        setError(err instanceof Error ? err.message : String(err))
+        if (!cancelled) {
+          setAuth(EMPTY_AUTH)
+          setError(err instanceof Error ? err.message : String(err))
+        }
       } finally {
-        if (active) {
+        if (!cancelled) {
           setInitializing(false)
         }
       }
@@ -110,15 +132,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     void bootstrap()
 
     return () => {
-      active = false
+      cancelled = true
     }
   }, [])
 
   useEffect(() => {
-    if (!isTauriReady()) {
-      return
-    }
-
+    let cancelled = false
     let unlistenExpired: (() => void) | undefined
     let unlistenLoggedOut: (() => void) | undefined
 
@@ -126,21 +145,37 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setAuth(EMPTY_AUTH)
       setError(null)
       setLoading(false)
+      setInitializing(false)
     }
 
-    listen("auth-session-expired", clearAuth)
-      .then((dispose) => {
-        unlistenExpired = dispose
-      })
-      .catch(() => undefined)
+    void waitForTauriReady().then((ready) => {
+      if (!ready || cancelled) {
+        return
+      }
 
-    listen("auth-logged-out", clearAuth)
-      .then((dispose) => {
-        unlistenLoggedOut = dispose
-      })
-      .catch(() => undefined)
+      listen("auth-session-expired", clearAuth)
+        .then((dispose) => {
+          if (cancelled) {
+            dispose()
+            return
+          }
+          unlistenExpired = dispose
+        })
+        .catch(() => undefined)
+
+      listen("auth-logged-out", clearAuth)
+        .then((dispose) => {
+          if (cancelled) {
+            dispose()
+            return
+          }
+          unlistenLoggedOut = dispose
+        })
+        .catch(() => undefined)
+    })
 
     return () => {
+      cancelled = true
       unlistenExpired?.()
       unlistenLoggedOut?.()
     }
@@ -150,12 +185,13 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     setLoading(true)
     setError(null)
     try {
-      const state = await trackedInvoke<AuthState>("login", {
-        request: { email, password },
-      })
-      const nextAuth = applyAuthState(state)
-      setAuth(nextAuth)
-      return nextAuth
+      const state = normalizeAuthState(
+        await trackedInvoke<RawAuthState>("login", {
+          request: { email, password },
+        })
+      )
+      setAuth(state)
+      return state
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
