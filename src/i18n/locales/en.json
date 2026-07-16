@@ -28,6 +28,18 @@
     "noProjects": "No assigned projects. Ask your manager for access or sync after signing in.",
     "openWebPanel": "Open web dashboard"
   },
+  "workspace": {
+    "title": "Workspace",
+    "back": "Back",
+    "done": "Done",
+    "workingOn": "Working on",
+    "selectWork": "Select your work",
+    "searchPlaceholder": "Search projects...",
+    "noResults": "No projects found",
+    "noTasks": "No tasks",
+    "task": "task",
+    "tasks": "tasks"
+  },
   "widget": {
     "expand": "Open full app",
     "openApp": "Open Voowork",
