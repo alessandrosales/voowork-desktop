@@ -31,7 +31,6 @@ thiserror = "2"
 parking_lot = "0.12"
 dirs = "6"
 dotenvy = "0.15"
-rdev = "0.5"
 xcap = "0.4.1"
 active-win-pos-rs = "0.11"
 image = "0.25"
@@ -44,6 +43,7 @@ libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 notify-rust = "4"
+user-idle3 = "0.7"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-graphics = "0.25"

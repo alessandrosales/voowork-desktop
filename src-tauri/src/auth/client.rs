@@ -124,7 +124,6 @@ fn session_from_login_payload(payload: LoginPayload) -> AuthSession {
 
     AuthSession {
         access_token: payload.token,
-        refresh_token: None,
         user: super::store::AuthUser {
             id: payload.user.id,
             name: payload.user.name,

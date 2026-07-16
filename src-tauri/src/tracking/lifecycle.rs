@@ -27,7 +27,9 @@ impl TrackingManager {
             tracking.tracking_id,
             if join_worker { "shutdown" } else { "quit" }
         );
-        let _ = self.flush_open_period(self.open_period_category());
+        if let Err(err) = self.flush_open_period(self.open_period_category()) {
+            log::warn!("failed to capture final screenshot: {err}");
+        }
         if join_worker {
             self.stop_worker();
         } else {

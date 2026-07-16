@@ -78,7 +78,7 @@ pub fn run() {
 
             let db = Database::open(app_data_dir.clone())?;
             let device_name = std::env::var("HOSTNAME").unwrap_or_else(|_| "voowork-device".into());
-            let _device_keys = DeviceKeys::ensure(db.conn(), &device_name)?;
+            DeviceKeys::ensure(db.conn(), &device_name)?;
 
             // Default settings
             if db.get_setting("theme")?.is_none() {
@@ -115,7 +115,7 @@ pub fn run() {
             let api_base_url = auth::configured_api_base_url();
             log::info!("Voowork API: {api_base_url}");
 
-            let state = AppState::new(db, _device_keys, screenshot, app.handle().clone());
+            let state = AppState::new(db, screenshot, app.handle().clone());
             if let Ok(count) = state.tracking_manager.initialize_session() {
                 if count > 0 {
                     log::warn!("discarded {count} orphaned tracking(s) from previous run");

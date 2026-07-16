@@ -119,7 +119,6 @@ pub async fn validate_auth_session(
         Ok((user, org, _projects_list)) => {
             let updated = AuthSession {
                 access_token: session.access_token,
-                refresh_token: None,
                 user,
                 organization: org,
             };

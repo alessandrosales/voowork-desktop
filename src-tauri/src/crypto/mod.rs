@@ -31,12 +31,6 @@ impl DeviceKeys {
         Ok(Self)
     }
 
-    #[allow(dead_code)]
-    pub fn device_id(conn: &Connection) -> AgentResult<String> {
-        conn.query_row("SELECT id FROM device_metadata LIMIT 1", [], |row| row.get(0))
-            .map_err(AgentError::from)
-    }
-
     pub fn device_name(conn: &Connection) -> AgentResult<String> {
         conn.query_row(
             "SELECT device_name FROM device_metadata LIMIT 1",

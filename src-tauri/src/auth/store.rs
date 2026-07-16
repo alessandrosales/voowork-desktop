@@ -67,8 +67,6 @@ pub struct SessionIdentity {
 #[derive(Debug, Clone)]
 pub struct AuthSession {
     pub access_token: String,
-    #[allow(dead_code)]
-    pub refresh_token: Option<String>,
     pub user: AuthUser,
     pub organization: AuthOrganization,
 }
@@ -175,7 +173,6 @@ pub fn read_session(db: &Database) -> AgentResult<Option<AuthSession>> {
 
     Ok(Some(AuthSession {
         access_token,
-        refresh_token: None,
         user: identity.user,
         organization: identity.organization,
     }))

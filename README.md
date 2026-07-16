@@ -4,12 +4,9 @@
 
 | Documento | Conteúdo |
 |-----------|----------|
-| [docs/PRODUCT.md](docs/PRODUCT.md) | Visão de produto e escopo do agente |
-| [docs/features/README.md](docs/features/README.md) | Specs por feature |
-| [docs/BACKEND_INTEGRATION.md](docs/BACKEND_INTEGRATION.md) | Integração desktop ↔ API |
-| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | **Plano de gargalos** (fases + checkboxes) |
-| [docs/UPGRADE.md](docs/UPGRADE.md) | Migração SQLite e breaking changes |
-| [docs/SMOKE_TEST.md](docs/SMOKE_TEST.md) | Checklist manual pré-release |
+| [docs/README.md](docs/README.md) | Visão geral do produto, stack, integração com API |
+| [docs/db.mermaid](docs/db.mermaid) | Schema SQLite local |
+| [docs/features/README.md](docs/features/README.md) | Features: auth, tracking, sync |
 
 O colaborador vê apenas um **timer compacto** (~480×700 px). Fechar a janela minimiza para a bandeja; a sessão continua ativa.
 
@@ -22,7 +19,7 @@ O colaborador vê apenas um **timer compacto** (~480×700 px). Fechar a janela m
 | Componentes | shadcn/ui + Tailwind CSS 4 |
 | Banco local | SQLite via `rusqlite` (WAL) |
 | Async / sync | Tokio + `reqwest` |
-| Input global | `rdev` (contagem, sem keylogging) |
+| Atividade (mouse/teclado) | Polling nativo por OS (`activity/` — ver `docs/features/02-tracking.md`) |
 | Screenshots | `xcap` |
 | Assinatura | Ed25519 (`ed25519-dalek`) |
 
@@ -73,7 +70,7 @@ src/                          # Frontend React
 └── lib/
 
 src-tauri/src/                # Core Rust
-├── activity/                 # rdev + anti-automação
+├── activity/                 # Polling de atividade + anti-automação
 ├── tracking_focus/           # Janela ativa → tracking_apps / tracking_sites
 ├── idle/                     # Máquina de estados idle
 ├── tracking/                 # Orquestração, buffer, worker
@@ -142,7 +139,7 @@ Lista completa em `src-tauri/src/lib.rs` (`generate_handler`).
 
 ## Próximas entregas
 
-Ver **[docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)** — fases 1–3 com checkboxes:
+Ver **[docs/README.md](docs/README.md)** para documentação completa do produto:
 
 1. **Comportamento:** activity score, pausa manual, buffer persistente, idle local
 2. **Captura:** blur, JPEG, multi-monitor, título de janela

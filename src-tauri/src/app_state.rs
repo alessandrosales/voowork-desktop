@@ -1,4 +1,3 @@
-use crate::crypto::DeviceKeys;
 use crate::db::Database;
 use crate::screenshot::ScreenshotCapture;
 use crate::sync::worker::SyncWorker;
@@ -17,15 +16,12 @@ pub struct AppState {
 impl AppState {
     pub fn new(
         db: Database,
-        device_keys: DeviceKeys,
         screenshot: ScreenshotCapture,
         app: AppHandle,
     ) -> Self {
         let db = Arc::new(Mutex::new(db));
-        let device_keys = Arc::new(device_keys);
         let tracking_manager = Arc::new(TrackingManager::new(
             Arc::clone(&db),
-            Arc::clone(&device_keys),
             screenshot,
         ));
         let api_base_url = crate::auth::configured_api_base_url();

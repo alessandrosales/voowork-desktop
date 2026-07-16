@@ -23,7 +23,6 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::Instant;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
@@ -42,16 +41,12 @@ pub struct ActiveTracking {
     pub project_id: String,
     pub task_id: String,
     pub started_at: String,
-    #[allow(dead_code)]
-    pub started_instant: Instant,
     pub last_screenshot_at: Option<String>,
     pub current_period_start: String,
 }
 
 pub struct TrackingManager {
     pub(crate) db: Arc<Mutex<Database>>,
-    #[allow(dead_code)]
-    device_keys: Arc<DeviceKeys>,
     pub(crate) tracker: Arc<Mutex<ActivityTracker>>,
     pub(crate) screenshot: Arc<Mutex<ScreenshotCapture>>,
     pub(crate) active: Arc<Mutex<Option<ActiveTracking>>>,
@@ -81,13 +76,11 @@ pub(crate) struct TrackingTotals {
 impl TrackingManager {
     pub fn new(
         db: Arc<Mutex<Database>>,
-        device_keys: Arc<DeviceKeys>,
         screenshot: ScreenshotCapture,
     ) -> Self {
         let db_for_buffer = Arc::clone(&db);
         Self {
             db,
-            device_keys,
             tracker: Arc::new(Mutex::new(ActivityTracker::new())),
             screenshot: Arc::new(Mutex::new(screenshot)),
             active: Arc::new(Mutex::new(None)),
@@ -145,7 +138,6 @@ impl TrackingManager {
 
         let tracking_id = Uuid::new_v4().to_string();
         let started_at = chrono::Utc::now().to_rfc3339();
-        let started_instant = Instant::now();
         let period_start = started_at.clone();
         let buffer_seconds = self.activity_buffer.claim();
 
@@ -217,7 +209,6 @@ impl TrackingManager {
             project_id,
             task_id,
             started_at,
-            started_instant,
             last_screenshot_at: None,
             current_period_start: period_start,
         };

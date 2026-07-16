@@ -84,54 +84,6 @@ impl Database {
             .map_err(crate::error::AgentError::from)
     }
 
-    #[allow(dead_code)]
-    pub fn purge_sync_queue_for_tracking(&self, tracking_id: &str) -> AgentResult<()> {
-        self.conn.execute(
-            "DELETE FROM sync_queue
-             WHERE entity_type = 'tracking' AND entity_id = ?1",
-            params![tracking_id],
-        )?;
-        self.conn.execute(
-            "DELETE FROM sync_queue
-             WHERE entity_type = 'tracking_screenshot'
-               AND entity_id IN (
-                 SELECT id FROM tracking_screenshots WHERE tracking_id = ?1
-               )",
-            params![tracking_id],
-        )?;
-        self.conn.execute(
-            "DELETE FROM sync_queue
-             WHERE entity_type = 'tracking_app'
-               AND entity_id IN (
-                 SELECT id FROM tracking_apps WHERE tracking_id = ?1
-               )",
-            params![tracking_id],
-        )?;
-        self.conn.execute(
-            "DELETE FROM sync_queue
-             WHERE entity_type = 'tracking_site'
-               AND entity_id IN (
-                 SELECT id FROM tracking_sites WHERE tracking_id = ?1
-               )",
-            params![tracking_id],
-        )?;
-        self.conn.execute(
-            "DELETE FROM sync_queue
-             WHERE entity_type = 'tracking_inactivity_period'
-               AND entity_id IN (
-                 SELECT id FROM tracking_inactivity_periods WHERE tracking_id = ?1
-               )",
-            params![tracking_id],
-        )?;
-        self.conn.execute(
-            "DELETE FROM sync_queue
-             WHERE entity_type = 'tracking_peripheral_event'
-               AND payload_json LIKE '%' || ?1 || '%'",
-            params![tracking_id],
-        )?;
-        Ok(())
-    }
-
     pub fn list_trackings(&self, limit: i64, offset: i64) -> AgentResult<Vec<TrackingRow>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, project_id, task_id, started_at, ended_at, status
