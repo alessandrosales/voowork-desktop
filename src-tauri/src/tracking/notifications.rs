@@ -106,7 +106,7 @@ pub(crate) fn send_inactivity_notification(app: &AppHandle, phase: TrackingInact
     #[cfg(not(target_os = "linux"))]
     {
         let app = app.clone();
-        let _ = app.run_on_main_thread(move || {
+        let _ = app.clone().run_on_main_thread(move || {
             if let Err(err) = app
                 .notification()
                 .builder()

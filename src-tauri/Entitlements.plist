@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- rdev: Global input monitoring (CGEventTap) -->
+    <key>com.apple.security.device.input-monitoring</key>
+    <true/>
+
+    <!-- xcap: Screen capture for screenshots -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+
+    <!-- active-win-pos-rs: Accessibility API for active window tracking -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+
+    <!-- keyring: macOS Keychain access for credential storage -->
+    <key>keychain-access-groups</key>
+    <array>
+        <string>$(AppIdentifierPrefix)com.voowork.desktop</string>
+    </array>
+</dict>
+</plist>

@@ -6261,6 +6261,7 @@ version = "0.1.0"
 dependencies = [
  "active-win-pos-rs",
  "chrono",
+ "core-graphics 0.25.0",
  "dirs",
  "dotenvy",
  "hex",

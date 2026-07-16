@@ -14,7 +14,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 log = "0.4"
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
 tauri-plugin-log = "2.9"
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
@@ -32,6 +32,7 @@ parking_lot = "0.12"
 dirs = "6"
 dotenvy = "0.15"
 rdev = "0.5"
+core-graphics = "0.25"
 xcap = "0.4.1"
 active-win-pos-rs = "0.11"
 image = "0.25"

@@ -75,5 +75,12 @@
     "pt-BR": "Português",
     "en": "English",
     "es": "Español"
+  },
+  "permission": {
+    "inputMonitoring": {
+      "title": "Permissão necessária",
+      "description": "O Voowork precisa monitorar a entrada do teclado e mouse para registrar sua atividade. Vá para Ajustes do Sistema e ative o Monitoramento de Entrada para o Voowork.",
+      "openSettings": "Abrir Ajustes do Sistema"
+    }
   }
 }
