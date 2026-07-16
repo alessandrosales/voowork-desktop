@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { CompactLogin } from "@/components/compact-login"
 import { MiniTimerWidget } from "@/components/mini-timer-widget"
 import { TimerApp } from "@/components/timer-app"
+import { PermissionBanner } from "@/components/permission-banner"
 import { useAuth } from "@/hooks/use-auth"
 import { Toaster } from "@/components/ui/sonner"
 
@@ -29,12 +30,15 @@ export default function App() {
 
   return (
     <>
-      <div className="h-full min-h-0">
-        {auth.isAuthenticated ? (
-          <TimerApp />
-        ) : (
-          <CompactLogin />
-        )}
+      <div className="flex h-full min-h-0 flex-col">
+        <PermissionBanner />
+        <div className="min-h-0 flex-1">
+          {auth.isAuthenticated ? (
+            <TimerApp />
+          ) : (
+            <CompactLogin />
+          )}
+        </div>
       </div>
       <Toaster />
     </>

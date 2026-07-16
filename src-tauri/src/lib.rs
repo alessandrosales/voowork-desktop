@@ -22,13 +22,14 @@ mod windows;
 use app_state::AppState;
 use auth::{get_auth_state, login, logout, validate_auth_session};
 use commands::{
-    classify_tracking_inactivity_period, confirm_manual_work, confirm_still_working, dismiss_activity_buffer,
+    check_input_monitoring_permission, classify_tracking_inactivity_period, confirm_manual_work, confirm_still_working,
+    dismiss_activity_buffer,
     dismiss_manual_work_check, get_activity_chart, get_app_status, get_app_version,
     get_dashboard_summary, get_tracking_inactivity_config, get_tracking_screenshot_image, get_setting, get_task_elapsed_seconds,
     get_tracking_capabilities, get_tracking_config, get_tracking_status, list_tracking_inactivity_periods,
     list_tracking_peripheral_events, list_projects, list_sync_queue, list_tracking_apps,
     list_tracking_screenshots, list_tracking_sites, list_trackings, open_data_directory, open_external_url,
-    open_web_panel, pause_tracking,
+    open_system_settings_input_monitoring, open_web_panel, pause_tracking,
     resume_tracking, restart_tracking, set_setting, skip_tracking_inactivity_classification, start_tracking, stop_tracking,
     sync_projects,
 };
@@ -183,8 +184,10 @@ pub fn run() {
             open_data_directory,
             open_web_panel,
             open_external_url,
+            open_system_settings_input_monitoring,
             get_tracking_config,
             get_tracking_capabilities,
+            check_input_monitoring_permission,
             open_main_window,
             begin_mini_widget_drag,
             reset_mini_widget_position,

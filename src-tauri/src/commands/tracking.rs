@@ -203,6 +203,13 @@ pub fn dismiss_manual_work_check(state: tauri::State<'_, AppState>) -> AgentResu
     state.tracking_manager.dismiss_manual_work_check()
 }
 
+/// Verifica se o app tem permissão de Monitoramento de Entrada no macOS.
+/// Necessário para o rdev capturar eventos globais de mouse/teclado.
+#[tauri::command]
+pub fn check_input_monitoring_permission(state: tauri::State<'_, AppState>) -> bool {
+    state.tracking_manager.tracker_has_permission()
+}
+
 #[tauri::command]
 pub fn get_tracking_inactivity_config(state: tauri::State<'_, AppState>) -> AgentResult<TrackingInactivityConfig> {
     let db = state.db.lock();

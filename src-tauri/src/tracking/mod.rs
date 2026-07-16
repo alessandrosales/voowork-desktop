@@ -125,6 +125,7 @@ impl TrackingManager {
     }
 
     pub fn set_app_handle(&self, handle: AppHandle) {
+        self.tracker.lock().set_app_handle(handle.clone());
         *self.app_handle.lock() = Some(handle);
     }
 
@@ -414,5 +415,9 @@ impl TrackingManager {
 
     pub fn tracker_mode(&self) -> TrackerMode {
         self.tracker.lock().mode()
+    }
+
+    pub fn tracker_has_permission(&self) -> bool {
+        self.tracker.lock().is_permission_granted()
     }
 }
