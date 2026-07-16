@@ -47,6 +47,6 @@ O `SyncWorker` emite o evento Tauri `auth-session-expired`. O `AuthProvider` esc
 
 | Variável | Uso |
 |----------|-----|
-| `VOOWORK_API_URL` | Base da API para login e validação |
+| `VITE_API_URL` | Base da API para login e validação |
 
 Ver também: [BACKEND_INTEGRATION.md](../BACKEND_INTEGRATION.md).

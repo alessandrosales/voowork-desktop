@@ -62,7 +62,7 @@ Schema completo em [`docs/db.mermaid`](db.mermaid).
 | 1.5 | ✅ | Sistema de erros (`AgentError` com variantes) |
 | 1.6 | ✅ | App state gerenciado (`AppState` em `app_state.rs`) |
 | 1.7 | ✅ | Credential store (keyring para token JWT) |
-| 1.8 | ✅ | Variáveis de ambiente (`VOOWORK_API_URL`, `VITE_VOOWORK_WEB_URL`) |
+| 1.8 | ✅ | Variáveis de ambiente (`VITE_API_URL`, `FRONTEND_URL` no backend; `S3_*` no desktop) |
 | 1.9 | ✅ | `.env.example` e documentação de setup |
 | 1.10 | ✅ | `package.json` com scripts (`tauri dev`, `typecheck`, `build`) |
 

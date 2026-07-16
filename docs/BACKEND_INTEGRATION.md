@@ -16,7 +16,7 @@ React UI ──invoke()──► Rust (Tauri) ──reqwest + JWT──► Rails
 
 - **Offline-first:** dados gravados no SQLite; sync assíncrono via `SyncWorker`.
 - **Auth:** JWT Bearer em todas as requisições autenticadas.
-- **Env:** `VOOWORK_API_URL` (padrão dev: `http://localhost:3000`).
+- **Env:** `VITE_API_URL` no `.env` do `voowork-backend` (padrão dev: `http://localhost:3000`).
 
 ## Autenticação
 
@@ -113,7 +113,7 @@ Worker: `sync/worker.rs` — lote de 10 itens, retry exponencial, evento `auth-s
 
 Fluxo em duas etapas:
 
-1. **Upload direto para S3/Garage** (`screenshot/storage.rs`) — o desktop envia o arquivo local para o bucket configurado via `VOOWORK_S3_*`. A chave do objeto é `{screenshot_id}.{ext}`; o path persistido é `screenshots/{screenshot_id}.{ext}`.
+1. **Upload direto para S3/Garage** (`screenshot/storage.rs`) — o desktop envia o arquivo local para o bucket configurado via `S3_*`. A chave do objeto é `{screenshot_id}.{ext}`; o path persistido é `screenshots/{screenshot_id}.{ext}`.
 2. **Metadados na API** — `POST /api/v1/trackings/:tracking_id/screenshots` com JSON:
 
 ```json
@@ -127,9 +127,9 @@ Fluxo em duas etapas:
 }
 ```
 
-O backend persiste apenas metadados e retorna `path`. **Não há multipart** nem upload no Rails — o download remoto no desktop usa o mesmo S3/Garage (`VOOWORK_S3_*`) com o `path` retornado pela API.
+O backend persiste apenas metadados e retorna `path`. **Não há multipart** nem upload no Rails — o download remoto no desktop usa o mesmo S3/Garage (`S3_*`) com o `path` retornado pela API.
 
-Variáveis de ambiente no desktop: `VOOWORK_S3_ENDPOINT`, `VOOWORK_S3_REGION` (padrão `garage`), `VOOWORK_S3_ACCESS_KEY`, `VOOWORK_S3_SECRET_KEY`, `VOOWORK_S3_BUCKET`. Em dev, espelham o Garage do `voowork-backend` (`bin/dev-infra`).
+Variáveis de ambiente (no `.env` do desktop): `S3_ENDPOINT`, `S3_REGION` (padrão `garage`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`. Em dev, use o Garage local (`bin/dev-infra` no backend).
 
 ### Re-sync
 

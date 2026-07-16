@@ -9,7 +9,7 @@ Checklist rápido antes de release ou após mudanças em auth/tracking/sync.
 cd voowork-backend && bin/rails server
 
 # Terminal 2 — desktop
-cd voowork-desktop && cp .env.example .env && npm run tauri dev
+cd voowork-desktop && cp ../voowork-backend/.env.example ../voowork-backend/.env && npm run tauri dev
 ```
 
 ## Fluxo
@@ -23,7 +23,7 @@ cd voowork-desktop && cp .env.example .env && npm run tauri dev
 | 5 | Selecionar projeto/tarefa e iniciar tracking | Timer ativo; tray atualizado |
 | 6 | Pausar / retomar | Estado correto na UI |
 | 7 | Parar tracking | Sync enfileira PATCH; worker processa |
-| 8 | Link "Abrir painel web" | Abre URL permitida (`VITE_VOOWORK_WEB_URL` ou produção) |
+| 8 | Link "Abrir painel web" | Abre URL permitida (`FRONTEND_URL` ou produção) |
 | 9 | Logout | Volta ao login; token removido do keyring |
 | 10 | Inatividade (opcional) | Overlay aparece após threshold configurado |
 
