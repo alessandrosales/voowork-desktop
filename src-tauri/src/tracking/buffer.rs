@@ -112,7 +112,7 @@ impl ActivityBuffer {
 
     pub fn start_watcher(
         &self,
-        tracking_active: Arc<Mutex<bool>>,
+        tracking_active: Arc<AtomicBool>,
         input_at: Arc<Mutex<Instant>>,
         session_authenticated: Arc<AtomicBool>,
         buffer_eligible: Arc<AtomicBool>,
@@ -152,7 +152,7 @@ impl ActivityBuffer {
                     continue;
                 }
 
-                if *tracking_active.lock() {
+                if tracking_active.load(Ordering::SeqCst) {
                     continue;
                 }
 

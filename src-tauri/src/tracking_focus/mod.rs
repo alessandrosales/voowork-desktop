@@ -327,6 +327,16 @@ fn is_excluded_system_ui(sample: &ActiveWindowSample) -> bool {
     matches!(app.as_str(), "org.gnome.shell" | "plasmashell")
 }
 
+/// Check if the platform supports active window capture.
+///
+/// - **Linux / Windows**: always `true` — native APIs work without special
+///   permissions (X11 / `GetForegroundWindow`).
+/// - **macOS**: `true` only if Screen Recording permission has been granted
+///   (otherwise `CGWindowListCopyWindowInfo` returns an empty list).
+pub fn check_active_window_permission() -> bool {
+    capture_active_window().is_some()
+}
+
 pub fn is_communication_app(sample: &ActiveWindowSample) -> bool {
     let app = normalize_app_name(&sample.app_name);
     if matches!(

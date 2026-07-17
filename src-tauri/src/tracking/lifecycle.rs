@@ -1,12 +1,10 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use crate::db::TIME_CATEGORY_ACTIVE;
 use crate::error::{AgentError, AgentResult};
 use crate::sync::{finalize, SyncOutbox, ENTITY_TRACKING};
-use crate::tracking_inactivity::TrackingInactivityPhase;
 
-use super::capture::{close_open_apps, close_open_sites, flush_period_screenshot, screenshot_time_category};
+use super::capture::{close_open_apps, close_open_sites, drain_activity_period};
 use super::worker::{spawn_tracking_worker, TrackingWorkerContext};
 use super::TrackingManager;
 
@@ -27,14 +25,21 @@ impl TrackingManager {
             tracking.tracking_id,
             if join_worker { "shutdown" } else { "quit" }
         );
-        if let Err(err) = self.flush_open_period(self.open_period_category()) {
-            log::warn!("failed to capture final screenshot: {err}");
-        }
+
+        // Stop worker first, then lightweight drain (no screenshot capture).
         if join_worker {
             self.stop_worker();
         } else {
             self.stop_worker_without_join();
         }
+        let period_start = tracking.current_period_start.clone();
+        let _ = drain_activity_period(
+            &self.db,
+            &self.tracker,
+            &self.totals,
+            &tracking,
+            &period_start,
+        );
         let _ = close_open_apps(&self.db, &self.active_app_id);
         let _ = close_open_sites(
             &self.db,
@@ -62,20 +67,18 @@ impl TrackingManager {
             .clone()
             .ok_or_else(|| AgentError::Session("no active tracking".into()))?;
 
-        let inactivity_controller = self.inactivity_controller.lock().clone();
-
-        let skip_period_flush = inactivity_controller.as_ref().is_some_and(|controller| {
-            matches!(
-                controller.snapshot().phase,
-                TrackingInactivityPhase::ManualPaused | TrackingInactivityPhase::ManualWorkCheck
-            )
-        });
-
-        if !skip_period_flush {
-            self.flush_open_period(self.open_period_category())?;
-        }
-        log::info!("pausing tracking {}", tracking.tracking_id);
+        // Stop worker FIRST to release any locks it holds (screenshot, db).
         self.stop_worker();
+
+        // Lightweight drain: save activity data locally without screenshot capture.
+        let period_start = tracking.current_period_start.clone();
+        let _ = drain_activity_period(
+            &self.db,
+            &self.tracker,
+            &self.totals,
+            &tracking,
+            &period_start,
+        );
 
         let _ = close_open_apps(&self.db, &self.active_app_id);
         let _ = close_open_sites(&self.db, &self.active_site_id, &self.last_site_address);
@@ -86,7 +89,7 @@ impl TrackingManager {
             let elapsed = super::status_report::snapshot_task_elapsed(
                 &db,
                 &tracking,
-                inactivity_controller.as_deref(),
+                None,
             )?;
             db.set_task_active_seconds(&tracking.task_id, elapsed)?;
             db.finalize_tracking(&tracking.tracking_id, &ended_at)?;
@@ -108,29 +111,8 @@ impl TrackingManager {
         }
 
         *self.active.lock() = None;
-        *self.tracking_active_flag.lock() = false;
+        self.tracking_active_flag.store(false, Ordering::SeqCst);
         Ok(())
-    }
-
-    pub(crate) fn flush_open_period(&self, time_category: &str) -> AgentResult<()> {
-        flush_period_screenshot(
-            &self.db,
-            &self.screenshot,
-            &self.tracker,
-            &self.totals,
-            &self.active,
-            time_category,
-        )
-    }
-
-    pub(crate) fn open_period_category(&self) -> &'static str {
-        self.inactivity_controller
-            .lock()
-            .as_ref()
-            .map(|inactivity_controller| {
-                screenshot_time_category(inactivity_controller.snapshot().phase)
-            })
-            .unwrap_or(TIME_CATEGORY_ACTIVE)
     }
 
     pub(crate) fn spawn_worker(&self) {
@@ -168,7 +150,7 @@ impl TrackingManager {
 
     fn clear_tracking_memory(&self) {
         *self.active.lock() = None;
-        *self.tracking_active_flag.lock() = false;
+        self.tracking_active_flag.store(false, Ordering::SeqCst);
         *self.inactivity_controller.lock() = None;
         *self.totals.lock() = super::TrackingTotals::default();
         *self.last_active_window.lock() = None;

@@ -12,7 +12,6 @@ use crate::tracking_focus::{
 use crate::auth::read_session_identity;
 use crate::crypto::DeviceKeys;
 use crate::db::Database;
-use crate::db::TIME_CATEGORY_ACTIVE;
 use crate::error::{AgentError, AgentResult};
 use crate::tracking_inactivity::{
     load_inactivity_threshold_minutes, TrackingInactivityController,
@@ -50,7 +49,7 @@ pub struct TrackingManager {
     pub(crate) tracker: Arc<Mutex<ActivityTracker>>,
     pub(crate) screenshot: Arc<Mutex<ScreenshotCapture>>,
     pub(crate) active: Arc<Mutex<Option<ActiveTracking>>>,
-    pub(crate) tracking_active_flag: Arc<Mutex<bool>>,
+    pub(crate) tracking_active_flag: Arc<AtomicBool>,
     pub(crate) worker_running: Arc<AtomicBool>,
     pub(crate) worker_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     pub(crate) totals: Arc<Mutex<TrackingTotals>>,
@@ -84,7 +83,7 @@ impl TrackingManager {
             tracker: Arc::new(Mutex::new(ActivityTracker::new())),
             screenshot: Arc::new(Mutex::new(screenshot)),
             active: Arc::new(Mutex::new(None)),
-            tracking_active_flag: Arc::new(Mutex::new(false)),
+            tracking_active_flag: Arc::new(AtomicBool::new(false)),
             worker_running: Arc::new(AtomicBool::new(false)),
             worker_handle: Arc::new(Mutex::new(None)),
             totals: Arc::new(Mutex::new(TrackingTotals::default())),
@@ -188,7 +187,7 @@ impl TrackingManager {
         *self.active_app_id.lock() = None;
         *self.active_site_id.lock() = None;
         *self.last_site_address.lock() = None;
-        *self.tracking_active_flag.lock() = true;
+        self.tracking_active_flag.store(true, Ordering::SeqCst);
 
         {
             let tracker = self.tracker.lock();
@@ -291,24 +290,6 @@ impl TrackingManager {
         ) {
             log::warn!("persist task time snapshot on manual pause failed: {err}");
         }
-
-        let db = Arc::clone(&self.db);
-        let active = Arc::clone(&self.active);
-        let screenshot = Arc::clone(&self.screenshot);
-        let tracker = Arc::clone(&self.tracker);
-        let totals = Arc::clone(&self.totals);
-        std::thread::spawn(move || {
-            if let Err(err) = capture::flush_period_screenshot(
-                &db,
-                &screenshot,
-                &tracker,
-                &totals,
-                &active,
-                TIME_CATEGORY_ACTIVE,
-            ) {
-                log::warn!("deferred flush on manual pause failed: {err}");
-            }
-        });
 
         if let Some(app) = self.app_handle.lock().clone() {
             let _ = app.emit("tracking-inactivity-changed", ());

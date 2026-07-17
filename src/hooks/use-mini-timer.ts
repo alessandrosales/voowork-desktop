@@ -43,6 +43,9 @@ const EMPTY_TRACKING: TrackingStatus = {
   },
 }
 
+const ACTIVE_POLL_MS = 1_000
+const IDLE_POLL_MS = 5_000
+
 export function useMiniTimer() {
   const [tracking, setTracking] = useState<TrackingStatus>(EMPTY_TRACKING)
   const [taskElapsedSeconds, setTaskElapsedSeconds] = useState(0)
@@ -83,11 +86,14 @@ export function useMiniTimer() {
     }
   }, [])
 
+  // Adaptive polling: 1s when tracking active, 5s when idle
+  const refreshMs = tracking.active ? ACTIVE_POLL_MS : IDLE_POLL_MS
+
   useEffect(() => {
     refresh().catch(() => undefined)
     const interval = window.setInterval(() => {
       refresh().catch(() => undefined)
-    }, 1000)
+    }, refreshMs)
 
     let unlisten: (() => void) | undefined
     listen("tracking-inactivity-changed", () => {
@@ -102,7 +108,7 @@ export function useMiniTimer() {
       window.clearInterval(interval)
       unlisten?.()
     }
-  }, [refresh])
+  }, [refresh, refreshMs])
 
   const pauseTracking = useCallback(async () => {
     setLoading(true)

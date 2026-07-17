@@ -16,7 +16,6 @@
     "core:window:allow-set-focus",
     "core:window:allow-set-position",
     "core:window:allow-start-dragging",
-    "core:window:allow-request-user-attention",
     {
       "identifier": "opener:allow-open-url",
       "allow": [
