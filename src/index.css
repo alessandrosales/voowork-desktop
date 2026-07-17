@@ -386,21 +386,6 @@ html.voowork-mini-surface .voowork-mini-widget {
   user-select: none;
 }
 
-.voowork-mini-shell {
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.05),
-    0 1px 2px rgba(15, 23, 42, 0.06),
-    0 6px 16px -4px rgba(15, 23, 42, 0.12),
-    0 14px 32px -10px rgba(15, 23, 42, 0.1);
-}
-
-.dark .voowork-mini-shell {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 2px 6px rgba(0, 0, 0, 0.22),
-    0 10px 24px -6px rgba(0, 0, 0, 0.34);
-}
-
 .voowork-mini-drag-handle {
   -webkit-app-region: drag;
   app-region: drag;
