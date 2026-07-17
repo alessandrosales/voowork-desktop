@@ -193,12 +193,8 @@ pub struct TrackingScreenshotRow {
 
 #[derive(Debug, Clone)]
 pub struct TrackingScreenshotAccess {
-    #[allow(dead_code)]
-    pub id: String,
     pub tracking_id: String,
     pub path: String,
-    #[allow(dead_code)]
-    pub remote_path: Option<String>,
     pub synced_at: Option<String>,
 }
 

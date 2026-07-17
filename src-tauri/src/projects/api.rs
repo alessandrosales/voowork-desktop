@@ -86,6 +86,33 @@ impl ProjectsClient {
             .collect())
     }
 
+    pub async fn fetch_all_projects(&self) -> AgentResult<Vec<ApiProject>> {
+        let url = format!("{}/api/v1/projects", self.base_url);
+        let response = self
+            .client
+            .get(&url)
+            .bearer_auth(&self.access_token)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(auth_error_from_response(status, &body));
+        }
+
+        let payload: Vec<ProjectResponse> = response.json().await?;
+
+        Ok(payload
+            .into_iter()
+            .filter(|project| !project.id.is_empty())
+            .map(|project| ApiProject {
+                id: project.id,
+                name: project.name,
+            })
+            .collect())
+    }
+
     pub async fn fetch_tasks(&self, project_id: &str) -> AgentResult<Vec<ApiTask>> {
         let url = format!(
             "{}/api/v1/projects/{}/tasks",

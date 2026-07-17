@@ -15,12 +15,12 @@ O desktop é um **cliente offline-first** da API Rails. O domínio de negócio v
 |-----------|---------|
 | Tabelas/colunas **locais** no SQLite | `idle_periods`, `activity_buffer_state` |
 | Usar entidades existentes de forma criativa | `peripheral_events.count` → activity score |
-| Sync via endpoints já integrados | Ver `docs/BACKEND_INTEGRATION.md` |
+| Sync via endpoints já integrados | Ver `docs/README.md` (seção "Integração com a API Rails") |
 | Dados que ficam só localmente | `idle_period` (sync ignorado) |
 
 ## Integração existente
 
-Consulte `docs/BACKEND_INTEGRATION.md` antes de propor sync ou novos payloads.
+Consulte `docs/README.md` (seção "Integração com a API Rails") antes de propor sync ou novos payloads.
 
 - Auth: `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - Tracking: `POST/PATCH /api/v1/trackings`
@@ -35,4 +35,4 @@ Consulte `docs/BACKEND_INTEGRATION.md` antes de propor sync ou novos payloads.
 
 ## Referência de escopo
 
-Ver restrições em `docs/IMPLEMENTATION_PLAN.md` — fechar gargalos do agente **sem alterar** o domínio do backend.
+Ver restrições em `docs/README.md` (seção "Restrições de escopo") — fechar gargalos do agente **sem alterar** o domínio do backend.

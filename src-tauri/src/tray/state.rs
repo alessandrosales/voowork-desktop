@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use parking_lot::Mutex;
 use tauri::{menu::MenuItem, Wry};
 

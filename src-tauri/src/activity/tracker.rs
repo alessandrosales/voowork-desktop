@@ -1,81 +1,11 @@
 use super::automation::SampleBuffer;
 use super::constants::{HARDWARE_LISTENER_POLL_MS, MAX_MOUSE_POSITIONS, SAMPLE_BUFFER_CAPACITY};
+use super::platform;
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
-
-// ---------------------------------------------------------------------------
-// macOS: polling-based activity tracker sem CGEventTap
-//
-// No macOS 26, o rdev 0.5.3 crasha ao criar um CGEventTap. Em vez de
-// escutar eventos globais (que exige permissão de Monitoramento de Entrada),
-// usamos uma thread de polling que consulta:
-//   - Posição do mouse (CGEventGetLocation — sem permissão especial)
-//   - Tempo desde o último evento de entrada (CGEventSourceSecondsSinceLastEventType)
-// ---------------------------------------------------------------------------
-
-#[cfg(target_os = "macos")]
-mod platform {
-
-    #[link(name = "CoreGraphics", kind = "framework")]
-    extern "C" {
-        fn CGEventCreate(source: *const std::ffi::c_void) -> *mut std::ffi::c_void;
-        fn CGEventGetLocation(event: *mut std::ffi::c_void) -> core_graphics::geometry::CGPoint;
-        fn CFRelease(cf: *mut std::ffi::c_void);
-        fn CGEventSourceSecondsSinceLastEventType(
-            source_state_id: i32,
-            event_type: u32,
-        ) -> f64;
-    }
-
-    const CG_EVENT_SOURCE_STATE_PRIVATE: i32 = -1;
-    /// kCGAnyInputEventType = todas as máscaras de evento de entrada (0xFFFFFFFF)
-    const CG_ANY_INPUT_EVENT_TYPE: u32 = !0u32;
-
-    pub(super) fn poll_mouse_position() -> Option<(f64, f64)> {
-        unsafe {
-            let event = CGEventCreate(std::ptr::null());
-            if event.is_null() {
-                return None;
-            }
-            let point = CGEventGetLocation(event);
-            CFRelease(event);
-            Some((point.x, point.y))
-        }
-    }
-
-    /// Retorna segundos desde o último evento de entrada (mouse ou teclado).
-    /// Valores pequenos (< 0.5s) indicam atividade recente.
-    pub(super) fn seconds_since_last_input() -> f64 {
-        unsafe { CGEventSourceSecondsSinceLastEventType(CG_EVENT_SOURCE_STATE_PRIVATE, CG_ANY_INPUT_EVENT_TYPE) }
-    }
-
-    pub(super) fn check_permission() -> bool {
-        // Reusa a mesma FFI do CGPreflightListenEventAccess
-        #[link(name = "CoreGraphics", kind = "framework")]
-        extern "C" {
-            fn CGPreflightListenEventAccess() -> u8;
-        }
-        unsafe { CGPreflightListenEventAccess() != 0 }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-mod platform {
-    pub(super) fn poll_mouse_position() -> Option<(f64, f64)> {
-        None
-    }
-
-    pub(super) fn seconds_since_last_input() -> f64 {
-        f64::MAX
-    }
-
-    pub(super) fn check_permission() -> bool {
-        true
-    }
-}
 
 // ---------------------------------------------------------------------------
 // ActivityTracker

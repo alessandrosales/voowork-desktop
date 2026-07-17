@@ -61,15 +61,13 @@ pub struct PendingSyncItem {
     pub entity_type: String,
     pub entity_id: String,
     pub payload_json: String,
-    #[allow(dead_code)]
-    pub signature: Option<String>,
     pub attempts: i64,
 }
 
 pub fn fetch_pending_batch(conn: &Connection, limit: usize) -> AgentResult<Vec<PendingSyncItem>> {
     let now = chrono::Utc::now().to_rfc3339();
     let mut stmt = conn.prepare(
-        "SELECT id, entity_type, entity_id, payload_json, signature, attempts
+        "SELECT id, entity_type, entity_id, payload_json, attempts
          FROM sync_queue
          WHERE status IN ('pending', 'failed') AND (next_retry_at IS NULL OR next_retry_at <= ?1)
          ORDER BY created_at ASC
@@ -82,8 +80,7 @@ pub fn fetch_pending_batch(conn: &Connection, limit: usize) -> AgentResult<Vec<P
             entity_type: row.get(1)?,
             entity_id: row.get(2)?,
             payload_json: row.get(3)?,
-            signature: row.get(4)?,
-            attempts: row.get(5)?,
+            attempts: row.get(4)?,
         })
     })?;
 

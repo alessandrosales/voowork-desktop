@@ -2,21 +2,18 @@ use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{AgentError, AgentResult};
 
-pub const ENV_WEB_PANEL_URL: &str = "VOOWORK_WEB_PANEL_URL";
-pub const ENV_WEB_PANEL_URL_VITE: &str = "VITE_VOOWORK_WEB_URL";
+pub const ENV_WEB_PANEL_URL: &str = "FRONTEND_URL";
 const DEFAULT_WEB_PANEL_URL_DEV: &str = "http://localhost:5173";
 const DEFAULT_WEB_PANEL_URL_PROD: &str = "https://app.voowork.com";
 
 pub fn configured_web_panel_url() -> String {
-    std::env::var(ENV_WEB_PANEL_URL)
-        .or_else(|_| std::env::var(ENV_WEB_PANEL_URL_VITE))
-        .unwrap_or_else(|_| {
-            if cfg!(debug_assertions) {
-                DEFAULT_WEB_PANEL_URL_DEV.to_string()
-            } else {
-                DEFAULT_WEB_PANEL_URL_PROD.to_string()
-            }
-        })
+    std::env::var(ENV_WEB_PANEL_URL).unwrap_or_else(|_| {
+        if cfg!(debug_assertions) {
+            DEFAULT_WEB_PANEL_URL_DEV.to_string()
+        } else {
+            DEFAULT_WEB_PANEL_URL_PROD.to_string()
+        }
+    })
 }
 
 pub fn open_allowed_url<R: tauri::Runtime>(

@@ -2,6 +2,8 @@ import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
 const LOGO_HEIGHTS = {
+  xs: "h-6",
+  compact: "h-7",
   sm: "h-8",
   md: "h-10",
   lg: "h-14",

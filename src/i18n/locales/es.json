@@ -28,6 +28,18 @@
     "noProjects": "No hay proyectos asignados. Pide acceso a tu gestor o sincroniza después de iniciar sesión.",
     "openWebPanel": "Abrir panel web"
   },
+  "workspace": {
+    "title": "Espacio de trabajo",
+    "back": "Volver",
+    "done": "Listo",
+    "workingOn": "Trabajando en",
+    "selectWork": "Selecciona tu trabajo",
+    "searchPlaceholder": "Buscar proyectos...",
+    "noResults": "Ningún proyecto encontrado",
+    "noTasks": "Sin tareas",
+    "task": "tarea",
+    "tasks": "tareas"
+  },
   "widget": {
     "expand": "Abrir app completo",
     "openApp": "Abrir Voowork",

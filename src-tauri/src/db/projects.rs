@@ -142,6 +142,11 @@ impl Database {
         let placeholders = std::iter::repeat_n("?", ids.len())
             .collect::<Vec<_>>()
             .join(", ");
+
+        // Delete tasks first to avoid FOREIGN KEY constraint failure.
+        let sql = format!("DELETE FROM tasks WHERE project_id NOT IN ({placeholders})");
+        self.conn.execute(&sql, rusqlite::params_from_iter(ids.iter()))?;
+
         let sql = format!("DELETE FROM projects WHERE id NOT IN ({placeholders})");
         self.conn.execute(&sql, rusqlite::params_from_iter(ids.iter()))?;
         Ok(())

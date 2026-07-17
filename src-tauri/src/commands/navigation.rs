@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 use std::process::Command;
 
 use tauri::AppHandle;
@@ -16,8 +17,7 @@ pub fn open_external_url(app: AppHandle, url: String) -> AgentResult<()> {
 }
 
 /// Abre os Ajustes do macOS na tela de Monitoramento de Entrada.
-/// No macOS 26, a permissão de Input Monitoring é necessária para o rdev
-/// capturar eventos globais de mouse/teclado.
+/// Pode melhorar a detecção de atividade do tracker baseado em polling no macOS.
 #[tauri::command]
 pub fn open_system_settings_input_monitoring() -> AgentResult<()> {
     #[cfg(target_os = "macos")]

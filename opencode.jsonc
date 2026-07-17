@@ -58,5 +58,23 @@
 
   "skills": {
     "paths": [".opencode/skills"]
+  },
+
+  "mcp": {
+    "voowork_production_pg": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-postgres", "postgresql://postgres:postgres@localhost:5433/voowork_development"],
+      "enabled": true
+    },
+    "voowork_production_pg_write": {
+      "type": "local",
+      "command": ["npx", "-y", "mcp-postgres-full-access", "postgresql://postgres:postgres@localhost:5434/voowork_db"],
+      "enabled": true,
+      "env": {
+        "TRANSACTION_TIMEOUT_MS": "60000",
+        "PG_STATEMENT_TIMEOUT_MS": "30000",
+        "MAX_CONCURRENT_TRANSACTIONS": "3"
+      }
+    }
   }
 }

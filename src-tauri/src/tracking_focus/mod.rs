@@ -7,8 +7,6 @@ pub struct ActiveWindowSample {
     pub app_name: String,
     pub window_title: String,
     pub process_path: Option<String>,
-    #[allow(dead_code)]
-    pub process_id: Option<i64>,
 }
 
 pub fn capture_active_window() -> Option<ActiveWindowSample> {
@@ -30,7 +28,6 @@ pub fn capture_active_window() -> Option<ActiveWindowSample> {
             } else {
                 Some(process_path)
             },
-            process_id: Some(window.process_id as i64),
         }))
     }) {
         Ok(sample) => sample,
@@ -374,7 +371,6 @@ mod tests {
             app_name: app_name.into(),
             window_title: window_title.into(),
             process_path: None,
-            process_id: None,
         }
     }
 

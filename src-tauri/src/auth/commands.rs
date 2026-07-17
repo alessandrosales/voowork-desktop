@@ -5,6 +5,7 @@ use tauri::Emitter;
 use crate::app_state::AppState;
 use crate::error::{AgentError, AgentResult};
 use crate::projects;
+use crate::sync::EVENT_AUTH_SESSION_EXPIRED;
 use crate::tray::{refresh_tray_ui, EVENT_AUTH_LOGGED_OUT};
 use crate::windows::hide_mini_timer;
 
@@ -29,9 +30,12 @@ pub async fn login(
         let db_guard = db.lock();
         persist_session(&db_guard, &session)?;
         projects::invalidate_project_cache_if_org_changed(&db_guard, &session.organization.id)?;
+        // Sempre limpar a seleção ao logar — o usuário escolhe projeto/task manualmente.
+        db_guard.set_setting("selected_project_id", "")?;
+        db_guard.set_setting("selected_task_id", "")?;
     }
 
-    if let Err(err) = projects::sync_project_cache(&api_base_url, &session.access_token, Arc::clone(&db)).await {
+    if let Err(err) = projects::sync_project_cache(&api_base_url, &session.access_token, &session.user.profile, Arc::clone(&db)).await {
         log::warn!("project cache sync failed after login: {err}");
     }
 
@@ -87,6 +91,7 @@ pub fn get_auth_state(state: tauri::State<'_, AppState>) -> AgentResult<AuthStat
 
 #[tauri::command]
 pub async fn validate_auth_session(
+    app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
 ) -> AgentResult<AuthState> {
     let db = Arc::clone(&state.db);
@@ -114,7 +119,6 @@ pub async fn validate_auth_session(
         Ok((user, org, _projects_list)) => {
             let updated = AuthSession {
                 access_token: session.access_token,
-                refresh_token: None,
                 user,
                 organization: org,
             };
@@ -122,7 +126,7 @@ pub async fn validate_auth_session(
                 let db_guard = db.lock();
                 persist_session(&db_guard, &updated)?;
             }
-            if let Err(err) = projects::refresh_project_cache_if_stale(&api_base_url, Arc::clone(&db)).await {
+            if let Err(err) = projects::refresh_project_cache_if_stale(&api_base_url, &updated.user.profile, Arc::clone(&db)).await {
                 log::warn!("project cache refresh after auth validate failed: {err}");
             }
             state.tracking_manager.set_session_authenticated(true);
@@ -130,9 +134,16 @@ pub async fn validate_auth_session(
         }
         Err(AgentError::Auth(msg)) => {
             log::info!("auth session invalidated: {msg}");
-            let db_guard = db.lock();
-            clear_session_store(&db_guard)?;
-            state.tracking_manager.set_session_authenticated(false);
+            let app_state = state.inner().clone();
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                let db_guard = app_state.db.lock();
+                if let Err(clear_err) = clear_session_store(&db_guard) {
+                    log::warn!("failed to clear session after auth invalidation: {clear_err}");
+                }
+                app_state.tracking_manager.set_session_authenticated(false);
+            })
+            .await;
+            let _ = app.emit(EVENT_AUTH_SESSION_EXPIRED, ());
             Ok(AuthState::signed_out())
         }
         Err(AgentError::Http(err)) if err.is_connect() || err.is_timeout() => {

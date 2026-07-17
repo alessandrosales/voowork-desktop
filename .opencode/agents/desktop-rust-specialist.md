@@ -12,7 +12,7 @@ Implement backend logic in `src-tauri/` only. The React UI is handled by `@deskt
 
 | Module | Responsibility |
 | ------ | -------------- |
-| `activity/` | Global input hooks (`rdev`), anti-automation |
+| `activity/` | Activity polling per OS (`docs/features/02-tracking.md`), anti-automation |
 | `app_focus/` | Active window, apps, browser sites |
 | `tracking/` | Session orchestration, buffer, worker |
 | `idle/` | Idle state machine, persistence |
@@ -40,8 +40,8 @@ Implement backend logic in `src-tauri/` only. The React UI is handled by `@deskt
 
 ## Sync / API
 
-- Read `docs/BACKEND_INTEGRATION.md` before changing payloads.
-- Base URL from `VOOWORK_API_URL`.
+- Read `docs/README.md` (seção "Integração com a API Rails") before changing payloads.
+- Base URL from `VITE_API_URL`.
 - Client-generated UUIDs for idempotent upsert.
 - Do not add new API endpoints — flag backend gap if needed.
 

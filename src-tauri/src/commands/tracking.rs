@@ -92,14 +92,11 @@ pub fn dismiss_activity_buffer(state: tauri::State<'_, AppState>) -> AgentResult
 }
 
 #[tauri::command]
-pub async fn get_task_elapsed_seconds(
+pub fn get_task_elapsed_seconds(
     state: tauri::State<'_, AppState>,
     task_id: String,
 ) -> AgentResult<u64> {
-    let app_state = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || app_state.tracking_manager.task_elapsed_seconds(&task_id))
-        .await
-        .map_err(|err| AgentError::Other(format!("task elapsed worker failed: {err}")))?
+    state.tracking_manager.task_elapsed_seconds(&task_id)
 }
 
 #[tauri::command]
@@ -204,7 +201,7 @@ pub fn dismiss_manual_work_check(state: tauri::State<'_, AppState>) -> AgentResu
 }
 
 /// Verifica se o app tem permissão de Monitoramento de Entrada no macOS.
-/// Necessário para o rdev capturar eventos globais de mouse/teclado.
+/// Usado pelo tracker de atividade baseado em polling (CoreGraphics).
 #[tauri::command]
 pub fn check_input_monitoring_permission(state: tauri::State<'_, AppState>) -> bool {
     state.tracking_manager.tracker_has_permission()

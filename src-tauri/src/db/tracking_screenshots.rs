@@ -11,17 +11,15 @@ impl Database {
     ) -> AgentResult<TrackingScreenshotAccess> {
         self.conn
             .query_row(
-                "SELECT id, tracking_id, path, remote_path, synced_at
+                "SELECT tracking_id, path, synced_at
                  FROM tracking_screenshots
                  WHERE id = ?1",
                 params![screenshot_id],
                 |row| {
                     Ok(TrackingScreenshotAccess {
-                        id: row.get(0)?,
-                        tracking_id: row.get(1)?,
-                        path: row.get(2)?,
-                        remote_path: row.get(3)?,
-                        synced_at: row.get(4)?,
+                        tracking_id: row.get(0)?,
+                        path: row.get(1)?,
+                        synced_at: row.get(2)?,
                     })
                 },
             )

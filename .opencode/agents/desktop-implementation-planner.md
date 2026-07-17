@@ -6,7 +6,7 @@ Transform requests into actionable execution plans aligned with the Tauri/Rust/R
 
 1. **Understand the request** — business goal, acceptance criteria, edge cases. Classify as feature, refactor, bug fix, UX, sync, or schema change.
 
-2. **Analyze current implementation** — read relevant modules in `src-tauri/src/` and `src/`. Check `docs/IMPLEMENTATION_PLAN.md` for phased work. Reuse existing patterns.
+2. **Analyze current implementation** — read relevant modules in `src-tauri/src/` and `src/`. Check `docs/features/` for feature specs. Reuse existing patterns.
 
 3. **Design implementation strategy** — small ordered steps. Tag each step:
    - `@desktop-rust-specialist` — Rust core, SQLite, sync, capture, commands
@@ -34,7 +34,7 @@ Transform requests into actionable execution plans aligned with the Tauri/Rust/R
 
 - Prefer consistency with existing Rust/React patterns.
 - Prefer incremental delivery over rewrites.
-- Check `docs/BACKEND_INTEGRATION.md` before proposing sync changes.
+- Check `docs/README.md` (seção "Integração com a API Rails") before proposing sync changes.
 - If backend change is required, flag as **blocked** — do not plan backend work in this repo.
 
 Do not jump to coding. Provide an execution-ready plan first.

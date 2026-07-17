@@ -21,6 +21,7 @@ pub fn invalidate_project_cache_if_org_changed(
 pub async fn sync_project_cache(
     api_base_url: &str,
     access_token: &str,
+    profile: &str,
     db: Arc<Mutex<Database>>,
 ) -> AgentResult<usize> {
     let organization_id = {
@@ -29,7 +30,11 @@ pub async fn sync_project_cache(
     };
 
     let client = ProjectsClient::with_token(api_base_url, access_token)?;
-    let projects = client.fetch_assigned_projects().await?;
+    let projects = if profile == "admin" {
+        client.fetch_all_projects().await?
+    } else {
+        client.fetch_assigned_projects().await?
+    };
     let mut entries = Vec::with_capacity(projects.len());
 
     for (index, project) in projects.iter().enumerate() {
@@ -62,6 +67,7 @@ pub async fn sync_project_cache(
 
 pub async fn refresh_project_cache_if_stale(
     api_base_url: &str,
+    profile: &str,
     db: Arc<Mutex<Database>>,
 ) -> AgentResult<()> {
     let (needs_refresh, access_token) = {
@@ -79,7 +85,7 @@ pub async fn refresh_project_cache_if_stale(
         return Ok(());
     };
 
-    if let Err(err) = sync_project_cache(api_base_url, &access_token, Arc::clone(&db)).await {
+    if let Err(err) = sync_project_cache(api_base_url, &access_token, profile, Arc::clone(&db)).await {
         log::warn!("background project cache refresh failed: {err}");
     }
 

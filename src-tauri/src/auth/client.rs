@@ -1,4 +1,5 @@
 use crate::error::{AgentError, AgentResult};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -33,6 +34,8 @@ struct LoginUserPayload {
     account_id: Option<String>,
     name: String,
     email: String,
+    #[serde(default)]
+    profile: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -47,6 +50,8 @@ pub struct MeResponse {
     pub account_id: String,
     pub name: String,
     pub email: String,
+    #[serde(default)]
+    pub profile: String,
     #[serde(default)]
     pub projects: Vec<ProjectSummary>,
 }
@@ -119,11 +124,11 @@ fn session_from_login_payload(payload: LoginPayload) -> AuthSession {
 
     AuthSession {
         access_token: payload.token,
-        refresh_token: None,
         user: super::store::AuthUser {
             id: payload.user.id,
             name: payload.user.name,
             email: payload.user.email,
+            profile: payload.user.profile,
         },
         organization: org,
     }
@@ -143,7 +148,7 @@ pub async fn fetch_me_profile(
         .send()
         .await?;
 
-    if is_auth_failure_status(response.status()) {
+    if is_auth_failure_status(response.status()) || response.status() == StatusCode::NOT_FOUND {
         return Err(AgentError::Auth("sessão expirada".into()));
     }
 
@@ -164,6 +169,7 @@ pub async fn fetch_me_profile(
             id: payload.id,
             name: payload.name,
             email: payload.email,
+            profile: payload.profile,
         },
         super::store::AuthOrganization {
             id: payload.account_id,

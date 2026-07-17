@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- rdev: Global input monitoring (CGEventTap) -->
+    <!-- Activity tracker: input idle polling on macOS -->
     <key>com.apple.security.device.input-monitoring</key>
     <true/>
 

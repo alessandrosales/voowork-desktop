@@ -75,11 +75,6 @@ export function ProfileMenu({
                 {auth.user.email}
               </span>
             ) : null}
-            {auth.organization?.name ? (
-              <span className="text-muted-foreground truncate text-xs font-normal">
-                {auth.organization.name}
-              </span>
-            ) : null}
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

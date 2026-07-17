@@ -4,11 +4,11 @@ use s3::creds::Credentials;
 use s3::region::Region;
 use std::path::Path;
 
-pub const ENV_S3_ENDPOINT: &str = "VOOWORK_S3_ENDPOINT";
-pub const ENV_S3_REGION: &str = "VOOWORK_S3_REGION";
-pub const ENV_S3_ACCESS_KEY: &str = "VOOWORK_S3_ACCESS_KEY";
-pub const ENV_S3_SECRET_KEY: &str = "VOOWORK_S3_SECRET_KEY";
-pub const ENV_S3_BUCKET: &str = "VOOWORK_S3_BUCKET";
+pub const ENV_S3_ENDPOINT: &str = "S3_ENDPOINT";
+pub const ENV_S3_REGION: &str = "S3_REGION";
+pub const ENV_S3_ACCESS_KEY: &str = "S3_ACCESS_KEY";
+pub const ENV_S3_SECRET_KEY: &str = "S3_SECRET_KEY";
+pub const ENV_S3_BUCKET: &str = "S3_BUCKET";
 
 const DEFAULT_S3_REGION: &str = "garage";
 
@@ -23,7 +23,7 @@ struct S3Config {
 fn required_env(name: &str) -> AgentResult<String> {
     std::env::var(name).map_err(|_| {
         AgentError::Other(format!(
-            "{name} não definida; copie .env.example para .env e configure o S3/Garage"
+            "{name} não definida; configure no .env do voowork-backend"
         ))
     })
 }
