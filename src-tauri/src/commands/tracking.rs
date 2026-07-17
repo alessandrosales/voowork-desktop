@@ -207,6 +207,16 @@ pub fn check_input_monitoring_permission(state: tauri::State<'_, AppState>) -> b
     state.tracking_manager.tracker_has_permission()
 }
 
+/// Verifica se o app consegue capturar a janela ativa (necessário para
+/// detectar meetings e trackear apps).
+///
+/// - Linux / Windows: sempre `true`.
+/// - macOS: `true` apenas se o usuário concedeu permissão de Screen Recording.
+#[tauri::command]
+pub fn check_active_window_permission() -> bool {
+    crate::tracking_focus::check_active_window_permission()
+}
+
 #[tauri::command]
 pub fn get_tracking_inactivity_config(state: tauri::State<'_, AppState>) -> AgentResult<TrackingInactivityConfig> {
     let db = state.db.lock();

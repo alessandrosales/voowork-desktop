@@ -1,5 +1,5 @@
 import { FolderIcon, LayoutGridIcon } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { useAuth } from "@/hooks/use-auth"
@@ -66,18 +66,46 @@ export function TimerApp() {
   const [taskId, setTaskId] = useState(NO_TASK_ID)
   const [view, setView] = useState<View>("timer")
 
-  const persistSelection = async (nextProjectId: string, nextTaskId: string) => {
-    await Promise.all([
-      trackedInvoke("set_setting", {
-        key: SETTING_SELECTED_PROJECT_ID,
-        value: nextProjectId,
-      }),
-      trackedInvoke("set_setting", {
-        key: SETTING_SELECTED_TASK_ID,
-        value: nextTaskId === NO_TASK_ID ? "" : nextTaskId,
-      }),
-    ])
-  }
+  const persistSelection = useCallback(
+    async (nextProjectId: string, nextTaskId: string) => {
+      await Promise.all([
+        trackedInvoke("set_setting", {
+          key: SETTING_SELECTED_PROJECT_ID,
+          value: nextProjectId,
+        }),
+        trackedInvoke("set_setting", {
+          key: SETTING_SELECTED_TASK_ID,
+          value: nextTaskId === NO_TASK_ID ? "" : nextTaskId,
+        }),
+      ])
+    },
+    [],
+  )
+
+  // Debounce persistSelection: coalesce rapid selection changes
+  // (e.g. keyboard arrow mashing) into a single save.
+  const pendingSelectionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const debouncedPersistSelection = useCallback(
+    (nextProjectId: string, nextTaskId: string) => {
+      if (pendingSelectionRef.current) {
+        clearTimeout(pendingSelectionRef.current)
+      }
+      pendingSelectionRef.current = setTimeout(() => {
+        pendingSelectionRef.current = null
+        void persistSelection(nextProjectId, nextTaskId)
+      }, 300)
+    },
+    [persistSelection],
+  )
+
+  // Cleanup pending save on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingSelectionRef.current) {
+        clearTimeout(pendingSelectionRef.current)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!auth.isAuthenticated) {
@@ -184,7 +212,7 @@ export function TimerApp() {
   const handleSelectTask = (nextProjectId: string, nextTaskId: string) => {
     setProjectId(nextProjectId)
     setTaskId(nextTaskId)
-    void persistSelection(nextProjectId, nextTaskId)
+    debouncedPersistSelection(nextProjectId, nextTaskId)
   }
 
   const handleOpenWorkspace = () => {
@@ -195,11 +223,16 @@ export function TimerApp() {
     setView("timer")
   }
 
-  // Carrega projetos apenas quando o usuário abre o workspace de trabalho.
+  // Carrega projetos quando abre workspace + stale-while-revalidate a cada 5 min.
   useEffect(() => {
-    if (view === "workspace") {
-      loadProjects().catch(() => undefined)
+    if (view !== "workspace") {
+      return
     }
+    loadProjects().catch(() => undefined)
+    const interval = window.setInterval(() => {
+      loadProjects().catch(() => undefined)
+    }, 5 * 60 * 1000)
+    return () => window.clearInterval(interval)
   }, [view, loadProjects])
 
   // ─── Workspace view ───────────────────────────────────────

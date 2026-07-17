@@ -93,6 +93,11 @@
       "title": "Permiso necesario",
       "description": "Voowork necesita monitorear la entrada del teclado y mouse para registrar tu actividad. Ve a Ajustes del Sistema y activa Monitorización de Entrada para Voowork.",
       "openSettings": "Abrir Ajustes del Sistema"
+    },
+    "activeWindow": {
+      "title": "Permiso de grabación de pantalla",
+      "description": "Voowork necesita permiso de Grabación de Pantalla para detectar cuando estás en reuniones y rastrear qué aplicaciones usas. Ve a Ajustes del Sistema y activa la Grabación de Pantalla para Voowork.",
+      "openSettings": "Abrir Ajustes del Sistema"
     }
   }
 }

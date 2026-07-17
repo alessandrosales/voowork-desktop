@@ -41,8 +41,9 @@ fn s3_config() -> AgentResult<S3Config> {
 fn content_type_for_extension(extension: &str) -> &'static str {
     match extension {
         "png" => "image/png",
-        "jpeg" => "image/jpeg",
-        _ => "image/jpeg",
+        "jpeg" | "jpg" => "image/jpeg",
+        "webp" => "image/webp",
+        _ => "image/webp",
     }
 }
 
@@ -96,7 +97,7 @@ pub async fn upload_capture(local_path: &str, screenshot_id: &str) -> AgentResul
     let extension = path
         .extension()
         .and_then(|value| value.to_str())
-        .unwrap_or("jpg");
+        .unwrap_or("webp");
     let content_type = content_type_for_extension(extension);
     let key = object_key(screenshot_id, extension);
     let remote_path = storage_path(screenshot_id, extension);

@@ -48,7 +48,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 15_000
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 10_000
 
 type RawAuthState = AuthState & {
   is_authenticated?: boolean
@@ -81,14 +81,64 @@ function validateAuthSessionWithTimeout(): Promise<AuthState> {
   ])
 }
 
+/** Safety net: force initializing to false after a generous timeout. */
+function useInitializingSafetyTimeout(setInitializing: (v: boolean) => void) {
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setInitializing(false),
+      AUTH_BOOTSTRAP_TIMEOUT_MS + 5_000,
+    )
+    return () => window.clearTimeout(timer)
+  }, [setInitializing])
+}
+
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [auth, setAuth] = useState<AuthState>(EMPTY_AUTH)
   const [initializing, setInitializing] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Safety net: prevent getting stuck on loading screen
+  useInitializingSafetyTimeout(setInitializing)
+
   useEffect(() => {
     let cancelled = false
+    let unlistenExpired: (() => void) | undefined
+    let unlistenLoggedOut: (() => void) | undefined
+
+    const clearAuth = () => {
+      setAuth(EMPTY_AUTH)
+      setError(null)
+      setLoading(false)
+      setInitializing(false)
+    }
+
+    const setupListeners = async () => {
+      const ready = await waitForTauriReady()
+      if (!ready || cancelled) {
+        return
+      }
+
+      listen("auth-session-expired", clearAuth)
+        .then((dispose) => {
+          if (cancelled) {
+            dispose()
+            return
+          }
+          unlistenExpired = dispose
+        })
+        .catch(() => undefined)
+
+      listen("auth-logged-out", clearAuth)
+        .then((dispose) => {
+          if (cancelled) {
+            dispose()
+            return
+          }
+          unlistenLoggedOut = dispose
+        })
+        .catch(() => undefined)
+    }
 
     const bootstrap = async () => {
       const ready = await waitForTauriReady()
@@ -99,10 +149,20 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return
       }
 
+      // Set up event listeners BEFORE validating, so we never miss
+      // the auth-session-expired event emitted by the Rust command.
+      // We kick off listener setup and await it in parallel with
+      // the local auth read to minimise the total wait.
+      const listenerPromise = setupListeners()
+
       try {
         const localState = normalizeAuthState(
-          await trackedInvoke<RawAuthState>("get_auth_state")
+          await trackedInvoke<RawAuthState>("get_auth_state"),
         )
+
+        // Make sure listeners are definitely wired up before the
+        // potentially-slow remote validation call.
+        await listenerPromise
 
         if (!localState.isAuthenticated) {
           if (!cancelled) {
@@ -130,49 +190,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
 
     void bootstrap()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    let unlistenExpired: (() => void) | undefined
-    let unlistenLoggedOut: (() => void) | undefined
-
-    const clearAuth = () => {
-      setAuth(EMPTY_AUTH)
-      setError(null)
-      setLoading(false)
-      setInitializing(false)
-    }
-
-    void waitForTauriReady().then((ready) => {
-      if (!ready || cancelled) {
-        return
-      }
-
-      listen("auth-session-expired", clearAuth)
-        .then((dispose) => {
-          if (cancelled) {
-            dispose()
-            return
-          }
-          unlistenExpired = dispose
-        })
-        .catch(() => undefined)
-
-      listen("auth-logged-out", clearAuth)
-        .then((dispose) => {
-          if (cancelled) {
-            dispose()
-            return
-          }
-          unlistenLoggedOut = dispose
-        })
-        .catch(() => undefined)
-    })
 
     return () => {
       cancelled = true

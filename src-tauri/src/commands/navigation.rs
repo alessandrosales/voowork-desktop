@@ -39,3 +39,27 @@ pub fn open_system_settings_input_monitoring() -> AgentResult<()> {
 
     Ok(())
 }
+
+/// Abre os Ajustes do macOS na tela de Gravação de Tela (Screen Recording).
+/// Necessário para capturar a janela ativa e detectar reuniões no macOS.
+#[tauri::command]
+pub fn open_system_settings_screen_recording() -> AgentResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let outcome = Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+            .output()
+            .map_err(|e| crate::error::AgentError::Other(format!("failed to open System Settings: {e}")))?;
+
+        if !outcome.status.success() {
+            log::warn!("open System Settings (Screen Recording) may have failed: {:?}", outcome.status);
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        log::info!("open_system_settings_screen_recording is macOS-only");
+    }
+
+    Ok(())
+}

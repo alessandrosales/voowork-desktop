@@ -85,13 +85,29 @@ pub fn setup_windows(app: &tauri::App) -> tauri::Result<()> {
         let _ = main.set_icon(icon.clone());
         let main_clone = main.clone();
         main.on_window_event(move |event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let app = main_clone.app_handle();
-                if let Err(err) = enter_background_mode(app) {
-                    log::warn!("enter background mode failed: {err}");
-                    let _ = main_clone.hide();
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let app = main_clone.app_handle();
+                    if let Err(err) = enter_background_mode(app) {
+                        log::warn!("enter background mode failed: {err}");
+                        let _ = main_clone.hide();
+                    }
                 }
+                tauri::WindowEvent::Focused(false) => {
+                    let app = main_clone.app_handle();
+                    if should_show_mini_widget(app) {
+                        if let Err(err) = show_mini_timer(app) {
+                            log::warn!("show mini widget on focus lost failed: {err}");
+                        }
+                    }
+                }
+                tauri::WindowEvent::Focused(true) => {
+                    if let Some(mini) = main_clone.app_handle().get_webview_window(MINI_WINDOW_LABEL) {
+                        let _ = mini.hide();
+                    }
+                }
+                _ => {}
             }
         });
     }

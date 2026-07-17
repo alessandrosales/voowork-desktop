@@ -1,14 +1,14 @@
 use crate::error::{AgentError, AgentResult};
 use image::imageops::FilterType;
 use image::DynamicImage;
-use mozjpeg_rs::{Encoder, Preset, Subsampling};
+use webp::Encoder as WebpEncoder;
 
 use super::constants::{DEFAULT_JPEG_QUALITY, MAX_SCREENSHOT_LONG_EDGE_PX};
 
 pub(crate) fn process_capture_bytes(
     png_bytes: &[u8],
     blur_enabled: bool,
-    jpeg_quality: u8,
+    quality: u8,
 ) -> AgentResult<(i32, i32, Vec<u8>)> {
     let image = image::load_from_memory(png_bytes)
         .map_err(|err| AgentError::Other(format!("failed to decode screenshot: {err}")))?;
@@ -20,8 +20,8 @@ pub(crate) fn process_capture_bytes(
     let resized = resize_for_storage(processed);
     let width = resized.width() as i32;
     let height = resized.height() as i32;
-    let jpeg_bytes = encode_jpeg(&resized, jpeg_quality)?;
-    Ok((width, height, jpeg_bytes))
+    let webp_bytes = encode_webp(&resized, quality)?;
+    Ok((width, height, webp_bytes))
 }
 
 fn resize_for_storage(image: DynamicImage) -> DynamicImage {
@@ -37,14 +37,11 @@ fn resize_for_storage(image: DynamicImage) -> DynamicImage {
     image.resize(new_width, new_height, FilterType::Lanczos3)
 }
 
-fn encode_jpeg(image: &DynamicImage, quality: u8) -> AgentResult<Vec<u8>> {
+fn encode_webp(image: &DynamicImage, quality: u8) -> AgentResult<Vec<u8>> {
     let rgb = image.to_rgb8();
-    let jpeg_bytes = Encoder::new(Preset::ProgressiveBalanced)
-        .quality(quality.clamp(1, 100))
-        .subsampling(Subsampling::S444)
-        .encode_rgb(rgb.as_raw(), rgb.width(), rgb.height())
-        .map_err(|err| AgentError::Other(format!("failed to encode jpeg: {err}")))?;
-    Ok(jpeg_bytes)
+    let encoder = WebpEncoder::from_rgb(rgb.as_raw(), rgb.width(), rgb.height());
+    let encoded = encoder.encode(quality.clamp(1, 100) as f32);
+    Ok(encoded.to_vec())
 }
 
 pub fn normalize_jpeg_quality(quality: u8) -> u8 {
@@ -77,9 +74,13 @@ mod tests {
     }
 
     #[test]
-    fn produces_valid_jpeg() {
-        let (_, _, jpeg) = process_capture_bytes(&sample_png_bytes(128, 128), false, 80).unwrap();
-        assert!(jpeg.starts_with(&[0xFF, 0xD8, 0xFF]));
+    fn produces_valid_webp() {
+        let (_, _, webp) = process_capture_bytes(&sample_png_bytes(128, 128), false, 80).unwrap();
+        assert!(webp.starts_with(b"RIFF"), "expected WEBP RIFF header");
+        assert!(
+            webp.windows(4).any(|w| w == b"WEBP"),
+            "expected WEBP chunk header"
+        );
     }
 
     #[test]
@@ -91,25 +92,25 @@ mod tests {
     }
 
     #[test]
-    fn jpeg_is_smaller_than_png_for_photo_like_fixture() {
+    fn webp_is_smaller_than_png() {
         let png = sample_png_bytes(128, 128);
-        let (_, _, jpeg) = process_capture_bytes(&png, false, 80).unwrap();
-        assert!(jpeg.len() < png.len());
+        let (_, _, webp) = process_capture_bytes(&png, false, 80).unwrap();
+        assert!(webp.len() < png.len());
     }
 
     #[test]
     fn downscales_large_captures_before_encoding() {
         let png = sample_png_bytes(3840, 2160);
-        let (width, height, jpeg) = process_capture_bytes(&png, false, 80).unwrap();
+        let (width, height, webp) = process_capture_bytes(&png, false, 80).unwrap();
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
-        assert!(jpeg.starts_with(&[0xFF, 0xD8, 0xFF]));
+        assert!(webp.starts_with(b"RIFF"));
     }
 
     #[test]
     fn large_capture_is_much_smaller_than_full_resolution_png() {
         let png = sample_png_bytes(2560, 1440);
-        let (_, _, jpeg) = process_capture_bytes(&png, false, 80).unwrap();
-        assert!(jpeg.len() < png.len() / 4);
+        let (_, _, webp) = process_capture_bytes(&png, false, 80).unwrap();
+        assert!(webp.len() < png.len() / 4);
     }
 }

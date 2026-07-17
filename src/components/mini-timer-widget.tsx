@@ -88,7 +88,7 @@ export function MiniTimerWidget() {
       <div
         className={cn(
           "voowork-mini-shell bg-card/95 border-border/80 flex h-10 items-center gap-2 rounded-2xl border py-0 pl-2.5 pr-0 backdrop-blur-md",
-          isRunning && "border-primary/40"
+          isRunning && "border-emerald-500/50"
         )}
       >
         <img

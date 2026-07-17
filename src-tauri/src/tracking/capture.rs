@@ -134,39 +134,6 @@ pub(crate) fn screenshot_time_category(inactivity_phase: TrackingInactivityPhase
     }
 }
 
-pub(crate) fn flush_period_screenshot(
-    db: &Arc<Mutex<Database>>,
-    screenshot: &Arc<Mutex<ScreenshotCapture>>,
-    tracker: &Arc<Mutex<ActivityTracker>>,
-    totals: &Arc<Mutex<TrackingTotals>>,
-    active: &Arc<Mutex<Option<ActiveTracking>>>,
-    time_category: &str,
-) -> AgentResult<()> {
-    use crate::error::AgentError;
-
-    let tracking = active
-        .lock()
-        .clone()
-        .ok_or_else(|| AgentError::Session("no active tracking".into()))?;
-
-    let record = capture_screenshot(
-        db,
-        screenshot,
-        tracker,
-        totals,
-        &tracking,
-        &tracking.current_period_start,
-        time_category,
-    )?;
-
-    if let Some(active_tracking) = active.lock().as_mut() {
-        active_tracking.last_screenshot_at = Some(record.captured_at.clone());
-        active_tracking.current_period_start = record.captured_at;
-    }
-
-    Ok(())
-}
-
 pub(crate) fn capture_screenshot(
     db: &Arc<Mutex<Database>>,
     screenshot: &Arc<Mutex<ScreenshotCapture>>,
@@ -262,6 +229,45 @@ pub(crate) fn capture_screenshot(
     )?;
 
     Ok(record)
+}
+
+/// Lightweight period drain: drains the tracker bucket and persists
+/// peripheral events to SQLite, but does NOT capture a screenshot or
+/// enqueue sync items. This is used on pause/stop to save activity
+/// data without the expensive xcap capture + file I/O.
+///
+/// Callers should ensure the worker is stopped before this to avoid
+/// lock contention on `screenshot` and `tracker`.
+pub(crate) fn drain_activity_period(
+    db: &Arc<Mutex<Database>>,
+    tracker: &Arc<Mutex<ActivityTracker>>,
+    totals: &Arc<Mutex<TrackingTotals>>,
+    tracking: &ActiveTracking,
+    period_start: &str,
+) -> AgentResult<()> {
+    let bucket = tracker.lock().drain_bucket();
+    let raw_score = compute_activity_score(bucket.mouse_events, bucket.keyboard_events);
+    let activity_score = apply_activity_confidence(raw_score, bucket.confidence);
+    {
+        let mut totals_guard = totals.lock();
+        totals_guard.mouse_events += bucket.mouse_events;
+        totals_guard.keyboard_events += bucket.keyboard_events;
+        totals_guard.last_confidence = bucket.confidence;
+        totals_guard.last_activity_score = activity_score;
+    }
+
+    let period_end = chrono::Utc::now().to_rfc3339();
+    let db_guard = db.lock();
+    db_guard.flush_tracking_peripheral_events_for_period(
+        &tracking.tracking_id,
+        "no-screenshot",
+        period_start,
+        &period_end,
+        bucket.mouse_events,
+        bucket.keyboard_events,
+    )?;
+
+    Ok(())
 }
 
 pub(crate) fn close_open_sites(

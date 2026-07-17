@@ -93,6 +93,11 @@
       "title": "Permission required",
       "description": "Voowork needs to monitor keyboard and mouse input to track your activity. Go to System Settings and enable Input Monitoring for Voowork.",
       "openSettings": "Open System Settings"
+    },
+    "activeWindow": {
+      "title": "Screen Recording permission",
+      "description": "Voowork needs Screen Recording permission to detect when you are in meetings and track which apps you use. Go to System Settings and enable Screen Recording for Voowork.",
+      "openSettings": "Open System Settings"
     }
   }
 }
