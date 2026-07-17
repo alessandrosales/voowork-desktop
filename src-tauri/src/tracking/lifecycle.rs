@@ -2,60 +2,13 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use crate::error::{AgentError, AgentResult};
-use crate::sync::{finalize, SyncOutbox, ENTITY_TRACKING};
+use crate::sync::{SyncOutbox, ENTITY_TRACKING};
 
 use super::capture::{close_open_apps, close_open_sites, drain_activity_period};
 use super::worker::{spawn_tracking_worker, TrackingWorkerContext};
 use super::TrackingManager;
 
 impl TrackingManager {
-    pub(crate) fn abandon_active_tracking(&self, join_worker: bool) -> AgentResult<()> {
-        self.activity_buffer.dismiss();
-
-        let tracking = match self.active.lock().clone() {
-            Some(tracking) => tracking,
-            None => {
-                self.clear_tracking_memory();
-                return Ok(());
-            }
-        };
-
-        log::info!(
-            "finalizing tracking {} on {}",
-            tracking.tracking_id,
-            if join_worker { "shutdown" } else { "quit" }
-        );
-
-        // Stop worker first, then lightweight drain (no screenshot capture).
-        if join_worker {
-            self.stop_worker();
-        } else {
-            self.stop_worker_without_join();
-        }
-        let period_start = tracking.current_period_start.clone();
-        let _ = drain_activity_period(
-            &self.db,
-            &self.tracker,
-            &self.totals,
-            &tracking,
-            &period_start,
-        );
-        let _ = close_open_apps(&self.db, &self.active_app_id);
-        let _ = close_open_sites(
-            &self.db,
-            &self.active_site_id,
-            &self.last_site_address,
-        );
-
-        {
-            let db = self.db.lock();
-            finalize::finalize_tracking_remotely(&db, &tracking.tracking_id)?;
-        }
-
-        self.clear_tracking_memory();
-        Ok(())
-    }
-
     pub(crate) fn finalize_active_tracking(
         &self,
         clear_inactivity_controller: bool,
@@ -141,21 +94,5 @@ impl TrackingManager {
                 let _ = handle.join();
             });
         }
-    }
-
-    fn stop_worker_without_join(&self) {
-        self.worker_running.store(false, Ordering::SeqCst);
-        let _ = self.worker_handle.lock().take();
-    }
-
-    fn clear_tracking_memory(&self) {
-        *self.active.lock() = None;
-        self.tracking_active_flag.store(false, Ordering::SeqCst);
-        *self.inactivity_controller.lock() = None;
-        *self.totals.lock() = super::TrackingTotals::default();
-        *self.last_active_window.lock() = None;
-        *self.active_app_id.lock() = None;
-        *self.active_site_id.lock() = None;
-        *self.last_site_address.lock() = None;
     }
 }

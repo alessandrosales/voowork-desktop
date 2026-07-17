@@ -63,13 +63,19 @@ pub fn handle_tray_quit(app: &AppHandle) {
     request_shutdown();
 
     if let Some(state) = app.try_state::<AppState>() {
+        // 1. Capture final screenshot + finalize tracking BEFORE killing the
+        //    process. This ensures the last work period is not lost.
+        state.tracking_manager.capture_final_screenshot_and_finalize();
+
+        // 2. Then signal immediate exit (drops worker handle, flags).
         state.tracking_manager.prepare_immediate_exit();
     }
 
     // Não chamar exit no callback GTK — retorna primeiro, encerra depois.
     let _ = app;
     std::thread::spawn(|| {
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Give SQLite a moment to flush pending writes before _exit.
+        std::thread::sleep(std::time::Duration::from_millis(300));
         force_process_exit(0);
     });
 }
