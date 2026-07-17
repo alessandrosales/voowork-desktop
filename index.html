@@ -5,6 +5,20 @@
     <link rel="icon" type="image/png" href="/app-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Voowork</title>
+    <script>
+      if (new URLSearchParams(window.location.search).get("view") === "mini") {
+        document.documentElement.classList.add("voowork-mini-surface")
+        document.documentElement.dataset.vooworkView = "mini"
+      }
+    </script>
+    <style>
+      html.voowork-mini-surface,
+      html.voowork-mini-surface body,
+      html.voowork-mini-surface #root {
+        background: transparent !important;
+        background-color: transparent !important;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

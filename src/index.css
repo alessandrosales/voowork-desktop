@@ -371,8 +371,14 @@ html.voowork-mini-surface,
 html.voowork-mini-surface body,
 html.voowork-mini-surface #root {
   background: transparent !important;
+  background-color: transparent !important;
   overflow: hidden;
   height: 100%;
+}
+
+html.voowork-mini-surface .voowork-mini-widget {
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 .voowork-mini-widget {

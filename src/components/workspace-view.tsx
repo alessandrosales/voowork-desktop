@@ -84,6 +84,125 @@ export function WorkspaceView({
 
   const noProjects = projects.length === 0
 
+  const renderBody = () => {
+    if (noProjects) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center py-16">
+          <FolderIcon className="text-muted-foreground/30 mb-3 size-12" />
+          <p className="text-muted-foreground text-center text-sm">
+            {t("timer.noProjects")}
+          </p>
+        </div>
+      )
+    }
+
+    if (filteredProjects.length === 0) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center py-16">
+          <SearchIcon className="text-muted-foreground/30 mb-3 size-12" />
+          <p className="text-muted-foreground text-center text-sm">
+            {t("workspace.noResults")}
+          </p>
+        </div>
+      )
+    }
+
+    return (
+      <div className="space-y-1">
+        {filteredProjects.map((project) => {
+          const isExpanded = expandedProjects.has(project.id)
+          const isSelectedProject = project.id === resolvedProjectId
+
+          return (
+            <div key={project.id}>
+              {/* Project row */}
+              <button
+                type="button"
+                onClick={() => toggleProject(project.id)}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-xl px-3.5 py-3 text-left text-sm transition-colors",
+                  isSelectedProject
+                    ? "bg-accent/60 text-accent-foreground font-medium"
+                    : "text-muted-foreground hover:bg-accent/30 hover:text-accent-foreground"
+                )}
+              >
+                {isExpanded ? (
+                  <ChevronDownIcon className="size-4 shrink-0" />
+                ) : (
+                  <ChevronRightIcon className="size-4 shrink-0" />
+                )}
+                <FolderIcon className="size-4.5 shrink-0" />
+                <span className="flex-1 truncate">{project.name}</span>
+                <span
+                  className={cn(
+                    "text-[11px] tabular-nums",
+                    isSelectedProject
+                      ? "text-accent-foreground/60"
+                      : "text-muted-foreground/50"
+                  )}
+                >
+                  {project.tasks.length}{" "}
+                  {project.tasks.length === 1
+                    ? t("workspace.task")
+                    : t("workspace.tasks")}
+                </span>
+              </button>
+
+              {/* Tasks */}
+              {isExpanded && (
+                <div className="ml-5 pl-4">
+                  {project.tasks.length === 0 ? (
+                    <p className="text-muted-foreground/50 px-3.5 py-3 text-xs italic">
+                      {t("workspace.noTasks")}
+                    </p>
+                  ) : (
+                    <div className="space-y-0.5 py-1">
+                      {project.tasks.map((task) => {
+                        const isActive =
+                          task.id === resolvedTaskId &&
+                          project.id === resolvedProjectId
+                        return (
+                          <button
+                            key={task.id}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() =>
+                              handleSelectTask(project.id, task.id)
+                            }
+                            className={cn(
+                              "flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left text-sm transition-colors",
+                              isActive
+                                ? "bg-primary/8 text-primary font-medium"
+                                : "text-muted-foreground hover:bg-accent/30 hover:text-accent-foreground",
+                              disabled && "cursor-not-allowed opacity-50"
+                            )}
+                          >
+                            <span className="flex size-4 shrink-0 items-center justify-center">
+                              {isActive ? (
+                                <span className="flex size-4 items-center justify-center rounded-full bg-primary">
+                                  <CheckIcon className="size-3 text-primary-foreground" />
+                                </span>
+                              ) : (
+                                <span className="border-muted-foreground/30 size-3.5 rounded-full border" />
+                              )}
+                            </span>
+                            <span className="flex-1 truncate">
+                              {task.name}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -122,116 +241,7 @@ export function WorkspaceView({
           )}
         </div>
 
-        {/* No projects */}
-        {noProjects ? (
-          <div className="flex flex-1 flex-col items-center justify-center py-16">
-            <FolderIcon className="text-muted-foreground/30 mb-3 size-12" />
-            <p className="text-muted-foreground text-center text-sm">
-              {t("timer.noProjects")}
-            </p>
-          </div>
-        ) : filteredProjects.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center py-16">
-            <SearchIcon className="text-muted-foreground/30 mb-3 size-12" />
-            <p className="text-muted-foreground text-center text-sm">
-              {t("workspace.noResults")}
-            </p>
-          </div>
-        ) : (
-          /* Project list */
-          <div className="space-y-1">
-            {filteredProjects.map((project) => {
-              const isExpanded = expandedProjects.has(project.id)
-              const isSelectedProject = project.id === resolvedProjectId
-
-              return (
-                <div key={project.id}>
-                  {/* Project row */}
-                  <button
-                    type="button"
-                    onClick={() => toggleProject(project.id)}
-                    className={cn(
-                      "flex w-full items-center gap-2.5 rounded-xl px-3.5 py-3 text-left text-sm transition-colors",
-                      isSelectedProject
-                        ? "bg-accent/60 text-accent-foreground font-medium"
-                        : "text-muted-foreground hover:bg-accent/30 hover:text-accent-foreground"
-                    )}
-                  >
-                    {isExpanded ? (
-                      <ChevronDownIcon className="size-4 shrink-0" />
-                    ) : (
-                      <ChevronRightIcon className="size-4 shrink-0" />
-                    )}
-                    <FolderIcon className="size-4.5 shrink-0" />
-                    <span className="flex-1 truncate">{project.name}</span>
-                    <span
-                      className={cn(
-                        "text-[11px] tabular-nums",
-                        isSelectedProject
-                          ? "text-accent-foreground/60"
-                          : "text-muted-foreground/50"
-                      )}
-                    >
-                      {project.tasks.length}{" "}
-                      {project.tasks.length === 1
-                        ? t("workspace.task")
-                        : t("workspace.tasks")}
-                    </span>
-                  </button>
-
-                  {/* Tasks */}
-                  {isExpanded && (
-                    <div className="ml-5 pl-4">
-                      {project.tasks.length === 0 ? (
-                        <p className="text-muted-foreground/50 px-3.5 py-3 text-xs italic">
-                          {t("workspace.noTasks")}
-                        </p>
-                      ) : (
-                        <div className="space-y-0.5 py-1">
-                          {project.tasks.map((task) => {
-                            const isActive =
-                              task.id === resolvedTaskId &&
-                              project.id === resolvedProjectId
-                            return (
-                              <button
-                                key={task.id}
-                                type="button"
-                                disabled={disabled}
-                                onClick={() =>
-                                  handleSelectTask(project.id, task.id)
-                                }
-                                className={cn(
-                                  "flex w-full items-center gap-3 rounded-lg px-3.5 py-2.5 text-left text-sm transition-colors",
-                                  isActive
-                                    ? "bg-primary/8 text-primary font-medium"
-                                    : "text-muted-foreground hover:bg-accent/30 hover:text-accent-foreground",
-                                  disabled && "cursor-not-allowed opacity-50"
-                                )}
-                              >
-                                <span className="flex size-4 shrink-0 items-center justify-center">
-                                  {isActive ? (
-                                    <span className="flex size-4 items-center justify-center rounded-full bg-primary">
-                                      <CheckIcon className="size-3 text-primary-foreground" />
-                                    </span>
-                                  ) : (
-                                    <span className="border-muted-foreground/30 size-3.5 rounded-full border" />
-                                  )}
-                                </span>
-                                <span className="flex-1 truncate">
-                                  {task.name}
-                                </span>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
+        {renderBody()}
       </div>
 
       {/* Footer with current selection and action */}
@@ -248,7 +258,7 @@ export function WorkspaceView({
             </span>
           </div>
           <Button size="sm" onClick={onBack} className="shrink-0">
-            {t("workspace.done")}
+            {t("workspace.select")}
           </Button>
         </footer>
       ) : null}

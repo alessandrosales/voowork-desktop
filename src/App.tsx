@@ -31,7 +31,7 @@ export default function App() {
   return (
     <>
       <div className="flex h-full min-h-0 flex-col">
-        <PermissionBanner checkActiveWindow={auth.isAuthenticated} />
+        <PermissionBanner checkActiveWindow={true} />
         <div className="min-h-0 flex-1">
           {auth.isAuthenticated ? (
             <TimerApp />

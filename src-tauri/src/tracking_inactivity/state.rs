@@ -231,6 +231,36 @@ impl TrackingInactivityController {
         Ok(())
     }
 
+    /// Dismisses a paused inactivity period and resets the session.
+    ///
+    /// - Discards the inactivity period record in DB
+    /// - Resets active_seconds to 0 (fresh start)
+    /// - Transitions back to Active
+    pub fn dismiss_inactivity_period(&self, conn: &Connection) -> AgentResult<()> {
+        if *self.phase.lock() != TrackingInactivityPhase::PausedInactivity {
+            return Ok(());
+        }
+
+        if let Some(period_id) = self.pending_period_id.lock().clone() {
+            discard_inactivity_period_record(conn, &period_id)?;
+        }
+
+        let now = Instant::now();
+        *self.active_seconds.lock() = 0;
+        *self.phase.lock() = TrackingInactivityPhase::Active;
+        *self.paused_at.lock() = None;
+        *self.pending_period_id.lock() = None;
+        *self.inactivity_started_at.lock() = None;
+        *self.countdown_started_at.lock() = None;
+        *self.last_input_at.lock() = now;
+        *self.last_input_wall_at.lock() = chrono::Utc::now().to_rfc3339();
+        *self.last_polled_input.lock() = now;
+        *self.segment_start.lock() = Some(now);
+
+        log::info!("idle: inactivity period dismissed — timer reset, back to active");
+        Ok(())
+    }
+
     pub fn confirm_still_working(&self) -> AgentResult<()> {
         let phase = *self.phase.lock();
         if !matches!(phase, TrackingInactivityPhase::Warning | TrackingInactivityPhase::Countdown) {

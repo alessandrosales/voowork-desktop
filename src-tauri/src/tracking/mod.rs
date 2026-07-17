@@ -11,7 +11,7 @@ use crate::tracking_focus::{
 };
 use crate::auth::read_session_identity;
 use crate::crypto::DeviceKeys;
-use crate::db::Database;
+use crate::db::{Database, TIME_CATEGORY_INACTIVITY};
 use crate::error::{AgentError, AgentResult};
 use crate::tracking_inactivity::{
     load_inactivity_threshold_minutes, TrackingInactivityController,
@@ -391,6 +391,66 @@ impl TrackingManager {
         if let Some(inactivity_controller) = self.inactivity_controller.lock().clone() {
             inactivity_controller.dismiss_manual_work_check()?;
         }
+        Ok(())
+    }
+
+    /// Dismisses the paused inactivity period: discards the record, resets the
+    /// active timer to zero, takes a screenshot, and returns to Active.
+    pub fn dismiss_inactivity_period(&self) -> AgentResult<()> {
+        if self.active.lock().is_none() {
+            return Err(AgentError::Session("no active tracking".into()));
+        }
+
+        let tracking = self.active.lock().clone().unwrap();
+        let period_start = tracking.current_period_start.clone();
+
+        // 1. Persist task time snapshot before resetting controller state
+        if let Err(err) = status_report::persist_task_time_snapshot_state(
+            &self.db,
+            &self.active,
+            &self.inactivity_controller,
+        ) {
+            log::warn!("persist task time snapshot before inactivity dismiss failed: {err}");
+        }
+
+        // 2. Dismiss the inactivity period in controller + DB
+        if let Some(inactivity_controller) = self.inactivity_controller.lock().clone() {
+            let db = self.db.lock();
+            inactivity_controller.dismiss_inactivity_period(db.conn())?;
+        }
+
+        // 3. Take a screenshot with inactivity category to mark end of idle period
+        let result = capture::capture_screenshot(
+            &self.db,
+            &self.screenshot,
+            &self.tracker,
+            &self.totals,
+            &tracking,
+            &period_start,
+            TIME_CATEGORY_INACTIVITY,
+        );
+
+        // 4. Update period start
+        match result {
+            Ok(record) => {
+                if let Some(active_tracking) = self.active.lock().as_mut() {
+                    active_tracking.last_screenshot_at = Some(record.captured_at.clone());
+                    active_tracking.current_period_start = record.captured_at;
+                }
+            }
+            Err(err) => {
+                log::warn!("screenshot on inactivity dismiss failed: {err}");
+                if let Some(active_tracking) = self.active.lock().as_mut() {
+                    active_tracking.current_period_start = chrono::Utc::now().to_rfc3339();
+                }
+            }
+        }
+
+        // 5. Emit event so frontend refreshes
+        if let Some(app) = self.app_handle.lock().clone() {
+            let _ = app.emit("tracking-inactivity-changed", ());
+        }
+
         Ok(())
     }
 

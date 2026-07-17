@@ -262,3 +262,22 @@ pub struct TrackingCapabilities {
     pub screenshots: PermissionCheck,
     pub notes: Vec<String>,
 }
+
+/// Platform information returned to the frontend so it can show
+/// OS-appropriate permission banners and behaviour.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformInfo {
+    /// One of "macos", "linux", "windows"
+    pub os: String,
+    /// Desktop environment hint — "wayland", "x11", or `None` on non-Linux
+    pub desktop_env: Option<String>,
+    /// Whether the OS requires Input Monitoring permission for activity polling
+    pub needs_input_monitoring_permission: bool,
+    /// Whether the OS requires Screen Recording permission for window tracking
+    pub needs_screen_recording_permission: bool,
+    /// Whether the OS always allows active-window capture (no extra permission)
+    pub always_allows_window_tracking: bool,
+    /// Human-readable recommendation / known limitation for the current platform
+    pub note: Option<String>,
+}

@@ -327,14 +327,27 @@ fn is_excluded_system_ui(sample: &ActiveWindowSample) -> bool {
     matches!(app.as_str(), "org.gnome.shell" | "plasmashell")
 }
 
-/// Check if the platform supports active window capture.
+/// Check whether the platform / user has granted active-window capture permission.
 ///
-/// - **Linux / Windows**: always `true` — native APIs work without special
-///   permissions (X11 / `GetForegroundWindow`).
 /// - **macOS**: `true` only if Screen Recording permission has been granted
 ///   (otherwise `CGWindowListCopyWindowInfo` returns an empty list).
+/// - **Linux (X11)**: always `true` — `_NET_ACTIVE_WINDOW` works without extra
+///   permission.  On **Wayland** the protocol does not expose the active window
+///   globally, so `active_win_pos_rs` always fails — we return `true` here
+///   because it is **not a permission problem**; the limitation is a
+///   platform-design constraint communicated via `get_platform_info` instead.
+/// - **Windows**: always `true` — `GetForegroundWindow` works without special
+///   permission.
 pub fn check_active_window_permission() -> bool {
-    capture_active_window().is_some()
+    #[cfg(target_os = "macos")]
+    {
+        return capture_active_window().is_some();
+    }
+
+    // Linux + Windows: no OS-level permission required.
+    // The actual capability to capture may vary (e.g. Wayland limitation),
+    // but that is not a "permission" that can be granted by the user.
+    true
 }
 
 pub fn is_communication_app(sample: &ActiveWindowSample) -> bool {

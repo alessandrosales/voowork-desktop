@@ -1,4 +1,3 @@
-import { useEffect } from "react"
 import { GripVertical, PauseIcon, PlayIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
@@ -36,15 +35,6 @@ export function MiniTimerWidget() {
 
   const beginDrag = useMiniWidgetDrag(true)
   const beginDragWithThreshold = useMiniWidgetDrag(false)
-
-  useEffect(() => {
-    document.documentElement.classList.add("voowork-mini-surface")
-    document.body.classList.add("voowork-mini-surface")
-    return () => {
-      document.documentElement.classList.remove("voowork-mini-surface")
-      document.body.classList.remove("voowork-mini-surface")
-    }
-  }, [])
 
   const phase = tracking.inactivity.phase
   const manuallyPaused =
@@ -84,10 +74,10 @@ export function MiniTimerWidget() {
   }
 
   return (
-    <div className="voowork-mini-widget flex h-full w-full items-center justify-center">
+    <div className="voowork-mini-widget flex h-12 w-46 rounded-2xl items-center justify-center">
       <div
         className={cn(
-          "voowork-mini-shell bg-card/95 border-border/80 flex h-10 items-center gap-2 rounded-2xl border py-0 pl-2.5 pr-0 backdrop-blur-md",
+          "voowork-mini-shell bg-card/95 border-border/80 flex h-10 items-center gap-2 rounded-2xl border py-0 pl-2.5 pr-0",
           isRunning && "border-emerald-500/50"
         )}
       >

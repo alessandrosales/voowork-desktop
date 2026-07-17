@@ -58,6 +58,7 @@ export function TimerApp() {
     skipTrackingInactivityClassification,
     confirmManualWork,
     dismissManualWorkCheck,
+    dismissInactivityPeriod,
     dismissActivityBuffer,
     refresh,
     loadProjects,
@@ -401,6 +402,8 @@ export function TimerApp() {
           onAcknowledgeReturn={skipTrackingInactivityClassification}
           onConfirmManualWork={confirmManualWork}
           onDismissManualWork={dismissManualWorkCheck}
+          onPauseTracking={pauseTracking}
+          onReturnToWork={dismissInactivityPeriod}
         />
       ) : null}
 

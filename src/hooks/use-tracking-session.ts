@@ -388,6 +388,20 @@ export function useTrackingSession() {
     }
   }, [refreshTrackingStatus])
 
+  const dismissInactivityPeriod = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      await trackedInvoke("dismiss_inactivity_period")
+      await refreshTrackingStatus()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [refreshTrackingStatus])
+
   const dismissActivityBuffer = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -424,6 +438,7 @@ export function useTrackingSession() {
     skipTrackingInactivityClassification,
     confirmManualWork,
     dismissManualWorkCheck,
+    dismissInactivityPeriod,
     dismissActivityBuffer,
   }
 }

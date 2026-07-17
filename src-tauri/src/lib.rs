@@ -24,10 +24,10 @@ use auth::{get_auth_state, login, logout, validate_auth_session};
 use commands::{
     check_active_window_permission, check_input_monitoring_permission,
     classify_tracking_inactivity_period, confirm_manual_work, confirm_still_working,
-    dismiss_activity_buffer, dismiss_manual_work_check, get_activity_chart, get_app_status,
-    get_app_version, get_dashboard_summary, get_tracking_inactivity_config,
-    get_tracking_screenshot_image, get_setting, get_task_elapsed_seconds,
-    get_tracking_capabilities, get_tracking_config, get_tracking_status,
+    dismiss_activity_buffer, dismiss_inactivity_period, dismiss_manual_work_check,
+    get_activity_chart, get_app_status, get_app_version, get_dashboard_summary,
+    get_platform_info, get_tracking_inactivity_config, get_tracking_screenshot_image, get_setting,
+    get_task_elapsed_seconds, get_tracking_capabilities, get_tracking_config, get_tracking_status,
     list_tracking_inactivity_periods, list_tracking_peripheral_events, list_projects,
     list_sync_queue, list_tracking_apps, list_tracking_screenshots, list_tracking_sites,
     list_trackings, open_data_directory, open_external_url,
@@ -43,6 +43,7 @@ use tauri::webview::PageLoadEvent;
 use tauri::{Manager, RunEvent};
 use tauri_plugin_log::{Target, TargetKind};
 use tray::{handle_tray_menu_event, setup_tray_from_state, spawn_refresh_loop};
+use std::sync::atomic::{AtomicBool, Ordering};
 use windows::{
     begin_mini_widget_drag, open_main_window, reset_mini_widget_position, setup_windows,
 };
@@ -160,6 +161,7 @@ pub fn run() {
             confirm_still_working,
             confirm_manual_work,
             dismiss_manual_work_check,
+            dismiss_inactivity_period,
             classify_tracking_inactivity_period,
             skip_tracking_inactivity_classification,
             get_tracking_inactivity_config,
@@ -190,6 +192,7 @@ pub fn run() {
             open_system_settings_screen_recording,
             get_tracking_config,
             get_tracking_capabilities,
+            get_platform_info,
             check_input_monitoring_permission,
             check_active_window_permission,
             open_main_window,
@@ -207,10 +210,13 @@ pub fn run() {
                 payload.url()
             );
 
-            if matches!(
-                payload.event(),
-                PageLoadEvent::Started | PageLoadEvent::Finished
-            ) {
+            // Only show + focus on the *first* page load (Started), so
+            // subsequent navigations (hot reload, route changes) do NOT
+            // steal focus from other apps on macOS.
+            static FIRST_LOAD: AtomicBool = AtomicBool::new(true);
+            if payload.event() == PageLoadEvent::Started
+                && FIRST_LOAD.swap(false, Ordering::AcqRel)
+            {
                 let window = webview.window();
                 let _ = window.show();
                 let _ = window.unminimize();
