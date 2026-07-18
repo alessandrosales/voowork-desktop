@@ -46,54 +46,23 @@ API local padrão: `http://localhost:3000` (`VITE_API_URL` no `.env` do backend)
 
 ## Variáveis de ambiente
 
-### Desenvolvimento (`npm run tauri dev`)
-
-O desktop carrega env files em cascata:
-
-1. `../voowork-backend/.env` — valores compartilhados
-2. `./.env` — desenvolvimento (desktop)
-3. `./.env.local` — overrides locais (dev only, gitignored)
-
 | Variável | Lida por | Descrição |
 |----------|----------|-----------|
 | `API_URL` | Rust | Base da API Rails (login, sync, projetos) |
 | `VITE_WEB_URL` | Vite | Painel web (link no timer) |
 | `S3_*` | Rust | Upload direto de screenshots |
 
-### Release builds (`npm run tauri build`)
+**IMPORTANTE:** O valor de `API_URL` é **compilado no binário** em todos os builds
+(`npm run tauri dev` e `npm run tauri build`). O `build.rs` lê o `.env` da raiz do
+projeto e injeta o valor via `cargo:rustc-env`. Portanto:
 
-**IMPORTANTE:** Em release builds, arquivos `.env` externos NÃO são carregados porque o `.app` bundle é executado de um diretório diferente do projeto (`Voowork.app/Contents/MacOS/`).
+1. Edite `API_URL` no `.env` da raiz do projeto
+2. Rode `npm run tauri build` (ou `npm run tauri dev`)
+3. O app buildado usa a URL que você definiu
 
-A API URL em release é definida em **tempo de compilação** via `option_env!("API_URL")`.
+Não precisa de comandos especiais — apenas `npm run tauri build`.
 
-#### Build para teste local (aponta para localhost)
-
-```bash
-# Compile com API_URL apontando para localhost:
-API_URL=http://localhost:3000 npm run tauri build -- --bundles app
-
-# O valor é compilado diretamente no binário.
-```
-
-#### Build para produção real
-
-```bash
-# Compile com API_URL de produção:
-API_URL=https://api.voowork.com npm run tauri build -- --bundles app
-```
-
-#### Override em runtime (sem recompilar)
-
-Se precisar testar um build release já compilado com outra URL:
-
-```bash
-# macOS — define variável de ambiente do sistema:
-launchctl setenv API_URL http://localhost:3000
-open src-tauri/target/release/bundle/macos/Voowork.app
-
-# Linux — passa env var ao executar diretamente:
-API_URL=http://localhost:3000 ./voowork-desktop
-```
+Para mudar a URL, edite o `.env` e recompile.
 
 ## Estrutura do projeto
 

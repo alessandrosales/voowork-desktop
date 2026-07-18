@@ -146,16 +146,22 @@ fn capture_all_monitors_png() -> AgentResult<(i32, i32, Vec<u8>)> {
         }
 
         // Collect monitor positions (xcap 0.4 returns Result from x()/y()/width()/height())
+        // These are in POINT coordinates (logical units, not pixels).
+        // On Retina/HiDPI displays, 1 point = scale_factor pixels.
+        // Example: a 3024×1964 px Retina display reports 1512×982 logical points.
         let mut positions: Vec<(i32, i32, u32, u32)> = Vec::with_capacity(monitors.len());
+        let mut scale_factors: Vec<f32> = Vec::with_capacity(monitors.len());
         for m in &monitors {
             let x = m.x().map_err(|e| AgentError::Other(e.to_string()))?;
             let y = m.y().map_err(|e| AgentError::Other(e.to_string()))?;
             let w = m.width().map_err(|e| AgentError::Other(e.to_string()))?;
             let h = m.height().map_err(|e| AgentError::Other(e.to_string()))?;
             positions.push((x, y, w, h));
+            let sf = m.scale_factor().unwrap_or(1.0);
+            scale_factors.push(sf);
         }
 
-        // Bounding box that covers all monitors in the virtual desktop
+        // Bounding box that covers all monitors in the virtual desktop (POINTS)
         let min_x = positions.iter().map(|(x, _, _, _)| *x).min().unwrap_or(0);
         let min_y = positions.iter().map(|(_, y, _, _)| *y).min().unwrap_or(0);
         let max_x = positions
@@ -179,6 +185,37 @@ fn capture_all_monitors_png() -> AgentResult<(i32, i32, Vec<u8>)> {
             let img = monitor
                 .capture_image()
                 .map_err(|e| AgentError::Other(e.to_string()))?;
+
+            // IMPORTANT: capture_image() returns the display's NATIVE PIXEL
+            // resolution (e.g. 3024×1964 on a 2x Retina display).  The canvas
+            // and offsets are in POINT coordinates (e.g. 1512×982).
+            //
+            // Without downscaling, a Retina image would be 2× larger than the
+            // canvas region it occupies, causing it to overflow and be cropped
+            // when overlaid.
+            let scale = scale_factors[i];
+            let img = if scale > 1.0 && scale.is_finite() {
+                let pixel_w = img.width();
+                let pixel_h = img.height();
+                let point_w = (pixel_w as f32 / scale).round() as u32;
+                let point_h = (pixel_h as f32 / scale).round() as u32;
+
+                // Only resize if the image is actually larger than point-space
+                // (defensive — if pixel_w / scale ≈ pixel_w, nothing to do).
+                if pixel_w != point_w || pixel_h != point_h {
+                    image::imageops::resize(
+                        &img,
+                        point_w.max(1),
+                        point_h.max(1),
+                        image::imageops::FilterType::CatmullRom,
+                    )
+                } else {
+                    img
+                }
+            } else {
+                img
+            };
+
             let offset_x = (mx - min_x) as i64;
             let offset_y = (my - min_y) as i64;
             image::imageops::overlay(&mut canvas, &img, offset_x, offset_y);

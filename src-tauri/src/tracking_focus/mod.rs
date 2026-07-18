@@ -141,7 +141,31 @@ pub fn extract_site_address(sample: &ActiveWindowSample) -> Option<String> {
         return None;
     }
 
-    let title = strip_browser_suffix(sample.window_title.trim());
+    let app = normalize_app_name(&sample.app_name);
+    let title = sample.window_title.trim();
+
+    if title.is_empty() {
+        return None;
+    }
+
+    // --- Safari uses a different window title format ---
+    // Safari shows: "Page Title — Website Name" (no fixed browser suffix).
+    // Other browsers show: "Page Title — https://example.com — Google Chrome"
+    // where the suffix " — Google Chrome" can be stripped.
+    //
+    // For Safari:
+    //   1. Try to extract a full HTTP URL from the title first.
+    //   2. Try to find a domain-like token in the title.
+    //   3. If the title contains " — ", try the last token after it as a
+    //      potential domain name (e.g., "README.md — GitHub" → "GitHub"
+    //      won't match because it has no dot, but
+    //      "Issues · voowork/backend - github.com" would).
+    if app == "safari" {
+        return extract_safari_address(title);
+    }
+
+    // --- Standard browsers (Chrome, Firefox, Brave, Edge, etc.) ---
+    let title = strip_browser_suffix(title);
     if title.is_empty() {
         return None;
     }
@@ -151,6 +175,44 @@ pub fn extract_site_address(sample: &ActiveWindowSample) -> Option<String> {
     }
 
     find_domain_in_title(title).map(|domain| format!("https://{domain}"))
+}
+
+/// Safari-specific site extraction.
+///
+/// Safari window titles follow this format (localized separator):
+///   `"Page Title — Website Name"` (English)
+///   `"Título da Página — Nome do Site"` (Portuguese)
+///
+/// Since Safari doesn't append a fixed browser suffix to the title,
+/// we use a different strategy:
+///   1. Look for a full HTTP/HTTPS URL in the title (rare in Safari).
+///   2. Look for domain-like tokens in the title.
+///   3. If title contains " — ", try to interpret the last part
+///      (the website name) as a potential domain (e.g., "github.com" or
+///      just "GitHub" — the latter won't match `find_domain_in_title`
+///      because it lacks a dot, which is acceptable).
+fn extract_safari_address(title: &str) -> Option<String> {
+    // 1. Full URL in title
+    if let Some(url) = find_http_url(title) {
+        return Some(normalize_site_url(url));
+    }
+
+    // 2. Domain token in the full title
+    if let Some(domain) = find_domain_in_title(title) {
+        return Some(format!("https://{domain}"));
+    }
+
+    // 3. Last segment after " — " — try to find a domain there
+    if let Some(last_part) = title.rsplit(" — ").next() {
+        let last = last_part.trim();
+        if !last.is_empty() && last != title {
+            if let Some(domain) = find_domain_in_title(last) {
+                return Some(format!("https://{domain}"));
+            }
+        }
+    }
+
+    None
 }
 
 pub fn open_tracking_site(
@@ -245,6 +307,25 @@ fn find_domain_in_title(text: &str) -> Option<String> {
     None
 }
 
+/// Common file extensions that should NOT be treated as domain TLDs.
+/// This prevents false positives like `README.md` → `readme.md` (file)
+/// or `index.html` → `index.html` (file) from being detected as domains.
+const NON_TLD_FILE_EXTENSIONS: &[&str] = &[
+    "md", "txt", "pdf", "png", "jpg", "jpeg", "gif", "svg", "webp", "ico",
+    "css", "js", "ts", "jsx", "tsx", "mjs", "cjs",
+    "xml", "json", "yaml", "yml", "toml",
+    "html", "htm", "xhtml", "php", "asp", "aspx", "jsp",
+    "py", "rb", "rs", "go", "java", "kt", "swift", "c", "cpp", "h", "hpp",
+    "cfg", "conf", "ini", "log", "tmp", "bak", "swp",
+    "zip", "tar", "gz", "rar", "7z", "tgz", "bz2",
+    "mp3", "mp4", "avi", "mov", "wav", "flac", "ogg", "mkv",
+    "ttf", "otf", "woff", "woff2", "eot",
+    "exe", "dll", "so", "dylib", "bin", "deb", "rpm", "appimage",
+    "iso", "img", "dmg", "toast",
+    "csv", "xls", "xlsx", "doc", "docx", "ppt", "pptx",
+    "pages", "numbers", "key",
+];
+
 fn parse_domain_token(token: &str) -> Option<String> {
     let host = token.split('/').next()?.split('?').next()?;
     if host.len() < 4 || !host.contains('.') {
@@ -258,6 +339,17 @@ fn parse_domain_token(token: &str) -> Option<String> {
 
     let tld = labels.last()?;
     if tld.len() < 2 || !tld.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return None;
+    }
+
+    // Reject common file extensions that look like TLDs.
+    // A host whose last label is a known file extension is almost certainly
+    // a filename, not a domain — especially when the host has only 2 labels
+    // (e.g. `README.md`, `index.html`).
+    if labels.len() <= 3
+        && tld.len() <= 5
+        && NON_TLD_FILE_EXTENSIONS.contains(&tld.to_ascii_lowercase().as_str())
+    {
         return None;
     }
 
@@ -324,7 +416,34 @@ fn is_excluded_system_ui(sample: &ActiveWindowSample) -> bool {
         return true;
     }
 
-    matches!(app.as_str(), "org.gnome.shell" | "plasmashell")
+    // Linux desktop shells
+    if matches!(app.as_str(), "org.gnome.shell" | "plasmashell") {
+        return true;
+    }
+
+    // macOS system UI elements — transient overlays and system panels that
+    // should NOT be tracked as "apps visited" by the user.
+    //
+    // These elements appear in CGWindowList when the user activates system
+    // controls (Spotlight, Mission Control, Control Center, etc.) but they
+    // don't represent user work activity.
+    if matches!(
+        app.as_str(),
+        "windowmanager"
+            | "loginwindow"
+            | "spotlight"
+            | "mds"
+            | "mds_stores"
+            | "controlcenter"
+            | "notificationcenter"
+            | "systemuiserver"
+            | "dock"
+            | "finder"
+    ) {
+        return true;
+    }
+
+    false
 }
 
 /// Check whether the platform / user has granted active-window capture permission.

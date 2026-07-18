@@ -11,7 +11,6 @@ pub const KEY_ACCESS_TOKEN: &str = "auth_access_token";
 pub const KEY_USER: &str = "auth_user_json";
 pub const KEY_ORGANIZATION: &str = "auth_org_json";
 
-pub const ENV_API_URL: &str = "VITE_API_URL";
 pub const DEFAULT_API_URL_DEV: &str = "http://localhost:3000";
 pub const DEFAULT_API_URL_PROD: &str = "https://api.voowork.com";
 pub const HTTP_TIMEOUT_SECS: u64 = 30;
@@ -81,40 +80,23 @@ impl AuthSession {
     }
 }
 
+/// Retorna a URL base da API Rails.
+///
+/// O valor vem do `.env` (raiz do projeto), injetado em tempo de compilação
+/// pelo `build.rs` e restaurado em runtime pelo `env.rs::load()`.
+/// Fallback para o default de dev ou produção se nada estiver definido.
 pub fn configured_api_base_url() -> String {
-    // Release builds: compila o valor diretamente via option_env! (definido em tempo de build).
-    // Permite override em runtime via variável de ambiente do sistema (std::env::var).
-    //
-    // Para buildar apontando para localhost:
-    //   API_URL=http://localhost:3000 npm run tauri build -- --bundles app
-    //
-    // Debug builds: lê do .env como antes.
-    let result = if cfg!(debug_assertions) {
-        std::env::var(ENV_API_URL)
-            .or_else(|_| std::env::var("API_URL"))
-            .unwrap_or_else(|_| {
-                log::warn!(
-                    "VITE_API_URL não definida; usando {DEFAULT_API_URL_DEV}. \
-                     Copie .env.example para .env no voowork-backend."
-                );
-                DEFAULT_API_URL_DEV.to_string()
-            })
-    } else {
-        // Release: runtime override primeiro (permite testar sem rebuild)
-        std::env::var("API_URL")
-            .ok()
-            // Depois o valor compilado em build-time
-            .or_else(|| option_env!("API_URL").map(String::from))
-            // Fallback de produção real
-            .unwrap_or_else(|| {
-                log::warn!(
-                    "API_URL não definida (compile-time nem runtime). \
-                     Usando {DEFAULT_API_URL_PROD}. \
-                     Para builds locais: API_URL=http://localhost:3000 npm run tauri build"
-                );
-                DEFAULT_API_URL_PROD.to_string()
-            })
-    };
+    let result = std::env::var("API_URL")
+        .or_else(|_| std::env::var("VITE_API_URL"))
+        .unwrap_or_else(|_| {
+            let default = if cfg!(debug_assertions) {
+                DEFAULT_API_URL_DEV
+            } else {
+                DEFAULT_API_URL_PROD
+            };
+            log::warn!("API_URL não definida; usando {default}. Defina API_URL no .env");
+            default.to_string()
+        });
     log::info!("configured_api_base_url() = {}", result);
     result
 }
