@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
+import { emit, listen } from "@tauri-apps/api/event"
 
 import { isTauriReady, trackedInvoke } from "@/lib/tauri"
 
@@ -45,6 +46,7 @@ export function ThemeProvider({
     applyThemeClass(defaultTheme)
 
     let cancelled = false
+    let unlisten: (() => void) | undefined
 
     async function loadTheme() {
       const ready = await waitForTauriReady()
@@ -68,12 +70,21 @@ export function ThemeProvider({
           applyThemeClass(defaultTheme)
         }
       }
+
+      // Listen for theme changes from other windows (e.g., mini-timer)
+      unlisten = await listen<Theme>("theme-changed", (event) => {
+        if (!cancelled && (event.payload === "dark" || event.payload === "light")) {
+          setThemeState(event.payload)
+          applyThemeClass(event.payload)
+        }
+      })
     }
 
     void loadTheme()
 
     return () => {
       cancelled = true
+      unlisten?.()
     }
   }, [defaultTheme])
 
@@ -82,6 +93,7 @@ export function ThemeProvider({
     applyThemeClass(nextTheme)
     if (isTauriReady()) {
       void trackedInvoke("set_setting", { key: "theme", value: nextTheme })
+      void emit("theme-changed", nextTheme)
     }
   }, [])
 

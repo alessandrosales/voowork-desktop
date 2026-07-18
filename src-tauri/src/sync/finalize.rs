@@ -21,14 +21,6 @@ pub fn finalize_orphaned_trackings(db: &Database) -> AgentResult<u32> {
     Ok(orphans.len() as u32)
 }
 
-/// Finaliza um tracking específico com sync remoto (ex.: shutdown sem stop explícito).
-pub fn finalize_tracking_remotely(db: &Database, tracking_id: &str) -> AgentResult<()> {
-    let now = chrono::Utc::now().to_rfc3339();
-    close_open_children_in_db(db, tracking_id, &now)?;
-    enqueue_tracking_stop(db.conn(), tracking_id, &now)?;
-    db.finalize_tracking(tracking_id, &now)
-}
-
 /// Fecha apps/sites ainda abertos no SQLite e enfileira POST para cada intervalo.
 pub fn close_open_children_in_db(
     db: &Database,

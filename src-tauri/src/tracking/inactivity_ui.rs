@@ -1,5 +1,5 @@
 use crate::tracking_inactivity::TrackingInactivityPhase;
-use crate::windows::{show_main_window, show_mini_timer};
+use crate::windows::{show_main_window, show_mini_timer_quiet};
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::notifications::send_inactivity_notification;
@@ -57,7 +57,7 @@ fn release_inactivity_alert_window(app: &AppHandle) {
         }
 
         if !main_visible {
-            let _ = show_mini_timer(&app);
+            let _ = show_mini_timer_quiet(&app);
         }
     });
 }

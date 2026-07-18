@@ -1,4 +1,4 @@
-import { LogOutIcon } from "lucide-react"
+import { LogOutIcon, User2Icon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import type { AuthState } from "@/hooks/use-auth"
@@ -60,8 +60,8 @@ export function ProfileMenu({
           />
         }
       >
-        <span className="bg-primary/15 text-primary flex size-8 items-center justify-center rounded-full text-xs font-semibold">
-          {initials}
+        <span className="flex size-6 items-center justify-center cursor-pointer rounded-full dark:bg-gray-950 bg-gray-200 text-primary">
+        <User2Icon className="size-4 text-foreground" />
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="z-[200] min-w-56">

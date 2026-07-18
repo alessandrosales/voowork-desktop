@@ -5,6 +5,7 @@ use crate::auth::{read_session_identity, KEY_AUTHENTICATED};
 use crate::icons::app_icon;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow};
+use tauri::window::Color;
 
 pub use commands::{begin_mini_widget_drag, open_main_window, reset_mini_widget_position};
 
@@ -97,7 +98,7 @@ pub fn setup_windows(app: &tauri::App) -> tauri::Result<()> {
                 tauri::WindowEvent::Focused(false) => {
                     let app = main_clone.app_handle();
                     if should_show_mini_widget(app) {
-                        if let Err(err) = show_mini_timer(app) {
+                        if let Err(err) = show_mini_timer_quiet(app) {
                             log::warn!("show mini widget on focus lost failed: {err}");
                         }
                     }
@@ -114,6 +115,7 @@ pub fn setup_windows(app: &tauri::App) -> tauri::Result<()> {
 
     if let Some(mini) = app.get_webview_window(MINI_WINDOW_LABEL) {
         let _ = mini.set_icon(icon);
+        let _ = mini.set_background_color(Some(Color(0, 0, 0, 0)));
         let mini_clone = mini.clone();
         mini.on_window_event(move |event| {
             match event {
@@ -172,6 +174,22 @@ pub fn show_main_window(app: &AppHandle) {
         let _ = main.unminimize();
         let _ = main.set_focus();
     }
+}
+
+/// Like `show_mini_timer()` but does NOT call `set_focus()` — used when the
+/// user switches away from the app (minimized / Cmd+Tab) so the mini-widget
+/// appears without stealing focus from the other app.
+pub fn show_mini_timer_quiet(app: &AppHandle) -> tauri::Result<()> {
+    let Some(mini) = app.get_webview_window(MINI_WINDOW_LABEL) else {
+        return Ok(());
+    };
+
+    restore_mini_position(app, &mini)?;
+    mini.set_always_on_top(true)?;
+    let _ = mini.show();
+    // Intentionally skip set_focus() to avoid stealing focus on macOS
+
+    Ok(())
 }
 
 pub fn hide_mini_timer(app: &AppHandle) {

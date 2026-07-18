@@ -13,6 +13,8 @@ type TrackingInactivityOverlayProps = Readonly<{
   onAcknowledgeReturn: () => void | Promise<void>
   onConfirmManualWork: () => void | Promise<void>
   onDismissManualWork: () => void | Promise<void>
+  onPauseTracking?: () => void | Promise<void>
+  onReturnToWork?: () => void | Promise<void>
   loading?: boolean
 }>
 
@@ -69,6 +71,8 @@ export function TrackingInactivityOverlay({
   onAcknowledgeReturn,
   onConfirmManualWork,
   onDismissManualWork,
+  onPauseTracking,
+  onReturnToWork,
   loading = false,
 }: TrackingInactivityOverlayProps) {
   const { t } = useTranslation()
@@ -136,11 +140,25 @@ export function TrackingInactivityOverlay({
             >
               {t("idle.stillWorking")}
             </Button>
+
+            {onPauseTracking ? (
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 w-full rounded-xl text-base"
+                onClick={() => {
+                  Promise.resolve(onPauseTracking()).catch(() => undefined)
+                }}
+                disabled={loading}
+              >
+                {t("idle.pause")}
+              </Button>
+            ) : null}
           </div>
         ) : null}
 
         {showPaused ? (
-          <div className="space-y-4 text-center">
+          <div className="space-y-5 text-center">
             <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-slate-500/15">
               <PauseCircleIcon className="size-6 text-slate-400" />
             </div>
@@ -152,6 +170,19 @@ export function TrackingInactivityOverlay({
                 {t("idle.pausedDescription")}
               </p>
             </div>
+
+            {onReturnToWork ? (
+              <Button
+                size="lg"
+                className="h-12 w-full rounded-xl text-base font-semibold"
+                onClick={() => {
+                  Promise.resolve(onReturnToWork()).catch(() => undefined)
+                }}
+                disabled={loading}
+              >
+                {t("idle.returnToWork")}
+              </Button>
+            ) : null}
           </div>
         ) : null}
 

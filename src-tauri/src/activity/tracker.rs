@@ -143,7 +143,8 @@ impl ActivityTracker {
 
                 // Verifica tempo desde último input (teclado + mouse)
                 let secs = platform::seconds_since_last_input();
-                if secs < (HARDWARE_LISTENER_POLL_MS as f64 / 1000.0) * 2.0 {
+
+                if secs.is_finite() && secs < (HARDWARE_LISTENER_POLL_MS as f64 / 1000.0) * 2.0 {
                     let mut bucket_guard = bucket.lock();
                     bucket_guard.keyboard_events += 1;
                     *mode.lock() = TrackerMode::Hardware;
@@ -153,6 +154,21 @@ impl ActivityTracker {
                     let analysis = sample_buffer.analyze();
                     bucket_guard.confidence = analysis.confidence;
                     bucket_guard.automation_flags = analysis.flags;
+                } else if !secs.is_finite() || secs > 1_000_000_000.0 {
+                    // No macOS 14+, sem permissão de Input Monitoring,
+                    // CGEventSourceSecondsSinceLastEventType() retorna
+                    // um valor sentinela (f64::MAX, kCGNever = 1e20,
+                    // ou f64::INFINITY). A API não consegue determinar
+                    // o tempo desde o último input — NÃO podemos assumir
+                    // que o usuário está inativo.
+                    //
+                    // Usamos um heartbeat para evitar falsos alertas de
+                    // inatividade enquanto mouse polling não detecta
+                    // movimento (ex: usuário só digitando).
+                    let elapsed = last_input_at.lock().elapsed();
+                    if elapsed >= Duration::from_secs(15) {
+                        Self::touch_input(&last_input_at, &last_input_wall_at);
+                    }
                 }
 
                 let _ = now; // usado implicitamente

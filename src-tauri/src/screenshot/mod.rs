@@ -21,8 +21,9 @@ pub use storage::upload_capture;
 use process::process_capture_bytes;
 use std::path::Path;
 
-/// Captura o monitor que contém o centro da janela ativa (`Monitor::from_point`).
-/// Fallback: monitor primário, depois o primeiro disponível.
+/// Captura todos os monitores conectados e combina em uma única imagem
+/// composta (stitched), usando as coordenadas reais de cada monitor (`x()`, `y()`)
+/// para posicioná-los corretamente no canvas virtual.
 pub struct ScreenshotCapture {
     output_dir: PathBuf,
     blur_enabled: bool,
@@ -69,7 +70,7 @@ impl ScreenshotCapture {
     }
 
     pub fn capture_pixels(&self) -> AgentResult<(i32, i32, Vec<u8>)> {
-        capture_screen_png()
+        capture_all_monitors_png()
     }
 
     pub fn persist_capture(
@@ -135,41 +136,62 @@ impl ScreenshotCapture {
     }
 }
 
-fn capture_screen_png() -> AgentResult<(i32, i32, Vec<u8>)> {
+fn capture_all_monitors_png() -> AgentResult<(i32, i32, Vec<u8>)> {
     guard_native("screenshot", || {
-        let monitor = select_capture_monitor()?;
-        let image = monitor
-            .capture_image()
+        let monitors = xcap::Monitor::all()
             .map_err(|e| AgentError::Other(e.to_string()))?;
-        let width = image.width() as i32;
-        let height = image.height() as i32;
+
+        if monitors.is_empty() {
+            return Err(AgentError::Other("no monitors found".into()));
+        }
+
+        // Collect monitor positions (xcap 0.4 returns Result from x()/y()/width()/height())
+        let mut positions: Vec<(i32, i32, u32, u32)> = Vec::with_capacity(monitors.len());
+        for m in &monitors {
+            let x = m.x().map_err(|e| AgentError::Other(e.to_string()))?;
+            let y = m.y().map_err(|e| AgentError::Other(e.to_string()))?;
+            let w = m.width().map_err(|e| AgentError::Other(e.to_string()))?;
+            let h = m.height().map_err(|e| AgentError::Other(e.to_string()))?;
+            positions.push((x, y, w, h));
+        }
+
+        // Bounding box that covers all monitors in the virtual desktop
+        let min_x = positions.iter().map(|(x, _, _, _)| *x).min().unwrap_or(0);
+        let min_y = positions.iter().map(|(_, y, _, _)| *y).min().unwrap_or(0);
+        let max_x = positions
+            .iter()
+            .map(|(x, _, w, _)| x + *w as i32)
+            .max()
+            .unwrap_or(0);
+        let max_y = positions
+            .iter()
+            .map(|(_, y, _, h)| y + *h as i32)
+            .max()
+            .unwrap_or(0);
+
+        let canvas_w = (max_x - min_x) as u32;
+        let canvas_h = (max_y - min_y) as u32;
+
+        let mut canvas = xcap::image::RgbaImage::new(canvas_w, canvas_h);
+
+        for (i, monitor) in monitors.iter().enumerate() {
+            let (mx, my, _mw, _mh) = positions[i];
+            let img = monitor
+                .capture_image()
+                .map_err(|e| AgentError::Other(e.to_string()))?;
+            let offset_x = (mx - min_x) as i64;
+            let offset_y = (my - min_y) as i64;
+            image::imageops::overlay(&mut canvas, &img, offset_x, offset_y);
+        }
 
         let mut png_bytes: Vec<u8> = Vec::new();
         let mut cursor = Cursor::new(&mut png_bytes);
-        image
+        canvas
             .write_to(&mut cursor, xcap::image::ImageFormat::Png)
             .map_err(|e| AgentError::Other(e.to_string()))?;
 
-        Ok((width, height, png_bytes))
+        Ok((canvas_w as i32, canvas_h as i32, png_bytes))
     })
-}
-
-fn select_capture_monitor() -> AgentResult<xcap::Monitor> {
-    if let Ok(window) = active_win_pos_rs::get_active_window() {
-        let center_x = (window.position.x + window.position.width / 2.0) as i32;
-        let center_y = (window.position.y + window.position.height / 2.0) as i32;
-        if let Ok(monitor) = xcap::Monitor::from_point(center_x, center_y) {
-            return Ok(monitor);
-        }
-    }
-
-    let monitors = xcap::Monitor::all().map_err(|e| AgentError::Other(e.to_string()))?;
-    monitors
-        .iter()
-        .find(|monitor| monitor.is_primary().unwrap_or(false))
-        .or(monitors.first())
-        .cloned()
-        .ok_or_else(|| AgentError::Other("no monitor found".into()))
 }
 
 pub fn cache_dir_for_db(db_path: &Path) -> PathBuf {

@@ -32,6 +32,7 @@
     "title": "Workspace",
     "back": "Voltar",
     "done": "Concluir",
+    "select": "Selecionar",
     "workingOn": "Trabalhando em",
     "selectWork": "Selecione seu trabalho",
     "searchPlaceholder": "Buscar projetos...",
@@ -56,6 +57,7 @@
     "noActivityDescription": "Confirme que você ainda está trabalhando. Caso contrário, o tempo passará a contar como inativo.",
     "autoPauseIn": "Tempo inativo em",
     "stillWorking": "Ainda estou trabalhando",
+    "pause": "Pausar",
     "pausedTitle": "Tempo inativo",
     "pausedDescription": "O tracking continua, mas este período conta como tempo inativo — não como trabalho ativo.",
     "returnedTitle": "Você voltou",
@@ -63,6 +65,7 @@
     "returnedPeriod": "Esse período",
     "returnedSuffix": "na sua sessão.",
     "notCounted": "não foi contabilizado",
+    "returnToWork": "Voltar ao trabalho",
     "continueWorking": "Continuar trabalhando",
     "manualWorkTitle": "Você está trabalhando?",
     "manualWorkDescription": "Detectamos atividade no computador enquanto o timer estava pausado. Deseja retomar e contabilizar esse tempo?",
@@ -98,6 +101,9 @@
       "title": "Permissão de Gravação de Tela",
       "description": "O Voowork precisa de permissão de Gravação de Tela para detectar quando você está em reuniões e monitorar quais apps você usa. Vá para Ajustes do Sistema e ative a Gravação de Tela para o Voowork.",
       "openSettings": "Abrir Ajustes do Sistema"
+    },
+    "platformNote": {
+      "title": "Nota sobre a plataforma"
     }
   }
 }

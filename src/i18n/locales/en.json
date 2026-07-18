@@ -32,6 +32,7 @@
     "title": "Workspace",
     "back": "Back",
     "done": "Done",
+    "select": "Select",
     "workingOn": "Working on",
     "selectWork": "Select your work",
     "searchPlaceholder": "Search projects...",
@@ -56,6 +57,7 @@
     "noActivityDescription": "Confirm that you are still working. Otherwise, time will count as inactive.",
     "autoPauseIn": "Inactive time in",
     "stillWorking": "I'm still working",
+    "pause": "Pause",
     "pausedTitle": "Inactive time",
     "pausedDescription": "Tracking continues, but this period counts as inactive — not active work.",
     "returnedTitle": "You're back",
@@ -63,6 +65,7 @@
     "returnedPeriod": "That time",
     "returnedSuffix": "in your session.",
     "notCounted": "was not counted",
+    "returnToWork": "Return to work",
     "continueWorking": "Continue working",
     "manualWorkTitle": "Are you working?",
     "manualWorkDescription": "We detected activity on your computer while the timer was paused. Resume tracking and count this time?",
@@ -98,6 +101,9 @@
       "title": "Screen Recording permission",
       "description": "Voowork needs Screen Recording permission to detect when you are in meetings and track which apps you use. Go to System Settings and enable Screen Recording for Voowork.",
       "openSettings": "Open System Settings"
+    },
+    "platformNote": {
+      "title": "Platform note"
     }
   }
 }

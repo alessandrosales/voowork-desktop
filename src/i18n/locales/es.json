@@ -32,6 +32,7 @@
     "title": "Espacio de trabajo",
     "back": "Volver",
     "done": "Listo",
+    "select": "Seleccionar",
     "workingOn": "Trabajando en",
     "selectWork": "Selecciona tu trabajo",
     "searchPlaceholder": "Buscar proyectos...",
@@ -56,6 +57,7 @@
     "noActivityDescription": "Confirma que sigues trabajando. De lo contrario, el tiempo contará como inactivo.",
     "autoPauseIn": "Tiempo inactivo en",
     "stillWorking": "Sigo trabajando",
+    "pause": "Pausar",
     "pausedTitle": "Tiempo inactivo",
     "pausedDescription": "El tracking continúa, pero este período cuenta como tiempo inactivo — no como trabajo activo.",
     "returnedTitle": "Has vuelto",
@@ -63,6 +65,7 @@
     "returnedPeriod": "Ese período",
     "returnedSuffix": "en tu sesión.",
     "notCounted": "no se contabilizó",
+    "returnToWork": "Volver al trabajo",
     "continueWorking": "Seguir trabajando",
     "manualWorkTitle": "¿Estás trabajando?",
     "manualWorkDescription": "Detectamos actividad en tu ordenador mientras el temporizador estaba pausado. ¿Reanudar y contabilizar ese tiempo?",
@@ -98,6 +101,9 @@
       "title": "Permiso de grabación de pantalla",
       "description": "Voowork necesita permiso de Grabación de Pantalla para detectar cuando estás en reuniones y rastrear qué aplicaciones usas. Ve a Ajustes del Sistema y activa la Grabación de Pantalla para Voowork.",
       "openSettings": "Abrir Ajustes del Sistema"
+    },
+    "platformNote": {
+      "title": "Nota sobre la plataforma"
     }
   }
 }
