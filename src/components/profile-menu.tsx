@@ -14,24 +14,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
-function userInitials(name?: string | null, email?: string | null) {
-  if (name) {
-    const parts = name.trim().split(/\s+/).filter(Boolean)
-    if (parts.length >= 2) {
-      return `${parts[0]?.[0] ?? ""}${parts.at(-1)?.[0] ?? ""}`.toUpperCase()
-    }
-    if (parts[0]) {
-      return parts[0].slice(0, 2).toUpperCase()
-    }
-  }
-
-  if (email) {
-    return email.slice(0, 2).toUpperCase()
-  }
-
-  return "??"
-}
-
 export function ProfileMenu({
   auth,
   loading,
@@ -44,7 +26,6 @@ export function ProfileMenu({
   className?: string
 }>) {
   const { t } = useTranslation()
-  const initials = userInitials(auth.user?.name, auth.user?.email)
 
   return (
     <DropdownMenu>

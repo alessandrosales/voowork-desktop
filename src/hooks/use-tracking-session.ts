@@ -160,6 +160,13 @@ export function useTrackingSession() {
       return
     }
 
+    // Tenta sincronizar primeiro, mas não falha se a API estiver offline
+    try {
+      await trackedInvoke("sync_projects")
+    } catch {
+      // sync failure é não-fatal — usa cache local
+    }
+
     try {
       const projectList = await trackedInvoke<ProjectOption[]>("list_projects")
       setProjects(projectList)

@@ -38,14 +38,22 @@ pub async fn sync_project_cache(
     let mut entries = Vec::with_capacity(projects.len());
 
     for (index, project) in projects.iter().enumerate() {
-        let tasks = client.fetch_tasks(&project.id).await?;
-        let task_options: Vec<TaskOption> = tasks
-            .into_iter()
-            .map(|task| TaskOption {
-                id: task.id,
-                name: task.name,
-            })
-            .collect();
+        let task_options = match client.fetch_tasks(&project.id).await {
+            Ok(tasks) => tasks
+                .into_iter()
+                .map(|task| TaskOption {
+                    id: task.id,
+                    name: task.name,
+                })
+                .collect(),
+            Err(err) => {
+                log::warn!(
+                    "failed to fetch tasks for project {} ({}): {err}",
+                    project.name, project.id
+                );
+                Vec::new()
+            }
+        };
         entries.push((project.id.clone(), project.name.clone(), task_options, index as i64));
     }
 

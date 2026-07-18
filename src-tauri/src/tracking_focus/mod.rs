@@ -341,13 +341,16 @@ fn is_excluded_system_ui(sample: &ActiveWindowSample) -> bool {
 pub fn check_active_window_permission() -> bool {
     #[cfg(target_os = "macos")]
     {
-        return capture_active_window().is_some();
+        capture_active_window().is_some()
     }
 
     // Linux + Windows: no OS-level permission required.
     // The actual capability to capture may vary (e.g. Wayland limitation),
     // but that is not a "permission" that can be granted by the user.
-    true
+    #[cfg(not(target_os = "macos"))]
+    {
+        true
+    }
 }
 
 pub fn is_communication_app(sample: &ActiveWindowSample) -> bool {

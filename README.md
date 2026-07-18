@@ -46,14 +46,54 @@ API local padrão: `http://localhost:3000` (`VITE_API_URL` no `.env` do backend)
 
 ## Variáveis de ambiente
 
-O desktop usa a mesma `.env` do `voowork-backend` (ver `.env.example` lá).
+### Desenvolvimento (`npm run tauri dev`)
 
-| Variável | Descrição |
-|----------|-----------|
-| `VITE_API_URL` | Base da API (login, sync, projetos) |
-| `FRONTEND_URL` | Painel web (link no timer) |
-| `S3_*` | Upload direto de screenshots — definido no `.env` do desktop |
-| `SCREENSHOT_INTERVAL_SECS` | Override de intervalo em dev (mín. 10s) |
+O desktop carrega env files em cascata:
+
+1. `../voowork-backend/.env` — valores compartilhados
+2. `./.env` — desenvolvimento (desktop)
+3. `./.env.local` — overrides locais (dev only, gitignored)
+
+| Variável | Lida por | Descrição |
+|----------|----------|-----------|
+| `API_URL` | Rust | Base da API Rails (login, sync, projetos) |
+| `VITE_WEB_URL` | Vite | Painel web (link no timer) |
+| `S3_*` | Rust | Upload direto de screenshots |
+
+### Release builds (`npm run tauri build`)
+
+**IMPORTANTE:** Em release builds, arquivos `.env` externos NÃO são carregados porque o `.app` bundle é executado de um diretório diferente do projeto (`Voowork.app/Contents/MacOS/`).
+
+A API URL em release é definida em **tempo de compilação** via `option_env!("API_URL")`.
+
+#### Build para teste local (aponta para localhost)
+
+```bash
+# Compile com API_URL apontando para localhost:
+API_URL=http://localhost:3000 npm run tauri build -- --bundles app
+
+# O valor é compilado diretamente no binário.
+```
+
+#### Build para produção real
+
+```bash
+# Compile com API_URL de produção:
+API_URL=https://api.voowork.com npm run tauri build -- --bundles app
+```
+
+#### Override em runtime (sem recompilar)
+
+Se precisar testar um build release já compilado com outra URL:
+
+```bash
+# macOS — define variável de ambiente do sistema:
+launchctl setenv API_URL http://localhost:3000
+open src-tauri/target/release/bundle/macos/Voowork.app
+
+# Linux — passa env var ao executar diretamente:
+API_URL=http://localhost:3000 ./voowork-desktop
+```
 
 ## Estrutura do projeto
 

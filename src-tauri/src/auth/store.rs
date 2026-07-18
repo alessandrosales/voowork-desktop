@@ -82,21 +82,41 @@ impl AuthSession {
 }
 
 pub fn configured_api_base_url() -> String {
-    std::env::var(ENV_API_URL).unwrap_or_else(|_| {
-        if cfg!(debug_assertions) {
-            log::warn!(
-                "VITE_API_URL não definida; usando {DEFAULT_API_URL_DEV}. \
-                 Copie .env.example para .env no voowork-backend."
-            );
-            DEFAULT_API_URL_DEV.to_string()
-        } else {
-            log::warn!(
-                "VITE_API_URL não definida; usando {DEFAULT_API_URL_PROD}. \
-                 Defina variável de ambiente do sistema ou .env no voowork-backend."
-            );
-            DEFAULT_API_URL_PROD.to_string()
-        }
-    })
+    // Release builds: compila o valor diretamente via option_env! (definido em tempo de build).
+    // Permite override em runtime via variável de ambiente do sistema (std::env::var).
+    //
+    // Para buildar apontando para localhost:
+    //   API_URL=http://localhost:3000 npm run tauri build -- --bundles app
+    //
+    // Debug builds: lê do .env como antes.
+    let result = if cfg!(debug_assertions) {
+        std::env::var(ENV_API_URL)
+            .or_else(|_| std::env::var("API_URL"))
+            .unwrap_or_else(|_| {
+                log::warn!(
+                    "VITE_API_URL não definida; usando {DEFAULT_API_URL_DEV}. \
+                     Copie .env.example para .env no voowork-backend."
+                );
+                DEFAULT_API_URL_DEV.to_string()
+            })
+    } else {
+        // Release: runtime override primeiro (permite testar sem rebuild)
+        std::env::var("API_URL")
+            .ok()
+            // Depois o valor compilado em build-time
+            .or_else(|| option_env!("API_URL").map(String::from))
+            // Fallback de produção real
+            .unwrap_or_else(|| {
+                log::warn!(
+                    "API_URL não definida (compile-time nem runtime). \
+                     Usando {DEFAULT_API_URL_PROD}. \
+                     Para builds locais: API_URL=http://localhost:3000 npm run tauri build"
+                );
+                DEFAULT_API_URL_PROD.to_string()
+            })
+    };
+    log::info!("configured_api_base_url() = {}", result);
+    result
 }
 
 pub fn resolve_api_url(configured_url: &str) -> AgentResult<String> {

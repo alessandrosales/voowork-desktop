@@ -24,7 +24,6 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
     seconds: 0,
     at: Date.now(),
   })
-  const [frozenElapsed, setFrozenElapsed] = useState<number | null>(null)
   const frozenElapsedRef = useRef<number | null>(null)
   const pauseIntentRef = useRef(false)
   const prevPhaseRef = useRef(tracking.inactivity.phase)
@@ -43,7 +42,6 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
       : tracking.elapsedSeconds
 
     frozenElapsedRef.current = frozen
-    setFrozenElapsed(frozen)
     setDisplayElapsedSeconds(frozen)
   }, [
     elapsedAnchor.at,
@@ -58,7 +56,6 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
       pauseIntentRef.current = false
       prevPhaseRef.current = "active"
       frozenElapsedRef.current = null
-      setFrozenElapsed(null)
       setDisplayElapsedSeconds(tracking.elapsedSeconds)
       return
     }
@@ -74,7 +71,6 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
       // discrepancies caused by IPC timing between freezeDisplayElapsed() and
       // the Rust backend freeze_billable_at().
       frozenElapsedRef.current = tracking.elapsedSeconds
-      setFrozenElapsed(tracking.elapsedSeconds)
       return
     }
 
@@ -87,7 +83,6 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
       BILLABLE_PHASES.has(phase)
     ) {
       frozenElapsedRef.current = null
-      setFrozenElapsed(null)
       setElapsedAnchor({ seconds: tracking.elapsedSeconds, at: Date.now() })
       return
     }
