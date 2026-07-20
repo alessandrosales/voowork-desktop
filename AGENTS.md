@@ -86,3 +86,28 @@ Compartilhadas com `voowork-backend/.env`.
 | `FRONTEND_URL` | Painel web (link no timer) |
 | `S3_*` | S3/Garage para screenshots |
 | `SCREENSHOT_INTERVAL_SECS` | Override de intervalo em dev (mín. 10s) |
+| `VOOWORK_MCP_PG_WRITE_URL` | Connection string do MCP Postgres full-access (usado por `opencode.jsonc`) |
+
+> **Por que um app SQLite/offline tem MCP Postgres?** O MCP (`voowork_production_pg_write`, full-access) é **ferramenta do agente** (não runtime do app): serve para comparar entidades de tracking entre o SQLite local e o Postgres (dev/prod). Não viola o backend-boundary — é inspeção/análise, não alteração do domínio do backend. **Não remova.**
+
+---
+
+## Skills instaladas
+
+Skills baixadas via `skills.sh` ficam em `.agents/skills/` — lidas por **OpenCode** (via `skills.paths`) e **Cursor** (auto-descoberta). Prefira uma skill existente antes de improvisar um fluxo que ela já cobre.
+
+| Skill | Quando usar |
+|-------|-------------|
+| `adding-tauri-system-tray` | Implementar tray icon, menu de tray, eventos e atualização em runtime na área de notificação |
+| `calling-rust-from-tauri-frontend` | Expor comandos Rust (`#[tauri::command]`) e chamá-los do frontend via `invoke()` |
+| `understanding-tauri-ipc` | Entender/ajustar padrões de IPC Tauri (brownfield/isolation) e passagem segura de mensagens |
+| `listening-to-tauri-events` | Assinar e tratar eventos Tauri no frontend (handlers tipados, cleanup) |
+| `configuring-tauri-permissions` | Configurar permissões, allow/deny lists, escopos e capabilities de plugins |
+| `integrating-tauri-js-frontends` | Configurar/ajustar o frontend JS (Vite/SSG) para Tauri v2 e `tauri.conf.json` |
+| `debugging-tauri-apps` | Depurar app Tauri (DevTools WebView, backtrace Rust, DevTools CrabNebula, launch configs) |
+| `testing-tauri-apps` | Testes unitários (mock runtime), mock de APIs Tauri, E2E (WebDriver) e CI |
+| `packaging-tauri-for-linux` | Empacotar para Linux (AppImage, .deb, RPM, Flatpak, Snap, AUR) |
+| `rust-async-patterns` | Async em Rust com Tokio, async traits, error handling e concorrência |
+| `shadcn` | Adicionar/compor/depurar componentes shadcn/ui e registries |
+| `tailwind-v4-shadcn` | Setup Tailwind v4 + shadcn/ui + Vite/React, dark mode, variáveis CSS, gotchas v4 |
+| `vercel-react-best-practices` | Otimizar performance React (waterfalls, bundle, re-render, rendering) |
