@@ -18,8 +18,8 @@ pub use platform::get_platform_info;
 pub use projects::{list_projects, sync_projects};
 pub use tracking::{
     check_active_window_permission, check_input_monitoring_permission,
-    classify_tracking_inactivity_period, confirm_manual_work, confirm_still_working,
-    dismiss_activity_buffer, dismiss_inactivity_period, dismiss_manual_work_check, get_app_status,
+    classify_paused_inactivity_period, classify_tracking_inactivity_period, confirm_manual_work,
+    confirm_still_working, dismiss_activity_buffer, dismiss_inactivity_period, dismiss_manual_work_check, get_app_status,
     get_tracking_inactivity_config, get_task_elapsed_seconds, get_tracking_status, pause_tracking,
     restart_tracking, resume_tracking, skip_tracking_inactivity_classification, start_tracking,
     stop_tracking,

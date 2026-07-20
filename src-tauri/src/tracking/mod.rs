@@ -487,8 +487,9 @@ impl TrackingManager {
         Ok(())
     }
 
-    /// Dismisses the paused inactivity period: discards the record, resets the
-    /// active timer to zero, takes a screenshot, and returns to Active.
+    /// Dismisses the paused inactivity period: discards the idle time
+    /// record, keeps pre-idle work time, takes a screenshot, and returns
+    /// to Active.
     pub fn dismiss_inactivity_period(&self) -> AgentResult<()> {
         if self.active.lock().is_none() {
             return Err(AgentError::Session("no active tracking".into()));
@@ -540,6 +541,73 @@ impl TrackingManager {
         }
 
         // 5. Emit event so frontend refreshes
+        if let Some(app) = self.app_handle.lock().clone() {
+            let _ = app.emit("tracking-inactivity-changed", ());
+        }
+
+        Ok(())
+    }
+
+    /// Classifies the paused inactivity period as billable: credits the
+    /// idle time to the task, takes a closing screenshot, and resumes
+    /// active tracking.
+    pub fn classify_paused_inactivity_period(&self) -> AgentResult<()> {
+        if self.active.lock().is_none() {
+            return Err(AgentError::Session("no active tracking".into()));
+        }
+
+        let tracking = self.active.lock().clone().unwrap();
+        let period_start = tracking.current_period_start.clone();
+
+        // 1. Classify from paused in controller (credits idle time,
+        //    transitions to Active)
+        if let Some(inactivity_controller) = self.inactivity_controller.lock().clone() {
+            let db = self.db.lock();
+            inactivity_controller.classify_from_paused_inactivity(db.conn())?;
+        }
+
+        // 2. Persist the updated task time (now includes credited idle seconds)
+        if let Err(err) = status_report::persist_task_time_snapshot_state(
+            &self.db,
+            &self.active,
+            &self.inactivity_controller,
+        ) {
+            log::warn!("persist task time after classifying paused inactivity failed: {err}");
+        }
+
+        // 3. Restart segment timer (persist cleared it via reset_billable_seconds)
+        if let Some(controller) = self.inactivity_controller.lock().as_ref() {
+            controller.restart_segment_timer();
+        }
+
+        // 4. Take a screenshot to mark the end of the idle period
+        let result = capture::capture_screenshot(
+            &self.db,
+            &self.screenshot,
+            &self.tracker,
+            &self.totals,
+            &tracking,
+            &period_start,
+            crate::db::TIME_CATEGORY_INACTIVITY,
+        );
+
+        // 5. Update period start
+        match result {
+            Ok(record) => {
+                if let Some(active_tracking) = self.active.lock().as_mut() {
+                    active_tracking.last_screenshot_at = Some(record.captured_at.clone());
+                    active_tracking.current_period_start = record.captured_at;
+                }
+            }
+            Err(err) => {
+                log::warn!("screenshot on inactivity classify failed: {err}");
+                if let Some(active_tracking) = self.active.lock().as_mut() {
+                    active_tracking.current_period_start = chrono::Utc::now().to_rfc3339();
+                }
+            }
+        }
+
+        // 6. Emit event so frontend refreshes
         if let Some(app) = self.app_handle.lock().clone() {
             let _ = app.emit("tracking-inactivity-changed", ());
         }

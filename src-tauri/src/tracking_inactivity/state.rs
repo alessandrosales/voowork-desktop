@@ -246,7 +246,6 @@ impl TrackingInactivityController {
         }
 
         let now = Instant::now();
-        *self.active_seconds.lock() = 0;
         *self.phase.lock() = TrackingInactivityPhase::Active;
         *self.paused_at.lock() = None;
         *self.pending_period_id.lock() = None;
@@ -258,6 +257,64 @@ impl TrackingInactivityController {
         *self.segment_start.lock() = Some(now);
 
         log::info!("idle: inactivity period dismissed — timer reset, back to active");
+        Ok(())
+    }
+
+    /// Classifies a paused inactivity period as billable and credits
+    /// the idle time to active_seconds.
+    ///
+    /// Mirrors the flow of `classify_tracking_inactivity_period` but
+    /// operates from the `PausedInactivity` phase instead of
+    /// `ResumePrompt`. Finalizes the period (calculates idle duration),
+    /// marks it as classified, adds the duration to active_seconds,
+    /// and transitions back to Active.
+    pub fn classify_from_paused_inactivity(&self, conn: &Connection) -> AgentResult<()> {
+        if *self.phase.lock() != TrackingInactivityPhase::PausedInactivity {
+            return Ok(());
+        }
+
+        // Finalize the period — same logic as detect_input's PausedInactivity arm
+        let total_discarded = if let Some(period_id) = self.pending_period_id.lock().clone() {
+            let idle_started = self
+                .inactivity_started_at
+                .lock()
+                .clone()
+                .unwrap_or_else(|| self.last_input_wall_at.lock().clone());
+            let previous = *self.inactivity_discarded_seconds.lock();
+            let (total, prev) = finalize_inactivity_period_on_resume(
+                conn,
+                &period_id,
+                &idle_started,
+                previous,
+            )?;
+            let additional = total.saturating_sub(prev);
+            if additional > 0 {
+                *self.inactivity_discarded_seconds.lock() += additional;
+            }
+
+            // Classify as billable (offline work category)
+            let (reclassify, duration) = classify_tracking_inactivity_period_record(
+                conn,
+                &period_id,
+                "offline_work",
+                total,
+            )?;
+
+            if reclassify {
+                *self.inactivity_reclassified_seconds.lock() += duration;
+                *self.inactivity_discarded_seconds.lock() =
+                    self.inactivity_discarded_seconds.lock().saturating_sub(duration);
+                *self.active_seconds.lock() += duration;
+            }
+            total
+        } else {
+            0
+        };
+
+        log::info!(
+            "idle: inactivity period classified from paused — credited {total_discarded}s as billable"
+        );
+        self.finish_inactivity_resume_prompt();
         Ok(())
     }
 
@@ -574,6 +631,14 @@ impl TrackingInactivityController {
     pub fn reset_billable_seconds(&self) {
         *self.active_seconds.lock() = 0;
         *self.segment_start.lock() = None;
+    }
+
+    /// Restarts the billable segment timer after an external caller
+    /// (e.g. persist_task_time_snapshot_state) cleared it via
+    /// reset_billable_seconds(). Must only be called when the
+    /// controller is in an active/billable phase.
+    pub fn restart_segment_timer(&self) {
+        *self.segment_start.lock() = Some(Instant::now());
     }
 
     fn cancel_inactivity_flow(&self) {

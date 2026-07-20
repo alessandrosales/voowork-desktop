@@ -196,6 +196,11 @@ pub fn dismiss_inactivity_period(state: tauri::State<'_, AppState>) -> AgentResu
 }
 
 #[tauri::command]
+pub fn classify_paused_inactivity_period(state: tauri::State<'_, AppState>) -> AgentResult<()> {
+    state.tracking_manager.classify_paused_inactivity_period()
+}
+
+#[tauri::command]
 pub fn confirm_manual_work(state: tauri::State<'_, AppState>) -> AgentResult<()> {
     state.tracking_manager.confirm_manual_work()
 }

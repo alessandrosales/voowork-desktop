@@ -38,11 +38,18 @@ impl TrackingManager {
 
         let ended_at = chrono::Utc::now().to_rfc3339();
         {
+            // Usa o mesmo contador (controller de inatividade) que
+            // `persist_task_time_snapshot_state`, evitando double-count:
+            // no fluxo de troca de task o persist já gravou `base + session`
+            // e resetou o controller, então aqui `billable_seconds() == 0` e
+            // `elapsed == base`. Passar `None` cairia no fallback por
+            // screenshots, somando o tempo ativo (e o ocioso) uma segunda vez.
+            let controller = self.inactivity_controller.lock().clone();
             let db = self.db.lock();
             let elapsed = super::status_report::snapshot_task_elapsed(
                 &db,
                 &tracking,
-                None,
+                controller.as_deref(),
             )?;
             db.set_task_active_seconds(&tracking.task_id, elapsed)?;
             db.finalize_tracking(&tracking.tracking_id, &ended_at)?;
