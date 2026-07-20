@@ -56,6 +56,8 @@ export function TimerApp() {
     projects,
     confirmStillWorking,
     skipTrackingInactivityClassification,
+    classifyTrackingInactivityPeriod,
+    classifyPausedInactivityPeriod,
     confirmManualWork,
     dismissManualWorkCheck,
     dismissInactivityPeriod,
@@ -400,6 +402,15 @@ export function TimerApp() {
           loading={loading}
           onConfirmStillWorking={confirmStillWorking}
           onAcknowledgeReturn={skipTrackingInactivityClassification}
+          onClassifyInactivity={async () => {
+            if (tracking.inactivity.pendingPeriodId) {
+              await classifyTrackingInactivityPeriod(
+                tracking.inactivity.pendingPeriodId,
+                "offline_work"
+              )
+            }
+          }}
+          onClassifyPausedInactivity={classifyPausedInactivityPeriod}
           onConfirmManualWork={confirmManualWork}
           onDismissManualWork={dismissManualWorkCheck}
           onPauseTracking={pauseTracking}

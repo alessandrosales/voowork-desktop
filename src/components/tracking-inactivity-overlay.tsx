@@ -11,10 +11,12 @@ type TrackingInactivityOverlayProps = Readonly<{
   inactivity: TrackingInactivityStatus
   onConfirmStillWorking: () => void | Promise<void>
   onAcknowledgeReturn: () => void | Promise<void>
+  onClassifyInactivity: () => void | Promise<void>
+  onClassifyPausedInactivity: () => void | Promise<void>
   onConfirmManualWork: () => void | Promise<void>
   onDismissManualWork: () => void | Promise<void>
   onPauseTracking?: () => void | Promise<void>
-  onReturnToWork?: () => void | Promise<void>
+  onReturnToWork: () => void | Promise<void>
   loading?: boolean
 }>
 
@@ -69,6 +71,8 @@ export function TrackingInactivityOverlay({
   inactivity,
   onConfirmStillWorking,
   onAcknowledgeReturn,
+  onClassifyInactivity,
+  onClassifyPausedInactivity,
   onConfirmManualWork,
   onDismissManualWork,
   onPauseTracking,
@@ -171,18 +175,28 @@ export function TrackingInactivityOverlay({
               </p>
             </div>
 
-            {onReturnToWork ? (
-              <Button
-                size="lg"
-                className="h-12 w-full rounded-xl text-base font-semibold"
-                onClick={() => {
-                  Promise.resolve(onReturnToWork()).catch(() => undefined)
-                }}
-                disabled={loading}
-              >
-                {t("idle.returnToWork")}
-              </Button>
-            ) : null}
+            <Button
+              size="lg"
+              className="h-12 w-full rounded-xl text-base font-semibold"
+              onClick={() => {
+                Promise.resolve(onClassifyPausedInactivity()).catch(() => undefined)
+              }}
+              disabled={loading}
+            >
+              {t("idle.wasWorking")}
+            </Button>
+
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-12 w-full rounded-xl text-base"
+              onClick={() => {
+                Promise.resolve(onReturnToWork()).catch(() => undefined)
+              }}
+              disabled={loading}
+            >
+              {t("idle.wasNotWorking")}
+            </Button>
           </div>
         ) : null}
 
@@ -208,11 +222,23 @@ export function TrackingInactivityOverlay({
               size="lg"
               className="h-12 w-full rounded-xl text-base font-semibold"
               onClick={() => {
+                Promise.resolve(onClassifyInactivity()).catch(() => undefined)
+              }}
+              disabled={loading}
+            >
+              {t("idle.wasWorking")}
+            </Button>
+
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-12 w-full rounded-xl text-base"
+              onClick={() => {
                 Promise.resolve(onAcknowledgeReturn()).catch(() => undefined)
               }}
               disabled={loading}
             >
-              {t("idle.continueWorking")}
+              {t("idle.wasNotWorking")}
             </Button>
           </div>
         ) : null}
