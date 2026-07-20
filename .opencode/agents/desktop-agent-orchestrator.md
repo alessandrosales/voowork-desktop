@@ -128,3 +128,11 @@ Always return:
 - Prefer direct specialist over router when scope is clear.
 - Prefer skipping planner over skipping auditor.
 - Respect backend boundary — desktop is local-only evolution.
+
+## Skills
+
+Skills baixadas via `skills.sh` vivem em `.agents/skills/` (lidas por OpenCode via `skills.paths` e por Cursor via auto-descoberta). Consulte `AGENTS.md` → "Skills instaladas" e use uma skill correspondente antes de improvisar um fluxo que ela já cobre (ex.: Tauri IPC, system tray, packaging Linux, async Rust, shadcn/Tailwind v4, React performance).
+
+## Local-only isolation (CRITICAL)
+
+Este projeto é configurado localmente. Use SOMENTE os agents, rules e skills deste repositório. Nunca recorra a agents/rules/skills globais, nem como fallback nem para complementar. Se algo faltar, crie localmente (ver rule `local-config-isolation`).
