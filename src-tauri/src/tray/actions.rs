@@ -3,7 +3,9 @@ use crate::auth::{perform_logout, KEY_AUTHENTICATED};
 use crate::error::AgentResult;
 use crate::models::TrackingStatus;
 use crate::projects::ensure_can_start_tracking;
+use crate::sync::SYNC_FLUSH_TIMEOUT_SECS;
 use crate::windows::{hide_mini_timer, show_main_window};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
 
 use super::refresh::refresh_tray_ui_sync;
@@ -69,12 +71,27 @@ pub fn handle_tray_quit(app: &AppHandle) {
 
         // 2. Then signal immediate exit (drops worker handle, flags).
         state.tracking_manager.prepare_immediate_exit();
+
+        // 3. Stop sync worker's background polling so it doesn't race with flush.
+        state.sync_worker.stop();
+
+        // 4. Flush pending sync items to backend, then exit.
+        let sync_worker = Arc::clone(&state.sync_worker);
+        let db = Arc::clone(&state.db);
+        let app_handle = app.clone();
+        std::thread::spawn(move || {
+            sync_worker.flush_blocking(db, app_handle, SYNC_FLUSH_TIMEOUT_SECS);
+            // Brief delay for SQLite WAL checkpoint before _exit.
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            force_process_exit(0);
+        });
+        return;
     }
 
-    // Não chamar exit no callback GTK — retorna primeiro, encerra depois.
+    // Fallback: AppState not available (should not happen, but be safe)
+    log::warn!("tray quit: AppState not available, exiting without sync flush");
     let _ = app;
     std::thread::spawn(|| {
-        // Give SQLite a moment to flush pending writes before _exit.
         std::thread::sleep(std::time::Duration::from_millis(300));
         force_process_exit(0);
     });

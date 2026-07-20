@@ -23,8 +23,8 @@ use app_state::AppState;
 use auth::{get_auth_state, login, logout, validate_auth_session};
 use commands::{
     check_active_window_permission, check_input_monitoring_permission,
-    classify_tracking_inactivity_period, confirm_manual_work, confirm_still_working,
-    dismiss_activity_buffer, dismiss_inactivity_period, dismiss_manual_work_check,
+    classify_paused_inactivity_period, classify_tracking_inactivity_period, confirm_manual_work,
+    confirm_still_working, dismiss_activity_buffer, dismiss_inactivity_period, dismiss_manual_work_check,
     get_activity_chart, get_app_status, get_app_version, get_dashboard_summary,
     get_platform_info, get_tracking_inactivity_config, get_tracking_screenshot_image, get_setting,
     get_task_elapsed_seconds, get_tracking_capabilities, get_tracking_config, get_tracking_status,
@@ -53,6 +53,7 @@ use crate::tracking_inactivity::{
 };
 use crate::tracking::{SCREENSHOT_BASE_INTERVAL_SECS, SETTING_SCREENSHOT_INTERVAL_SECS};
 use crate::screenshot::{SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY, DEFAULT_JPEG_QUALITY};
+use crate::sync::SYNC_FLUSH_TIMEOUT_SECS;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -163,6 +164,7 @@ pub fn run() {
             dismiss_manual_work_check,
             dismiss_inactivity_period,
             classify_tracking_inactivity_period,
+            classify_paused_inactivity_period,
             skip_tracking_inactivity_classification,
             get_tracking_inactivity_config,
             get_app_status,
@@ -231,6 +233,13 @@ pub fn run() {
                     if let Err(err) = state.tracking_manager.shutdown_for_quit() {
                         log::error!("failed to reset tracking on exit: {err}");
                     }
+                    // Flush pending sync items before process termination.
+                    state.sync_worker.stop();
+                    state.sync_worker.flush_blocking(
+                        state.db.clone(),
+                        app_handle.clone(),
+                        SYNC_FLUSH_TIMEOUT_SECS,
+                    );
                 }
             }
         });

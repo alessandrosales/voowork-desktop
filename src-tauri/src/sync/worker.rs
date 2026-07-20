@@ -4,8 +4,8 @@ use crate::error::AgentError;
 use crate::sync::{
     constants::{
         BACKEND_SYNC_ENABLED, ENTITY_TRACKING_SCREENSHOT, EVENT_AUTH_SESSION_EXPIRED, HTTP_TIMEOUT_SECS,
-        PENDING_BATCH_SIZE, WORKER_IDLE_AFTER_SESSION_REVOKED_SECS, WORKER_IDLE_BETWEEN_BATCHES_SECS,
-        WORKER_IDLE_EMPTY_QUEUE_SECS, WORKER_IDLE_NO_TOKEN_SECS,
+        PENDING_BATCH_SIZE, WORKER_IDLE_AFTER_SESSION_REVOKED_SECS,
+        WORKER_IDLE_BETWEEN_BATCHES_SECS, WORKER_IDLE_EMPTY_QUEUE_SECS, WORKER_IDLE_NO_TOKEN_SECS,
     },
     fetch_pending_batch, mark_tracking_screenshot_synced, tracking_screenshot_file_path, send_sync_item,
     PendingSyncItem, SyncOutbox,
@@ -78,6 +78,84 @@ impl SyncWorker {
                 };
                 sleep(Duration::from_secs(idle_secs)).await;
             }
+        });
+    }
+
+    pub fn stop(&self) {
+        self.running.store(false, Ordering::SeqCst);
+    }
+
+    /// Processa todos os itens pendentes na sync_queue de forma síncrona,
+    /// útil durante shutdown para garantir que nenhum dado seja perdido.
+    pub fn flush_blocking(
+        self: &Arc<Self>,
+        db: Arc<Mutex<Database>>,
+        app: AppHandle,
+        timeout_secs: u64,
+    ) {
+        let rt = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(rt) => rt,
+            Err(e) => {
+                log::error!("sync flush: failed to create runtime: {e}");
+                return;
+            }
+        };
+
+        let api_base_url = self.api_base_url.clone();
+
+        rt.block_on(async move {
+            let http_client = match reqwest::Client::builder()
+                .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
+                .build()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    log::error!("sync flush: failed to build HTTP client: {e}");
+                    return;
+                }
+            };
+
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
+            let mut total_processed = 0usize;
+
+            loop {
+                if tokio::time::Instant::now() >= deadline {
+                    let remaining = count_pending(&db);
+                    log::warn!(
+                        "sync flush: timeout after {timeout_secs}s — {remaining} item(s) remain for next startup"
+                    );
+                    break;
+                }
+
+                let batch = load_pending_batch(&db);
+                if batch.access_token.is_none() {
+                    log::debug!("sync flush: no access token, skipping");
+                    break;
+                }
+                if batch.items.is_empty() {
+                    break;
+                }
+
+                let count = batch.items.len();
+                log::info!("sync flush: processing {count} pending item(s)");
+
+                process_batch(
+                    &http_client,
+                    &api_base_url,
+                    &batch.access_token.unwrap(),
+                    &db,
+                    &app,
+                    batch.items,
+                )
+                .await;
+
+                total_processed += count;
+            }
+
+            log::info!("sync flush: complete — {total_processed} item(s) processed");
         });
     }
 }
@@ -155,6 +233,19 @@ fn screenshot_path_from_payload(payload_json: &str) -> Option<String> {
         .get("filePath")
         .and_then(|value| value.as_str())
         .map(str::to_string)
+}
+
+fn count_pending(db: &Arc<Mutex<Database>>) -> usize {
+    let db_guard = db.lock();
+    db_guard
+        .conn()
+        .query_row(
+            "SELECT COUNT(*) FROM sync_queue WHERE status IN ('pending', 'failed')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|c| c as usize)
+        .unwrap_or(0)
 }
 
 fn apply_sync_result(

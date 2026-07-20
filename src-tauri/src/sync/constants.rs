@@ -23,3 +23,6 @@ pub const WORKER_IDLE_BETWEEN_BATCHES_SECS: u64 = 2;
 
 /// Evento Tauri emitido quando a sessão de auth expira durante o sync.
 pub const EVENT_AUTH_SESSION_EXPIRED: &str = "auth-session-expired";
+
+/// Timeout máximo para flush do sync queue durante shutdown.
+pub const SYNC_FLUSH_TIMEOUT_SECS: u64 = 30;

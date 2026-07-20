@@ -11,6 +11,7 @@ pub struct AppState {
     pub db: Arc<Mutex<Database>>,
     pub tracking_manager: Arc<TrackingManager>,
     pub api_base_url: String,
+    pub sync_worker: Arc<SyncWorker>,
 }
 
 impl AppState {
@@ -37,6 +38,7 @@ impl AppState {
             db,
             tracking_manager,
             api_base_url,
+            sync_worker,
         }
     }
 }
