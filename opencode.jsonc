@@ -5,6 +5,7 @@
 
   "instructions": [
     "AGENTS.md",
+    ".opencode/rules/local-config-isolation.md",
     ".opencode/rules/backend-boundary.md",
     ".opencode/rules/tauri-dev-cli.md",
     ".opencode/rules/sqlite-local-schema.md"
@@ -57,18 +58,13 @@
   },
 
   "skills": {
-    "paths": [".opencode/skills"]
+    "paths": [".opencode/skills", ".agents/skills"]
   },
 
   "mcp": {
-    "voowork_production_pg": {
-      "type": "local",
-      "command": ["npx", "-y", "@modelcontextprotocol/server-postgres", "postgresql://postgres:postgres@localhost:5433/voowork_development"],
-      "enabled": true
-    },
     "voowork_production_pg_write": {
       "type": "local",
-      "command": ["npx", "-y", "mcp-postgres-full-access", "postgresql://postgres:postgres@localhost:5434/voowork_db"],
+      "command": ["npx", "-y", "mcp-postgres-full-access", "{env:VOOWORK_MCP_PG_WRITE_URL}"],
       "enabled": true,
       "env": {
         "TRANSACTION_TIMEOUT_MS": "60000",
