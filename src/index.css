@@ -373,17 +373,23 @@ html.voowork-mini-surface #root {
   background: transparent !important;
   background-color: transparent !important;
   overflow: hidden;
-  height: 100%;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0;
+  pointer-events: none;
 }
 
 html.voowork-mini-surface .voowork-mini-widget {
   background: transparent !important;
   background-color: transparent !important;
+  pointer-events: auto;
 }
 
 .voowork-mini-widget {
   -webkit-user-select: none;
   user-select: none;
+  width: fit-content;
+  height: fit-content;
 }
 
 .voowork-mini-drag-handle {

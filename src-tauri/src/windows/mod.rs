@@ -4,12 +4,14 @@ use crate::app_state::AppState;
 use crate::auth::{read_session_identity, KEY_AUTHENTICATED};
 use crate::icons::app_icon;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow};
+use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition, Size, WebviewWindow};
 use tauri::window::Color;
 
 pub use commands::{begin_mini_widget_drag, open_main_window, reset_mini_widget_position};
 
 pub const MINI_WINDOW_LABEL: &str = "mini-timer";
+pub const MINI_WINDOW_WIDTH: u32 = 200;
+pub const MINI_WINDOW_HEIGHT: u32 = 20;
 pub const SETTING_MINI_WIDGET_ENABLED: &str = "mini_widget_enabled";
 pub const SETTING_MINI_WIDGET_X: &str = "mini_widget_x";
 pub const SETTING_MINI_WIDGET_Y: &str = "mini_widget_y";
@@ -116,6 +118,10 @@ pub fn setup_windows(app: &tauri::App) -> tauri::Result<()> {
     if let Some(mini) = app.get_webview_window(MINI_WINDOW_LABEL) {
         let _ = mini.set_icon(icon);
         let _ = mini.set_background_color(Some(Color(0, 0, 0, 0)));
+        let _ = mini.set_size(Size::Logical(LogicalSize::new(
+            MINI_WINDOW_WIDTH as f64,
+            MINI_WINDOW_HEIGHT as f64,
+        )));
         let mini_clone = mini.clone();
         mini.on_window_event(move |event| {
             match event {
@@ -290,7 +296,7 @@ fn persist_mini_position(app: &AppHandle, x: i32, y: i32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{clamp_to_bounds, mini_position_bounds};
+    use super::{clamp_to_bounds, mini_position_bounds, MINI_WINDOW_HEIGHT, MINI_WINDOW_WIDTH};
     use tauri::{PhysicalPosition, PhysicalSize};
 
     #[test]
@@ -298,14 +304,14 @@ mod tests {
         let bounds = mini_position_bounds(
             PhysicalPosition::new(0, 0),
             PhysicalSize::new(1920, 1080),
-            200,
-            48,
+            MINI_WINDOW_WIDTH as i32,
+            MINI_WINDOW_HEIGHT as i32,
         );
 
         assert_eq!(bounds.min_x, 0);
         assert_eq!(bounds.min_y, 0);
         assert_eq!(bounds.max_x, 1720);
-        assert_eq!(bounds.max_y, 1032);
+        assert_eq!(bounds.max_y, 1060);
     }
 
     #[test]

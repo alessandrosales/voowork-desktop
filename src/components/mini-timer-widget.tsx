@@ -1,5 +1,8 @@
+import { useLayoutEffect, useRef } from "react"
 import { GripVertical, PauseIcon, PlayIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
+import { isTauri } from "@tauri-apps/api/core"
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window"
 
 import { Button } from "@/components/ui/button"
 import { useMiniTimer } from "@/hooks/use-mini-timer"
@@ -35,6 +38,42 @@ export function MiniTimerWidget() {
 
   const beginDrag = useMiniWidgetDrag(true)
   const beginDragWithThreshold = useMiniWidgetDrag(false)
+
+  const frameRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    if (!isTauri()) {
+      return
+    }
+
+    const frame = frameRef.current
+    if (!frame) {
+      return
+    }
+
+    const appWindow = getCurrentWindow()
+
+    const syncWindowToPill = () => {
+      // Measure the frame (pill + small gutter) so the pill's border and
+      // rounded corners are never clipped by the window bounds.
+      const rect = frame.getBoundingClientRect()
+      const width = Math.ceil(rect.width)
+      const height = Math.ceil(rect.height)
+      if (width <= 0 || height <= 0) {
+        return
+      }
+      appWindow.setSize(new LogicalSize(width, height)).catch((error) => {
+        console.error("[mini-timer] failed to resize window to pill", error)
+      })
+    }
+
+    syncWindowToPill()
+
+    const observer = new ResizeObserver(syncWindowToPill)
+    observer.observe(frame)
+
+    return () => observer.disconnect()
+  }, [])
 
   const phase = tracking.inactivity.phase
   const manuallyPaused =
@@ -74,10 +113,13 @@ export function MiniTimerWidget() {
   }
 
   return (
-    <div className="voowork-mini-widget flex h-12 w-46 rounded-2xl items-center justify-center">
+    <div
+      ref={frameRef}
+      className="voowork-mini-widget inline-flex !w-44 shrink-0 p-0.5"
+    >
       <div
         className={cn(
-          "voowork-mini-shell bg-card/95 border-border/80 flex h-10 items-center gap-2 rounded-2xl border py-0 pl-2.5 pr-0",
+          "voowork-mini-shell bg-card/95 border-border/80 flex h-5 items-center gap-2 rounded-full border py-0 pl-2 pr-0",
           isRunning && "border-emerald-500/50"
         )}
       >
@@ -86,12 +128,12 @@ export function MiniTimerWidget() {
           alt=""
           aria-hidden
           draggable={false}
-          className="size-[18px] shrink-0 rounded-[4px] object-cover"
+          className="size-3 shrink-0 rounded-[3px] object-cover"
         />
 
         <button
           type="button"
-          className="text-foreground voowork-mini-draggable flex shrink-0 cursor-grab items-center border-0 bg-transparent p-0 text-sm font-semibold tabular-nums leading-none active:cursor-grabbing"
+          className="text-foreground voowork-mini-draggable flex shrink-0 cursor-grab items-center border-0 bg-transparent p-0 text-xs font-semibold tabular-nums leading-none active:cursor-grabbing"
           onPointerDown={beginDragWithThreshold}
           onDoubleClick={openMain}
         >
@@ -103,15 +145,15 @@ export function MiniTimerWidget() {
           variant="ghost"
           size="icon-sm"
           data-no-drag
-          className="voowork-mini-no-drag size-8 shrink-0 rounded-xl"
+          className="voowork-mini-no-drag size-4 shrink-0 rounded-full cursor-pointer"
           disabled={loading}
           aria-label={toggleLabel}
           onClick={handleToggle}
         >
           {showPlay ? (
-            <PlayIcon className="size-4 fill-current" />
+            <PlayIcon className="size-3 fill-current" />
           ) : (
-            <PauseIcon className="size-4 fill-current" />
+            <PauseIcon className="size-3 fill-current" />
           )}
         </Button>
 
@@ -120,10 +162,10 @@ export function MiniTimerWidget() {
           data-tauri-drag-region
           aria-label={t("widget.drag")}
           title={t("widget.drag")}
-          className="voowork-mini-drag-handle text-muted-foreground/80 hover:text-muted-foreground voowork-mini-draggable flex h-10 w-7 shrink-0 cursor-grab items-center justify-center rounded-r-2xl border-l border-border/50 active:cursor-grabbing"
+          className="voowork-mini-drag-handle text-muted-foreground hover:bg-muted/60 hover:text-foreground voowork-mini-draggable flex h-5 w-6 shrink-0 cursor-grab items-center justify-center rounded-r-full border-l border-border/60 active:cursor-grabbing"
           onPointerDown={beginDrag}
         >
-          <GripVertical className="size-3.5" strokeWidth={2.25} />
+          <GripVertical className="size-3.5" strokeWidth={2.5} />
         </button>
       </div>
     </div>
