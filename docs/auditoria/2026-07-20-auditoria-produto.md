@@ -22,6 +22,7 @@ O produto está **substancialmente implementado**: o núcleo de um time tracker 
 - **M10** — Tela de Settings implementada como página (desfoque, inatividade, mini widget). ✅
 - **Stop na UI** — Botão "Encerrar" adicionado na janela principal, mini widget e tray. ✅
 - **M12, M13, M14, M17, M18, A12(a)** — Sétima rodada na branch `fix/auditoria-pendentes`: contadores em memória (M12), commands pesados fora da main thread (M13), flush no exit em background (M14), screenshots durante pausa manual (M17), token SQLite documentado (M18), métrica de teclado documentada (A12a). ✅
+- **Seção 12 (itens 1-4)** — Verificação por leitura do backend Rails + correção do A1: `finalize_active_tracking_inner` agora captura screenshot **antes** de enfileirar peripheral_events (UUID real, sem `"no-screenshot"`). ✅
 
 | Severidade | Quantidade | Tema dominante |
 |---|---|---|
@@ -35,7 +36,7 @@ O produto está **substancialmente implementado**: o núcleo de um time tracker 
 1. ~~**Mini widget mostra `00:00:00` para sempre quando o timer está parado**~~ ✅ Corrigido (C1)
 2. ~~**Release sem `.env` compila a API apontando para `http://localhost:3000`**~~ ✅ Corrigido (C2)
 3. ~~**`panic = "abort"` em release anula toda a proteção `guard_native`**~~ ✅ Corrigido (C3)
-4. ~~**Último período de atividade de cada sessão nunca é sincronizado**~~ ✅ Corrigido (A1) — `drain_activity_period` agora enfileira eventos no outbox (commit `7d36006`); pendente verificação se o backend aceita `screenshot_original_id = "no-screenshot"`
+4. ~~**Último período de atividade de cada sessão nunca é sincronizado**~~ ✅ Corrigido (A1) — `finalize_active_tracking_inner` agora captura screenshot final com UUID real antes de enfileirar peripheral_events; `drain_activity_period` removido
 5. ~~**Bug na agregação de `discarded_seconds`**~~ ✅ Corrigido (C4) + testes de regressão
 
 ---
@@ -132,7 +133,7 @@ Checklist das capacidades esperadas de uma alternativa ao TimeDoctor, verificada
 | Retry com backoff | ⚠️ Divergente da spec | Spec: "10s/30s/90s/270s, máx. 3 tentativas" (`03-sync.md:67`); código: `2^n` cap 3600s, **ilimitado** (`sync/outbox.rs:47`) |
 | Recuperação de itens em `sending` após crash | 🟠 **Ausente** | Ver A2 — itens presos para sempre |
 | Dead-letter para erros permanentes (4xx) | 🟠 **Ausente** | Ver A3 — retry infinito de erros que nunca vão passar |
-| Último período de atividade da sessão | 🟠 **Perdido** | Ver A4 |
+| Último período de atividade da sessão | ✅ **Corrigido** | `finalize_active_tracking_inner` captura screenshot + enfileira events com UUID real; `drain_activity_period` removido |
 | Trackings órfãos (crash) finalizados no boot | ✅ **Corrigido** | `ended_at` agora é estimado a partir do último screenshot/peripheral_event. Fallback para `started_at` (duração 0) se não houver dados. |
 | Visibilidade de sync na UI | ❌ Ausente | `get_app_status`/`list_sync_queue` existem e **nunca são chamados**; offline/401/falhas são invisíveis ao usuário |
 | Flush no quit | ✅ Completo | Tray quit + `RunEvent::Exit` (dois caminhos divergentes — dívida) |
@@ -200,11 +201,15 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 
 ### A1 — O último período de atividade de cada sessão nunca sincroniza 🟠 (verificado) ✅ **CORRIGIDO**
 
-- **Onde:** `src-tauri/src/tracking/capture.rs:234-271` (`drain_activity_period`, usado em todo stop/pause-final e quit)
-- **O quê:** o próprio doc-comment dizia: *"persists peripheral events to SQLite, but does NOT capture a screenshot or **enqueue sync items**"*. Os eventos ficavam no SQLite com `screenshot_original_id = "no-screenshot"` e nunca entravam no outbox.
-- **Efeito:** toda sessão perdia para a API até `screenshot_interval_secs` (default 300s) de dados de mouse/teclado do período parcial final. Diverge de `docs/features/03-sync.md:35`.
-- **Correção:** `drain_activity_period` agora chama `flush_activity_period`, que enfileira periphal_events no outbox. Documentação atualizada em `03-sync.md`.
-- **Verificação pendente (seção 12.4):** confirmar que o backend aceita `screenshot_original_id = "no-screenshot"`.
+- **Onde:** `src-tauri/src/tracking/capture.rs:234-271`, `src-tauri/src/tracking/lifecycle.rs:27-91`
+- **O quê:** o `finalize_active_tracking_inner` usava `drain_activity_period`, que persistia eventos no SQLite mas **não enfileirava sync items**. Os eventos também usavam `screenshot_original_id = "no-screenshot"` (sentinela), que o backend Rails rejeitava com 422 (validação exige que a screenshot exista).
+- **Efeito:** toda sessão perdia para a API até `screenshot_interval_secs` (default 300s) de dados de mouse/teclado do período parcial final.
+- **Correção (final, 2026-07-22):**
+  1. `finalize_active_tracking_inner` agora captura a screenshot final **antes** de enfileirar os peripheral_events, passando o UUID real (`Some(&record.original_id)`) via `capture_screenshot` → `flush_activity_period`
+  2. `flush_activity_period` mudou de `&str` para `Option<&str>` — só inclui `screenshotOriginalId` no JSON se for `Some` (UUID real)
+  3. Caminho de erro de captura passa `None` (campo omitido → `null` no backend) em vez de `"no-screenshot"`
+  4. `drain_activity_period` removido (substituído por `capture_screenshot`)
+  5. Backend Rails mantém validação `screenshot_original_id_exists_in_tracking` — correta para UUIDs reais, e `null` já é aceito pela coluna nullable + `optional: true`
 
 ### A2 — Itens marcados `sending` em um crash são perdidos para sempre 🟠 (verificado) ✅ **CORRIGIDO**
 
@@ -343,15 +348,15 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 
 ### 9.2 Login / logout
 Login → token (keyring + fallback SQLite) → cache de projetos → UI no timer. Logout → para tracking → limpa sessão → evento cross-window.
-**Falhas:** ~~logout sem confirmação durante tracking (M8)~~ ✅; token em claro no SQLite (M18); ~~nome da org sobrescrito com `""` na validação (M9)~~ ✅.
+**Falhas:** ~~logout sem confirmação durante tracking (M8)~~ ✅; ~~token em claro no SQLite (M18 — risco aceitável, decisão documentada)~~ ✅; ~~nome da org sobrescrito com `""` na validação (M9)~~ ✅.
 
 ### 9.3 Start → tracking → pause/resume → stop
 UI valida seleção → `start_tracking` (claim do buffer, INSERT + enqueue POST) → worker 1s: atividade (200ms thread), foco (15s), screenshot (~300s) → pause congela billing → resume → stop (screenshot final + drain + enqueue PATCH).
-**Falhas:** ~~TOCTOU e `unwrap` com race (A7)~~ ✅; ~~claim do buffer antes da validação de auth (perde buffer em start sem sessão) (N1)~~ ✅; ~~race worker↔finalize (A8)~~ ✅; task agora validada contra projeto (M7 ✅); ~~**stop não existe na UI**~~ ✅ (botão na main, mini widget e tray); ~~pause manual continua capturando (M17)~~ ✅; último período de atividade não sincroniza (A1) — ver A1 corrigido acima.
+**Falhas:** ~~TOCTOU e `unwrap` com race (A7)~~ ✅; ~~claim do buffer antes da validação de auth (perde buffer em start sem sessão) (N1)~~ ✅; ~~race worker↔finalize (A8)~~ ✅; task agora validada contra projeto (M7 ✅); ~~**stop não existe na UI**~~ ✅ (botão na main, mini widget e tray); ~~pause manual continua capturando (M17)~~ ✅; ~~último período de atividade não sincroniza (A1)~~ ✅.
 
 ### 9.4 Pipeline de screenshot + eventos de atividade
 `capture_screenshot`: drain bucket → score → captura xcap (todos os monitores, stitch) → WebP → SQLite + disco → flush peripheral events → enqueue (screenshot + eventos) → worker sync: upload S3 → POST metadados → purge local.
-**Falhas:** ~~eventos morrem com falha de captura (A4)~~ ✅; ~~drain final sem enqueue (A1)~~ ✅; chave S3 raiz vs `path` com prefixo — consistente com a doc, mas depende do webapp *(verificar)*; ~~cache sem eviction (M6)~~ ✅; purge ausente quando `path` não retorna (M15) ❌; ~~captura na main thread em alguns commands (M13)~~ ✅. **Divergência:** docs dizem JPEG e "monitor da janela ativa"; código é WebP e todos os monitores.
+**Falhas:** ~~eventos morrem com falha de captura (A4)~~ ✅; ~~drain final sem enqueue (A1)~~ ✅; chave S3 raiz vs `path` com prefixo — consistente com a doc, mas depende do webapp *(verificar)*; ~~cache sem eviction (M6)~~ ✅; ~~purge ausente quando `path` não retorna (M15)~~ ✅; ~~captura na main thread em alguns commands (M13)~~ ✅. **Divergência:** docs dizem JPEG e "monitor da janela ativa"; código é WebP e todos os monitores.
 
 ### 9.5 Inatividade
 Controller 1s: `Active → Warning → Countdown(60s) → PausedInactivity` → input → `ResumePrompt` → classificar (billable/descarte) ou pular.
@@ -359,7 +364,7 @@ Controller 1s: `Active → Warning → Countdown(60s) → PausedInactivity` → 
 
 ### 9.6 Sync outbox + shutdown
 Enqueue (SQLite) → worker a cada 2–5s busca 10 `pending`/`failed` → `sending` → HTTP → `confirmed`/`failed` (backoff 2^n cap 3600). Quit: dois caminhos (tray: captura+finaliza, flush em thread, `_exit`; `RunEvent::Exit`: flush na main thread até 30s).
-**Falhas:** A1 ❌; ~~A2~~ ✅; ~~A3~~ ✅ (dead-letter + `MAX_SYNC_ATTEMPTS=8`); ~~M14~~ ✅; M15 ❌; ~~M16~~ ✅; retry diverge da spec; classificação de erro por string matching no body (`sync/api.rs:292-308`) — frágil a mudanças de mensagem no Rails *(gap de contrato — backend fora de escopo)*.
+**Falhas:** ~~A1~~ ✅; ~~A2~~ ✅; ~~A3~~ ✅ (dead-letter + `MAX_SYNC_ATTEMPTS=8`); ~~M14~~ ✅; ~~M15~~ ✅; ~~M16~~ ✅; retry diverge da spec; classificação de erro por string matching no body (`sync/api.rs:292-308`) — frágil a mudanças de mensagem no Rails *(gap de contrato — backend fora de escopo)*.
 
 ### 9.7 Recuperação de crash
 Boot finaliza trackings/apps/sites órfãos e segue.
@@ -379,7 +384,7 @@ Boot finaliza trackings/apps/sites órfãos e segue.
 2. **C2** — build.rs: ler `VITE_API_URL`, fail-loud em release, alinhar env vars. ✅
 3. **C3** — remover `panic = "abort"`. ✅
 4. **C4** — corrigir agregação de `discarded_seconds` + testes. ✅
-5. **A1** — enfileirar o drain final de atividade. ✅ (verificar backend, seção 12.4)
+5. **A1** — capturar screenshot final + enfileirar eventos com UUID real. ✅ (verificado no backend: sem `"no-screenshot"`, validação mantida)
 6. **A2** — requeue de `sending` no boot. ✅
 7. **A3** — dead-letter + limite de tentativas. ✅
 8. **A10/A11** — timeout de sessão + freeze de pause. ✅
@@ -442,16 +447,19 @@ Ver seção 11. Em resumo: geração de tipos IPC (ts-rs/specta), docs sync (JPE
 
 ---
 
-## 12. Verificações pendentes (dependem de fora deste repo)
+## 12. Verificações — inspecionadas em 2026-07-22
 
-Pelo backend-boundary, estas hipóteses **não** foram confirmadas e exigem inspeção do `voowork-backend`/webapp (somente leitura, fora do escopo desta auditoria):
+As 4 primeiras foram verificadas por leitura do `voowork-backend`:
 
-1. Como o webapp monta a URL da screenshot a partir de `path` (chave real está na raiz do bucket, `path` tem prefixo `screenshots/`) — se montar com o prefixo, **404 em todas as screenshots**.
-2. Comportamento do backend ao receber screenshot/peripheral events **após** o PATCH de `endedAt` (determina a frequência de itens envenenados de A3/A8).
-3. Se o backend valida `task_id` no `POST /trackings` (determina se M7 vira 422 ∞).
-4. Se o backend aceita `peripheral_events` com `screenshot_original_id = "no-screenshot"` (pré-requisito da correção de A1).
-5. Custo real do `user-idle3` por provider no Linux (DBus vs XScreenSaver).
-6. Comportamento de `Instant` durante suspensão no Windows (M4).
+1. ⚠️ **URL da screenshot** — `public_url` inclui `screenshots/` prefixo (quebrada se usada), `signed_url` usa `File.basename` (correta). Depende de qual campo o webapp consome.
+2. ✅ **Dados pós-endedAt** — backend **aceita** screenshots/eventos mesmo após tracking finalizado (`TrackingsController#update` sem guard de status).
+3. ✅ **Validação de task_id** — `project` e `task` são `optional: true`, sem validação de pertencimento. M7 não causa 422.
+4. ✅ **Corrigido (2026-07-22)** — `"no-screenshot"` não existe mais. O desktop agora:
+   - No `finalize_active_tracking_inner`: captura a screenshot **antes** de enfileirar os peripheral_events, passando o UUID real
+   - Na falha de captura: omite o campo `screenshotOriginalId` (envia `null`)
+   - No backend: a validação permanece (correta para UUIDs reais), e `null` é aceito pela coluna nullable
+5. ❓ Custo real do `user-idle3` por provider no Linux — não verificado.
+6. ❓ Comportamento de `Instant` durante suspensão no Windows — não verificado (sem ambiente).
 
 ---
 
@@ -464,7 +472,7 @@ Pelo backend-boundary, estas hipóteses **não** foram confirmadas e exigem insp
 | `README.md:78`, `02-tracking.md:53`, `03-sync.md` | "JPEG" | WebP |
 | `02-tracking.md:52` | "monitor da janela ativa" | Todos os monitores stitchados |
 | `02-tracking.md:73` | `flush_period_screenshot` | Nome real: `capture_final_screenshot_and_finalize` |
-| `03-sync.md:35` | peripheral_events sincronizados | Período final de cada sessão não sincroniza (A1) |
+| `03-sync.md:35` | peripheral_events sincronizados | ~~Período final de cada sessão não sincroniza (A1)~~ ✅ Corrigido: `finalize_active_tracking_inner` agora captura screenshot e enfileira events com UUID real |
 | `03-sync.md:68` | "re-sync automático se JPEG existir" | Não existe mecanismo fora do outbox |
 | `02-tracking.md` | (não documenta) | Feature **buffer de atividade** existe e não está na spec |
 | `02-tracking.md` | (omisso) | Pausa manual continua capturando screenshot/atividade |
@@ -494,4 +502,5 @@ Pelo backend-boundary, estas hipóteses **não** foram confirmadas e exigem insp
 **2026-07-22 (5ª rodada):** M10 (tela de Settings como página com desfoque, inatividade, mini widget).  
 **2026-07-22 (6ª rodada):** Stop na UI (main window, mini widget, tray).
 **2026-07-22 (7ª rodada):** M12 (contadores em memória), M13 (commands off main thread), M14 (flush background no exit), M17 (skip screenshots na pausa manual), M18 (token SQLite documentado), A12(a) (métrica de teclado documentada).  
-**2026-07-22 (8ª rodada):** P2.1 (sync_queue pruning), P2.2 (user_version migrations), P2.3 (i18n gaps: IPC error, seconds suffix), P2.4 (dead code/dedup: EMPTY_TRACKING, formatElapsed, Toaster), P2.5 (Vitest + CI workflow).
+**2026-07-22 (8ª rodada):** P2.1 (sync_queue pruning), P2.2 (user_version migrations), P2.3 (i18n gaps: IPC error, seconds suffix), P2.4 (dead code/dedup: EMPTY_TRACKING, formatElapsed, Toaster), P2.5 (Vitest + CI workflow).  
+**2026-07-22 (9ª rodada):** Seção 12 verificada no backend Rails (itens 1-4) + correção do fluxo de finalização: `drain_activity_period` removido, `finalize_active_tracking_inner` agora captura screenshot final com UUID real e passa `Some(&record.original_id)` para `flush_activity_period`. Caminho de erro de captura passa `None` (campo omitido no JSON). Backend validation mantida (correta).
