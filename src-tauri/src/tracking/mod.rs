@@ -73,6 +73,8 @@ pub(crate) struct TrackingTotals {
     keyboard_events: u64,
     last_confidence: f64,
     last_activity_score: u8,
+    screenshot_count: u64,
+    inactivity_seconds: u64,
 }
 
 impl TrackingManager {
