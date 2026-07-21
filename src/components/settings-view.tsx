@@ -73,8 +73,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
   // Load settings on mount
   useEffect(() => {
-    setLoading(true)
-
     Promise.all([
       trackedInvoke<string | null>("get_setting", { key: "screenshot_blur_enabled" }).catch(() => null),
       trackedInvoke<string | null>("get_setting", { key: "tracking_inactivity_profile" }).catch(() => null),

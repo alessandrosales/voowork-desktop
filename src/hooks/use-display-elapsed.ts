@@ -20,10 +20,10 @@ type ElapsedAnchor = {
 }
 
 export function useDisplayElapsed(tracking: TrackingStatus) {
-  const [elapsedAnchor, setElapsedAnchor] = useState<ElapsedAnchor>({
+  const [elapsedAnchor, setElapsedAnchor] = useState<ElapsedAnchor>(() => ({
     seconds: 0,
     at: Date.now(),
-  })
+  }))
   const frozenElapsedRef = useRef<number | null>(null)
   const pauseIntentRef = useRef(false)
   const prevPhaseRef = useRef(tracking.inactivity.phase)
@@ -69,7 +69,7 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
       pauseIntentRef.current = false
       prevPhaseRef.current = "active"
       frozenElapsedRef.current = null
-      setDisplayElapsedSeconds(tracking.elapsedSeconds)
+      queueMicrotask(() => setDisplayElapsedSeconds(tracking.elapsedSeconds))
       return
     }
 
@@ -79,10 +79,6 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
 
     if (isFrozenPhase(phase)) {
       pauseIntentRef.current = false
-      // Always use backend elapsedSeconds as source of truth for consistency
-      // across all windows (mini-widget, main, tray). This prevents 1-second
-      // discrepancies caused by IPC timing between freezeDisplayElapsed() and
-      // the Rust backend freeze_billable_at().
       frozenElapsedRef.current = tracking.elapsedSeconds
       return
     }

@@ -44,6 +44,7 @@ export function TimerApp() {
     pauseTracking,
     resumeTracking,
     projects,
+    projectsLoading,
     confirmStillWorking,
     skipTrackingInactivityClassification,
     classifyTrackingInactivityPeriod,
@@ -329,6 +330,7 @@ export function TimerApp() {
       <>
         <WorkspaceView
           projects={projects}
+          projectsLoading={projectsLoading}
           resolvedProjectId={resolvedProjectId}
           resolvedTaskId={resolvedTaskId}
           disabled={active && !manuallyPaused}

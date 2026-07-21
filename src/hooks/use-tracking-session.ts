@@ -110,6 +110,7 @@ function backgroundRefreshIntervalMs(tracking: TrackingStatus) {
 export function useTrackingSession() {
   const [tracking, setTracking] = useState<TrackingStatus>(EMPTY_TRACKING)
   const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -160,6 +161,7 @@ export function useTrackingSession() {
       return
     }
 
+    setProjectsLoading(true)
     // Tenta sincronizar primeiro, mas não falha se a API estiver offline
     try {
       await trackedInvoke("sync_projects")
@@ -172,6 +174,8 @@ export function useTrackingSession() {
       setProjects(projectList)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setProjectsLoading(false)
     }
   }, [])
 
@@ -283,6 +287,7 @@ export function useTrackingSession() {
   )
 
   const pauseTracking = useCallback(async () => {
+    setLoading(true)
     setError(null)
     freezeDisplayElapsed()
     try {
@@ -297,6 +302,8 @@ export function useTrackingSession() {
       cancelPauseFreeze()
       setError(err instanceof Error ? err.message : String(err))
       throw err
+    } finally {
+      setLoading(false)
     }
   }, [
     freezeDisplayElapsed,
@@ -393,7 +400,7 @@ export function useTrackingSession() {
     } finally {
       setLoading(false)
     }
-  }, [refresh])
+  }, [refreshTrackingStatus])
 
   const dismissManualWorkCheck = useCallback(async () => {
     setLoading(true)
@@ -459,6 +466,7 @@ export function useTrackingSession() {
     taskElapsedSeconds,
     refreshTaskElapsed,
     projects,
+    projectsLoading,
     loading,
     error,
     refresh,

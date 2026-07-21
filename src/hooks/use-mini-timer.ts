@@ -56,10 +56,12 @@ export function useMiniTimer() {
       console.error("mini-timer refresh failed", err)
     }
 
-    refresh().catch(logRefreshError)
     const interval = window.setInterval(() => {
       refresh().catch(logRefreshError)
     }, refreshMs)
+
+    // Initial fetch: deferred to avoid set-state-during-render
+    queueMicrotask(() => refresh().catch(logRefreshError))
 
     let cancelled = false
     let unlisten: (() => void) | undefined

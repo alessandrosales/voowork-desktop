@@ -42,6 +42,7 @@
     "selectWork": "Selecciona tu trabajo",
     "searchPlaceholder": "Buscar proyectos...",
     "noResults": "Ningún proyecto encontrado",
+    "loading": "Cargando...",
     "noTasks": "Sin tareas",
     "task": "tarea",
     "tasks": "tareas"

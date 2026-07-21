@@ -30,8 +30,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
 
   useEffect(() => {
     if (!isTauriReady()) {
-      setInputState("granted")
-      setWindowState("granted")
       return
     }
 
