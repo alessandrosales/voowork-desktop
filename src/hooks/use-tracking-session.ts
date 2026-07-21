@@ -225,8 +225,12 @@ export function useTrackingSession() {
       return
     }
 
+    let cancelled = false
     let unlisten: (() => void) | undefined
     listen("tracking-inactivity-changed", () => {
+      if (cancelled) {
+        return
+      }
       refreshTrackingStatus().catch(() => undefined)
     })
       .then((dispose) => {
@@ -235,6 +239,7 @@ export function useTrackingSession() {
       .catch(() => undefined)
 
     return () => {
+      cancelled = true
       unlisten?.()
     }
   }, [refreshTrackingStatus])

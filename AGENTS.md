@@ -59,6 +59,7 @@ React UI  ──invoke()──►  Rust Core  ──reqwest──►  API Rails 
 1. **Backend boundary** — Nunca alterar `voowork-backend/` (schema PostgreSQL, endpoints). Escopo local apenas.
 2. **SQLite local** — Novas tabelas/colunas só no SQLite do desktop; documentar em `docs/db.mermaid`.
 3. **Tauri dev CLI** — `npm run tauri dev` para desenvolvimento; frontend nunca chama HTTP direto.
+4. **Input permission** — Sem permissão de captura de input, o app opera em modo degradado (heartbeat com threshold de inatividade em vez de polling real). Não há "modo simulado" — a inatividade é desligada se não houver movimento de mouse por 2min.
 
 ---
 

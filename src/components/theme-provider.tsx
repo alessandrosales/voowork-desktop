@@ -2,7 +2,7 @@
 import * as React from "react"
 import { emit, listen } from "@tauri-apps/api/event"
 
-import { isTauriReady, trackedInvoke } from "@/lib/tauri"
+import { isTauriReady, trackedInvoke, waitForTauriReady } from "@/lib/tauri"
 
 type Theme = "dark" | "light"
 
@@ -24,16 +24,6 @@ function applyThemeClass(theme: Theme) {
   const root = document.documentElement
   root.classList.remove("light", "dark")
   root.classList.add(theme)
-}
-
-async function waitForTauriReady(maxAttempts = 30): Promise<boolean> {
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    if (isTauriReady()) {
-      return true
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  return false
 }
 
 export function ThemeProvider({

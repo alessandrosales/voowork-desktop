@@ -82,7 +82,10 @@ pub fn run() {
                 .join("voowork-desktop");
 
             let db = Database::open(app_data_dir.clone())?;
-            let device_name = std::env::var("HOSTNAME").unwrap_or_else(|_| "voowork-device".into());
+            let device_name = std::env::var("HOSTNAME")
+                .or_else(|_| std::env::var("COMPUTERNAME"))
+                .or_else(|_| std::env::var("hostname"))
+                .unwrap_or_else(|_| "voowork-device".into());
             DeviceKeys::ensure(db.conn(), &device_name)?;
 
             // Default settings

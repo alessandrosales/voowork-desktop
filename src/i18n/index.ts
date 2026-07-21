@@ -1,7 +1,7 @@
 import i18n from "i18next"
 import { initReactI18next } from "react-i18next"
 
-import { isTauriReady, trackedInvoke } from "@/lib/tauri"
+import { isTauriReady, trackedInvoke, waitForTauriReady } from "@/lib/tauri"
 
 import en from "./locales/en.json"
 import es from "./locales/es.json"
@@ -60,16 +60,6 @@ export function resolveLocale(input?: string | null): AppLocale | null {
 
 export function applyDocumentLocale(locale: AppLocale) {
   document.documentElement.lang = locale
-}
-
-async function waitForTauriReady(maxAttempts = 30): Promise<boolean> {
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    if (isTauriReady()) {
-      return true
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  return false
 }
 
 void i18n.use(initReactI18next).init({

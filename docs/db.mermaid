@@ -7,8 +7,6 @@ erDiagram
   device_metadata {
     text id PK
     text device_name
-    text public_key
-    text private_key_b64
     text registered_at
     text created_at
     text updated_at
@@ -25,8 +23,7 @@ erDiagram
     text entity_type "tracking | tracking_screenshot | tracking_peripheral_event | tracking_app | tracking_site | tracking_inactivity_period"
     text entity_id
     text payload_json
-    text signature
-    text status
+    text status "pending | sending | confirmed | failed | dead"
     integer attempts
     text last_attempt_at
     text next_retry_at
@@ -58,8 +55,8 @@ erDiagram
   trackings {
     text id PK
     text account_id
-    text project_id FK
-    text task_id FK
+    text project_id
+    text task_id
     text user_id
     text status "active | inactive"
     text device

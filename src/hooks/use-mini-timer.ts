@@ -61,8 +61,12 @@ export function useMiniTimer() {
       refresh().catch(logRefreshError)
     }, refreshMs)
 
+    let cancelled = false
     let unlisten: (() => void) | undefined
     listen("tracking-inactivity-changed", () => {
+      if (cancelled) {
+        return
+      }
       refresh().catch(logRefreshError)
     })
       .then((dispose) => {
@@ -71,6 +75,7 @@ export function useMiniTimer() {
       .catch(() => undefined)
 
     return () => {
+      cancelled = true
       window.clearInterval(interval)
       unlisten?.()
     }

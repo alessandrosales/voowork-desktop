@@ -11,19 +11,9 @@ use super::worker::{spawn_tracking_worker, TrackingWorkerContext};
 use super::TrackingManager;
 
 impl TrackingManager {
-    /// Public wrapper that acquires the state-transition guard before
-    /// delegating to the inner implementation.
-    #[allow(dead_code)]
-    pub(crate) fn finalize_active_tracking(
-        &self,
-        clear_inactivity_controller: bool,
-    ) -> AgentResult<()> {
-        let _guard = self.state_transition.lock();
-        self.finalize_active_tracking_inner(clear_inactivity_controller)
-    }
-
-    /// Inner implementation — no lock on `state_transition`; callers must
-    /// hold it if concurrency safety is required.
+    /// Finaliza a tracking ativa — captura screenshot final, fecha apps/sites,
+    /// enfileira PATCH com endedAt. Callers externos devem adquirir
+    /// `state_transition` antes se concorrência for relevante.
     pub(super) fn finalize_active_tracking_inner(
         &self,
         clear_inactivity_controller: bool,

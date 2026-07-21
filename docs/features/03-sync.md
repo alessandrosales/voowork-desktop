@@ -31,7 +31,7 @@ Worker assíncrono (Tokio) que processa a fila:
 | Tipo | Endpoint | Método | Observação |
 |------|----------|--------|------------|
 | `tracking` | `/api/v1/trackings` | POST / PATCH | POST no start, PATCH no stop |
-| `tracking_screenshot` | `/api/v1/trackings/:id/screenshots` | POST | Após upload do JPEG para S3 |
+| `tracking_screenshot` | `/api/v1/trackings/:id/screenshots` | POST | Após upload do WebP para S3 |
 | `tracking_peripheral_event` | `/api/v1/trackings/:id/peripheral_events` | POST | Mouse/keyboard counts |
 | `tracking_app` | `/api/v1/trackings/:id/apps` | POST | Quando o app é fechado |
 | `tracking_site` | `/api/v1/trackings/:id/sites` | POST | Quando o site é fechado |
@@ -42,7 +42,7 @@ Worker assíncrono (Tokio) que processa a fila:
 Fluxo em duas etapas:
 
 1. **Upload direto para S3/Garage** (`screenshot/storage.rs`)
-   - Lê o JPEG local
+   - Lê o WebP local
    - Envia para o bucket configurado via `S3_*`
    - Chave do objeto: `{screenshot_id}.{ext}`
    - Path remoto: `screenshots/{screenshot_id}.{ext}`
@@ -52,20 +52,20 @@ Fluxo em duas etapas:
    - Payload: `{ id, original_id, captured_at, path }`
    - API retorna o `path` que o desktop armazena em `path` e `remote_path`
 
-3. **Limpeza**: após sync bem-sucedido, o JPEG local é apagado
+3. **Limpeza**: após sync bem-sucedido, o WebP local é apagado
 
 ## Cache de projetos
 
 Após login, o desktop busca projetos e tarefas da API:
 - `GET /api/v1/auth/me` → projetos atribuídos (member) ou `GET /api/v1/projects` (admin)
 - `GET /api/v1/projects/:id/tasks` → tarefas de cada projeto
-- Cache com TTL de 5 minutos em `settings`
+- Cache com TTL de 15 minutos em `settings`
 - Reset automático se o `organization_id` mudar
 
 ## Retry e recuperação
 
-- Retry exponencial: 10s, 30s, 90s, 270s (máx. 3 tentativas)
-- Se o JPEG local ainda existir (`synced_at` nulo e arquivo presente), re-sync automático
+- Retry exponencial: `2^n` segundos (2s, 4s, 8s, 16s, 32s, 64s, 128s, 256s) cap 3600s, máx. 8 tentativas (dead-letter após)
+- Erros 4xx (exceto 401/403) são terminais — vão para dead-letter imediatamente
 - Trackings órfãos (crash) são finalizados no próximo boot
 
 ## Código
