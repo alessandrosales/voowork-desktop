@@ -57,5 +57,7 @@ incremental = true
 codegen-units = 1
 lto = true
 opt-level = "s"
-panic = "abort"
+# NÃO usar `panic = "abort"`: o código de captura nativa (xcap,
+# active-win-pos-rs) é envolvido em `catch_unwind` (error::guard_native) para
+# nunca derrubar o app. `panic = "abort"` anularia essa proteção.
 strip = true
