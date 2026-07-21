@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import { AppMeta } from "@/components/app-meta"
+import { SyncIndicator } from "@/components/sync-indicator"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -211,6 +212,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                   >
                     {appVersion}
                   </p>
+                  <SyncIndicator enabled />
                 </div>
               </section>
 
