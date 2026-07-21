@@ -122,6 +122,17 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                     .clone()
                     .map(|ctrl| ctrl.snapshot().phase)
                     .unwrap_or(TrackingInactivityPhase::Active);
+
+                // M17: skip screenshots during manual pause — TimeDoctor compat.
+                if matches!(
+                    screenshot_phase,
+                    TrackingInactivityPhase::ManualPaused
+                        | TrackingInactivityPhase::ManualWorkCheck
+                ) {
+                    period_start = chrono::Utc::now().to_rfc3339();
+                    continue;
+                }
+
                 let time_category = screenshot_time_category(screenshot_phase);
                 match capture_screenshot(
                     &db,
