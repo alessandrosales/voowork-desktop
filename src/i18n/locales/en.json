@@ -121,6 +121,13 @@
     "profileNote": "When selecting a profile, the manual threshold below is ignored. Select 'Custom' to set a manual value.",
     "profileCustomPlaceholder": "Custom"
   },
+  "sync": {
+    "ok": "Synced",
+    "pending_one": "{{count}} pending",
+    "pending_other": "{{count}} pending",
+    "failed_one": "{{count}} failed",
+    "failed_other": "{{count}} failed"
+  },
   "permission": {
     "inputMonitoring": {
       "title": "Permission required",

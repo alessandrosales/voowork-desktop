@@ -121,6 +121,13 @@
     "profileNote": "Al seleccionar un perfil, el límite manual se ignora. Selecciona 'Personalizado' para definir un valor manual.",
     "profileCustomPlaceholder": "Personalizado"
   },
+  "sync": {
+    "ok": "Sincronizado",
+    "pending_one": "{{count}} pendiente",
+    "pending_other": "{{count}} pendientes",
+    "failed_one": "{{count}} fallo",
+    "failed_other": "{{count}} fallos"
+  },
   "permission": {
     "inputMonitoring": {
       "title": "Permiso necesario",
