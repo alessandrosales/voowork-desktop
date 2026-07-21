@@ -55,7 +55,7 @@ impl TrackingManager {
 
             let clock_skew_detected = self.started_at_monotonic.lock().as_ref().is_some_and(|start| {
                 let monotonic_elapsed = start.elapsed().as_secs();
-                monotonic_elapsed.abs_diff(elapsed_seconds as u64) > 60
+                monotonic_elapsed.abs_diff(elapsed_seconds) > 60
             });
 
             return TrackingStatus {
