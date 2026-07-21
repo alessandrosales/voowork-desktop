@@ -26,7 +26,7 @@ export async function waitForTauriReady(maxAttempts = 30): Promise<boolean> {
 
 export async function trackedInvoke<T>(command: string, args?: InvokeArgs) {
   if (!isTauriReady()) {
-    throw new Error(`Tauri IPC indisponível para o comando: ${command}`)
+    throw new Error(`IPC not available for command: ${command}`)
   }
 
   return invoke<T>(command, args)

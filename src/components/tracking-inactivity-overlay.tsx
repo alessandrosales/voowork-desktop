@@ -54,7 +54,7 @@ function TrackingInactivityCountdownPanel({
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">{t("idle.autoPauseIn")}</span>
         <span className="font-mono text-2xl font-bold tabular-nums text-amber-500">
-          {remaining}s
+          {t("common.seconds", { count: remaining })}
         </span>
       </div>
       <div className="bg-muted h-2 overflow-hidden rounded-full">

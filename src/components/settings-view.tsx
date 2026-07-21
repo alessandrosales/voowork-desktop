@@ -317,7 +317,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                       id="inactivity-countdown"
                       className="text-muted-foreground text-sm tabular-nums"
                     >
-                      {countdownSecs}s
+                      {t("common.seconds", { count: countdownSecs })}
                     </p>
                   </div>
                 </div>

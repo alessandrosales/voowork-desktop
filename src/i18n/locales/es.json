@@ -2,7 +2,9 @@
   "common": {
     "loading": "Cargando...",
     "hello": "Hola",
-    "call": "Llamada"
+    "call": "Llamada",
+    "seconds": "{{count}}s",
+    "ipcError": "Error de comunicación con la app: {{command}}"
   },
   "auth": {
     "tagline": "Accede a tu cuenta Voowork.",

@@ -2,7 +2,9 @@
   "common": {
     "loading": "Carregando...",
     "hello": "Olá",
-    "call": "Chamada"
+    "call": "Chamada",
+    "seconds": "{{count}}s",
+    "ipcError": "Erro de comunicação com o app: {{command}}"
   },
   "auth": {
     "tagline": "Acesse sua conta Voowork.",
