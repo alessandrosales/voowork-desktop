@@ -42,12 +42,24 @@ impl Database {
     }
 
     fn migrate(&self) -> AgentResult<()> {
-        for sql in schema::MIGRATIONS {
-            self.conn.execute_batch(sql)?;
+        let version: i64 = self.conn
+            .pragma_query_value(None, "user_version", |row| row.get::<_, i64>(0))
+            .unwrap_or(0);
+
+        if version == 0 {
+            for sql in schema::MIGRATIONS {
+                self.conn.execute_batch(sql)?;
+            }
+            self.ensure_tracking_screenshots_runtime_columns()?;
+            self.migrate_sync_queue_entity_types()?;
+            self.migrate_legacy_idle_periods()?;
+            let current = schema::MIGRATIONS.len() as i64;
+            self.conn.pragma_update(None, "user_version", current)?;
+            log::info!("database migrated to version {current}");
+        } else {
+            // Future incremental migrations go here:
+            // if version < 5 { ... self.conn.pragma_update(None, "user_version", 5)?; }
         }
-        self.ensure_tracking_screenshots_runtime_columns()?;
-        self.migrate_sync_queue_entity_types()?;
-        self.migrate_legacy_idle_periods()?;
         Ok(())
     }
 
