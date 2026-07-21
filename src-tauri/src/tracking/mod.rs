@@ -157,13 +157,6 @@ impl TrackingManager {
             return Err(AgentError::Session("task is required".into()));
         }
 
-        self.buffer_eligible.store(true, Ordering::SeqCst);
-
-        let tracking_id = Uuid::new_v4().to_string();
-        let started_at = chrono::Utc::now().to_rfc3339();
-        let period_start = started_at.clone();
-        let buffer_seconds = self.activity_buffer.claim();
-
         let (account_id, user_id, device_name) = {
             let db = self.db.lock();
             let identity = read_session_identity(&db)?
@@ -171,6 +164,13 @@ impl TrackingManager {
             let device_name = DeviceKeys::device_name(db.conn())?;
             (identity.organization.id, identity.user.id, device_name)
         };
+
+        self.buffer_eligible.store(true, Ordering::SeqCst);
+
+        let tracking_id = Uuid::new_v4().to_string();
+        let started_at = chrono::Utc::now().to_rfc3339();
+        let period_start = started_at.clone();
+        let buffer_seconds = self.activity_buffer.claim();
 
         {
             let db = self.db.lock();
@@ -762,5 +762,35 @@ mod state_transition_tests {
         // Start again after stop should succeed
         let result = manager.start_tracking("proj-1".into(), "task-2".into());
         assert!(result.is_ok(), "start after stop should succeed: {:?}", result.err());
+    }
+
+    #[test]
+    fn start_without_auth_fails_without_claiming_buffer() {
+        // N1: Verifica se o buffer NÃO é reivindicado quando a auth falha.
+        // Cria TrackingManager sem dados de autenticação — `read_session_identity`
+        // deve falhar ANTES de buffer_eligible/claim serem chamados.
+        let dir = PathBuf::from(std::env::temp_dir()).join(format!("voowork-n1-test-{}", uuid::Uuid::new_v4()));
+        let db = {
+            let db = Database::open(dir.clone()).unwrap();
+            // Configura device metadata MAS NÃO auth
+            DeviceKeys::ensure(db.conn(), "test-device").unwrap();
+            db
+        };
+        let db = Arc::new(Mutex::new(db));
+        let screenshot = ScreenshotCapture::new(dir.join("screenshots")).unwrap();
+        let manager = Arc::new(TrackingManager::new(Arc::clone(&db), screenshot));
+
+        // Tentar start tracking sem auth deve falhar
+        let result = manager.start_tracking("proj-1".into(), "task-1".into());
+        assert!(result.is_err(), "start without auth should fail");
+
+        // Verificar que o buffer NÃO foi reivindicado (ainda é elegível)
+        // buffer_eligible ainda é false (nunca foi setado para true)
+        assert!(!manager.buffer_eligible.load(Ordering::SeqCst),
+            "buffer_eligible should remain false when auth fails");
+
+        // Verificar que o estado tracking_active_flag não foi setado
+        assert!(!manager.tracking_active_flag.load(Ordering::SeqCst),
+            "tracking_active_flag should remain false when auth fails");
     }
 }

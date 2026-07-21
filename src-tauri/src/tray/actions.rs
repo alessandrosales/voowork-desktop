@@ -97,6 +97,19 @@ pub fn handle_tray_quit(app: &AppHandle) {
     });
 }
 
+pub fn handle_tray_stop(app: &AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    if !state.tracking_manager.status().active {
+        return;
+    }
+    if let Err(err) = state.tracking_manager.stop_tracking() {
+        log::error!("tray stop tracking failed: {err}");
+    }
+    let _ = refresh_tray_ui_sync(app);
+}
+
 pub fn handle_tray_menu_event(app: &AppHandle, event_id: &str) {
     match event_id {
         "show" => show_main_window(app),
@@ -106,6 +119,7 @@ pub fn handle_tray_menu_event(app: &AppHandle, event_id: &str) {
             }
         }
         "toggle_tracking" => handle_toggle_tracking(app),
+        "stop" => handle_tray_stop(app),
         "logout" => handle_tray_logout(app),
         "quit" => handle_tray_quit(app),
         other => log::debug!("unhandled tray menu event: {other}"),

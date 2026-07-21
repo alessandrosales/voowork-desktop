@@ -27,7 +27,9 @@
     "task": "Tarefa",
     "noTask": "Sem tarefa",
     "noProjects": "Nenhum projeto atribuído. Peça ao gestor para liberar seu acesso ou sincronize após o login.",
-    "openWebPanel": "Abrir painel web"
+    "openWebPanel": "Abrir painel web",
+    "stop": "Encerrar",
+    "confirmStop": "Encerrar a sessão ativa? O timer será finalizado."
   },
   "workspace": {
     "title": "Workspace",
@@ -91,6 +93,33 @@
     "pt-BR": "Português",
     "en": "English",
     "es": "Español"
+  },
+  "settings": {
+    "title": "Configurações",
+    "sectionGeneral": "Geral",
+    "sectionScreenshots": "Captura de Tela",
+    "sectionInactivity": "Inatividade",
+    "sectionWidget": "Mini Widget",
+    "appVersion": "Versão do app",
+    "screenshotBlur": "Desfocar capturas de tela",
+    "screenshotBlurDesc": "Aplica desfoque nas screenshots para proteger informações sensíveis.",
+    "inactivityProfile": "Perfil de inatividade",
+    "inactivityProfileDesc": "Define o tempo de inatividade antes do timer pausar automaticamente.",
+    "profileStandard": "Padrão (2 min)",
+    "profileDataEntry": "Digitação intensa (3 min)",
+    "profileKnowledge": "Trabalho cognitivo (15 min)",
+    "profileMeetingHeavy": "Muitas reuniões (30 min)",
+    "profileCustom": "Personalizado",
+    "inactivityThreshold": "Limite de inatividade (minutos)",
+    "inactivityThresholdDesc": "Tempo sem atividade antes do aviso de inatividade. Só usado com perfil 'Personalizado'.",
+    "inactivityCountdown": "Tempo de confirmação",
+    "inactivityCountdownDesc": "Tempo para confirmar que está trabalhando antes de pausar.",
+    "miniWidgetEnabled": "Mostrar mini widget",
+    "miniWidgetEnabledDesc": "Exibe um timer compacto na tela quando o app principal é minimizado.",
+    "takesEffectNextTracking": "Essa alteração só terá efeito no próximo período de tracking.",
+    "minutesLabel": "minutos",
+    "profileNote": "Ao selecionar um perfil, o limite manual abaixo é ignorado. Selecione 'Personalizado' para definir um valor manual.",
+    "profileCustomPlaceholder": "Personalizado"
   },
   "permission": {
     "inputMonitoring": {

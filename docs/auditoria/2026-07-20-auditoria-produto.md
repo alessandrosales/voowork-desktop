@@ -15,6 +15,11 @@ O produto está **substancialmente implementado**: o núcleo de um time tracker 
 
 **Veredito (atualizado em 2026-07-22):** os 4 itens P0 e 11 dos ~12 itens P1 foram corrigidos na branch `fix/p0-p1-remediation-round`. O produto está **pronto para release** com ressalva de 1 item P1 pendente (A12 — métrica de teclado inflada, limitação da API macOS) e itens P2 não iniciados.
 
+**Rodadas adicionais (2026-07-22 em diante):**
+- **N1, N2, N3** — Correções de dados na análise de fluxo: buffer claim após auth, `ended_at` estimado no crash, períodos idle órfãos fechados no crash. ✅
+- **M10** — Tela de Settings implementada como página (desfoque, inatividade, mini widget). ✅
+- **Stop na UI** — Botão "Encerrar" adicionado na janela principal, mini widget e tray. ✅
+
 | Severidade | Quantidade | Tema dominante |
 |---|---|---|
 | 🔴 Crítica | 4 | Release/env, bug de cálculo, IPC quebrado silenciosamente |
@@ -73,7 +78,7 @@ Checklist das capacidades esperadas de uma alternativa ao TimeDoctor, verificada
 |---|---|---|
 | Seleção obrigatória de projeto + tarefa | ✅ Completo | Projeto validado; **tarefa não é validada** contra o projeto (`timer-app.tsx:153`, `projects/cache.rs:67-86`) — task obsoleta pode ser sincronizada (M7) |
 | Start / Pause / Resume | ✅ Completo | `tracking/mod.rs:124-318` — com races TOCTOU (A7) |
-| **Stop (encerrar sessão)** | ❌ **Ausente na UI** | `stop_tracking` existe no Rust e é usado internamente (logout/quit), mas **nenhum botão** na janela principal, mini widget ou tray permite encerrar a sessão. O hook `stopTracking` está morto (`use-tracking-session.ts:309-321`). Para um time tracker, "encerrar o dia/tarefa" exigir logout é um gap de produto — **confirmar se é decisão intencional** |
+| **Stop (encerrar sessão)** | ✅ **Implementado** | Botão "Encerrar" na janela principal (com confirmação), ícone `■` no mini widget, item "⏹ Encerrar" no tray menu — todos chamam `stop_tracking` existente. `stopTracking` reativado do hook `useTrackingSession`. |
 | Precisão do tempo exibido | ✅ Completo | `billable_seconds` monotonic (`tracking_inactivity/state.rs:545-563`), imune a mudanças de relógio; display com âncora local ±1s |
 | Tempo acumulado da tarefa (widget) | 🔴 **Quebrado** | Ver C1 |
 
@@ -113,7 +118,7 @@ Checklist das capacidades esperadas de uma alternativa ao TimeDoctor, verificada
 | Overlay na UI (5 fases) | ✅ Completo | `tracking-inactivity-overlay.tsx` — **não renderiza na workspace view** (M5) |
 | `meeting_exempt` (apps de reunião) | ⚠️ Bug | Ativar a isenção em `PausedInactivity`/`ResumePrompt` **destrói o período pendente** sem finalizar no DB — registro órfão (M3) |
 | Suspensão do SO (fechar tampa) | ⚠️ Invisível | `Instant` monotonic não avança durante sleep → noite inteira some sem pausa nem classificação; `ended_at − started_at` inclui o gap (M4) |
-| Recuperação de períodos idle abertos após crash | ❌ Ausente | `sync/finalize.rs` recupera trackings/apps/sites, mas não `tracking_inactivity_periods` com `status='paused'` — registros zumbis |
+| Recuperação de períodos idle abertos após crash | ✅ **Corrigido** | `close_open_children_in_db` agora também finaliza períodos `paused` → `abandoned` com `duration_seconds` calculado. |
 
 ### 3.7 Sync (offline-first)
 
@@ -125,7 +130,7 @@ Checklist das capacidades esperadas de uma alternativa ao TimeDoctor, verificada
 | Recuperação de itens em `sending` após crash | 🟠 **Ausente** | Ver A2 — itens presos para sempre |
 | Dead-letter para erros permanentes (4xx) | 🟠 **Ausente** | Ver A3 — retry infinito de erros que nunca vão passar |
 | Último período de atividade da sessão | 🟠 **Perdido** | Ver A4 |
-| Trackings órfãos (crash) finalizados no boot | ⚠️ Parcial | Funciona, mas `ended_at` = hora do **restart**, inflando a duração (`sync/finalize.rs:11-22`) |
+| Trackings órfãos (crash) finalizados no boot | ✅ **Corrigido** | `ended_at` agora é estimado a partir do último screenshot/peripheral_event. Fallback para `started_at` (duração 0) se não houver dados. |
 | Visibilidade de sync na UI | ❌ Ausente | `get_app_status`/`list_sync_queue` existem e **nunca são chamados**; offline/401/falhas são invisíveis ao usuário |
 | Flush no quit | ✅ Completo | Tray quit + `RunEvent::Exit` (dois caminhos divergentes — dívida) |
 | Poda de itens `confirmed` | ❌ Ausente | `sync_queue` cresce para sempre |
@@ -138,7 +143,7 @@ Checklist das capacidades esperadas de uma alternativa ao TimeDoctor, verificada
 | Tema claro/escuro cross-window | ✅ Completo | `theme-provider.tsx` |
 | Tray (status, pause/resume, quit) | ✅ Completo | `tray/` — refresh 1s com queries pesadas **na main thread** (M12) |
 | Mini-timer flutuante | 🔴 **Bug** | Ver C1 |
-| Tela de settings | ❌ **Ausente** | Superfície preparada (whitelist de settings, commands) sem nenhuma UI |
+| Tela de settings | ✅ **Implementada** | Página `SettingsView` com seções: Geral (versão), Captura de Tela (desfoque), Inatividade (perfil + threshold), Mini Widget (toggle). Acessível via ProfileMenu → "Configurações". |
 | Histórico/dashboard local | ❌ Ausente (por escopo?) | Restrição de escopo diz que dashboard fica no web — **mas** 17 commands de listagem/dashboard existem registrados sem nenhum chamador (superfície morta ou feature abandonada: decidir) |
 | Banner de permissões (macOS/Wayland) | ⚠️ Parcial | Listener de evento que **nunca é emitido** + checagem one-shot (A9); `get_tracking_capabilities` é stub que retorna tudo `true` |
 
@@ -279,7 +284,7 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 | M7 | `timer-app.tsx:153`, `commands/tracking.rs:25-29` | Task selecionada não é validada contra o projeto — task obsoleta pode ser sincronizada (risco de 422 ∞ via A3) | ✅ |
 | M8 | `profile-menu.tsx:63-71` | Logout sem confirmação durante tracking ativo (encerra a sessão de tempo) | ✅ |
 | M9 | `auth/client.rs:174-177`, `auth/commands.rs:120-127` | `validate_auth_session` sobrescreve o nome da organização com `""` | ✅ |
-| M10 | `frontend_settings.rs:16-29` | Settings prontas (blur, qualidade, thresholds, intervalo, mini widget) **sem nenhuma tela** — features inatingíveis | ❌ |
+| M10 | `frontend_settings.rs:16-29`, `components/settings-view.tsx` | Settings prontas (blur, thresholds, profile, mini widget) agora com **página SettingsView** acessível via ProfileMenu. Qualidade e intervalo removidos (admin define no webapp). | ✅ |
 | M11 | `db/dashboard.rs:7-60` | `avg_activity_confidence` hardcoded `1.0` (TODO documentado); "hoje" agora usa `chrono::Local`; `hours_today_seconds` subtrai períodos de inatividade | ✅ |
 | M12 | `tray/refresh.rs:61-89`, `tracking/status_report.rs:26-44`, `db/task_time.rs:48-98` | Status 3×/s (main window, mini-timer, tray) faz **scan completo + parse RFC3339 de todas as screenshots** do tracking; tray roda isso **na main thread** — degrada sessões longas | ❌ |
 | M13 | `commands/tracking.rs:194-201`, `commands/dashboard.rs`, `tray/actions.rs:70` | Captura de screenshot (xcap + encode) e queries N+1 (`db/trackings.rs:105-127`, ~200 queries por listagem) executadas **na main thread** — UI congela por centenas de ms | ❌ |
@@ -331,7 +336,7 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 
 ### 9.1 Boot e restauração de sessão
 `main.tsx` → `validate_auth_session` → `GET /auth/me` → hidrata `TrackingManager` → `finalize_orphaned_trackings` → worker de sync inicia.
-**Falhas:** ~~buffer restaurado e imediatamente descartado (A5)~~ ✅; ~~itens `sending` não recuperados (A2)~~ ✅; períodos idle órfãos não recuperados (3.6) ❌; ~~timeout 10s da UI pode derrubar sessão válida (A10)~~ ✅; órfãos finalizados com `ended_at` = hora do restart, inflando duração (3.7) ❌.
+**Falhas:** ~~buffer restaurado e imediatamente descartado (A5)~~ ✅; ~~itens `sending` não recuperados (A2)~~ ✅; ~~períodos idle órfãos não recuperados (N3)~~ ✅; ~~timeout 10s da UI pode derrubar sessão válida (A10)~~ ✅; ~~órfãos finalizados com `ended_at` = hora do restart, inflando duração (N2)~~ ✅.
 
 ### 9.2 Login / logout
 Login → token (keyring + fallback SQLite) → cache de projetos → UI no timer. Logout → para tracking → limpa sessão → evento cross-window.
@@ -339,7 +344,7 @@ Login → token (keyring + fallback SQLite) → cache de projetos → UI no time
 
 ### 9.3 Start → tracking → pause/resume → stop
 UI valida seleção → `start_tracking` (claim do buffer, INSERT + enqueue POST) → worker 1s: atividade (200ms thread), foco (15s), screenshot (~300s) → pause congela billing → resume → stop (screenshot final + drain + enqueue PATCH).
-**Falhas:** ~~TOCTOU e `unwrap` com race (A7)~~ ✅; claim do buffer antes da validação de auth (perde buffer em start sem sessão) ❌; ~~race worker↔finalize (A8)~~ ✅; task agora validada contra projeto (M7 ✅); **stop não existe na UI** (3.2) ❌; pause manual continua capturando (M17) ❌; último período de atividade não sincroniza (A1) ❌.
+**Falhas:** ~~TOCTOU e `unwrap` com race (A7)~~ ✅; ~~claim do buffer antes da validação de auth (perde buffer em start sem sessão) (N1)~~ ✅; ~~race worker↔finalize (A8)~~ ✅; task agora validada contra projeto (M7 ✅); ~~**stop não existe na UI**~~ ✅ (botão na main, mini widget e tray); pause manual continua capturando (M17) ❌; último período de atividade não sincroniza (A1) — ver A1 corrigido acima.
 
 ### 9.4 Pipeline de screenshot + eventos de atividade
 `capture_screenshot`: drain bucket → score → captura xcap (todos os monitores, stitch) → WebP → SQLite + disco → flush peripheral events → enqueue (screenshot + eventos) → worker sync: upload S3 → POST metadados → purge local.
@@ -347,7 +352,7 @@ UI valida seleção → `start_tracking` (claim do buffer, INSERT + enqueue POST
 
 ### 9.5 Inatividade
 Controller 1s: `Active → Warning → Countdown(60s) → PausedInactivity` → input → `ResumePrompt` → classificar (billable/descarte) ou pular.
-**Falhas:** ~~agregação de `discarded_seconds` errada (C4)~~ ✅; ~~`meeting_exempt` destrói período pendente (M3)~~ ✅; ~~suspensão do SO invisível (M4)~~ ✅; ~~heartbeat infinito sem permissão (A12)~~ ✅; ~~overlay não renderiza na workspace view (M5)~~ ✅; períodos órfãos no crash (3.6) ❌.
+**Falhas:** ~~agregação de `discarded_seconds` errada (C4)~~ ✅; ~~`meeting_exempt` destrói período pendente (M3)~~ ✅; ~~suspensão do SO invisível (M4)~~ ✅; ~~heartbeat infinito sem permissão (A12)~~ ✅; ~~overlay não renderiza na workspace view (M5)~~ ✅; ~~períodos órfãos no crash (N3)~~ ✅.
 
 ### 9.6 Sync outbox + shutdown
 Enqueue (SQLite) → worker a cada 2–5s busca 10 `pending`/`failed` → `sending` → HTTP → `confirmed`/`failed` (backoff 2^n cap 3600). Quit: dois caminhos (tray: captura+finaliza, flush em thread, `_exit`; `RunEvent::Exit`: flush na main thread até 30s).
@@ -355,7 +360,7 @@ Enqueue (SQLite) → worker a cada 2–5s busca 10 `pending`/`failed` → `sendi
 
 ### 9.7 Recuperação de crash
 Boot finaliza trackings/apps/sites órfãos e segue.
-**Falhas:** `ended_at` = restart (infla duração) ❌; períodos idle órfãos ❌; ~~itens `sending` presos~~ ✅; ~~buffer descartado~~ ✅ — **duas das quatro perdas silenciosas foram corrigidas.**
+**Falhas:** ~~`ended_at` = restart (infla duração) (N2)~~ ✅; ~~períodos idle órfãos (N3)~~ ✅; ~~itens `sending` presos~~ ✅; ~~buffer descartado~~ ✅ — **todas as quatro perdas silenciosas foram corrigidas.**
 
 ---
 
@@ -395,12 +400,12 @@ Boot finaliza trackings/apps/sites órfãos e segue.
 | **M15** — purge local screenshot sem remote_path | ✅ |
 | **M16** — idle periods não enfileirados no outbox | ✅ |
 | A12(a) — métrica de teclado inflada (limitação macOS) | ⚠️ |
-| Expor **stop na UI** (decisão de produto) | ❌ |
+| Expor **stop na UI** (decisão de produto) | ✅ |
 | Expor **indicador de sync** (decisão de produto) | ❌ |
 | A12(b) — heartbeat infinito (corrigido) | ✅ |
 
 ### P2 — dívida técnica e gargalos de desenvolvimento
-Ver seção 11. Em resumo: testes de frontend, geração de tipos IPC (ts-rs/specta), tela de settings, poda/limpeza (sync_queue, cache, disco), docs sync (JPEG→WebP, retry, TTL), remoção de superfície morta (17 commands, componentes, deps), CI mínimo (typecheck + clippy + testes). *Nenhum item P2 foi iniciado.*
+Ver seção 11. Em resumo: testes de frontend, geração de tipos IPC (ts-rs/specta), poda/limpeza (sync_queue, cache, disco), docs sync (JPEG→WebP, retry, TTL), remoção de superfície morta (17 commands, componentes, deps), CI mínimo (typecheck + clippy + testes). *Nenhum item P2 foi iniciado (M10 era P1, não P2).*
 
 ---
 
@@ -468,4 +473,7 @@ Pelo backend-boundary, estas hipóteses **não** foram confirmadas e exigem insp
 **Atualizações:**  
 **2026-07-21** — 1ª rodada: C1, C2, C3, C4, A2, A3, A4, A5, A6, A7, A8, M3, M4, M5, M7 corrigidos.  
 **2026-07-22** — 2ª rodada: A9 (re-check de permissão no foco), A12(b) (heartbeat usa threshold de inatividade), M6 (evicção de cache), M8 (confirmação de logout), M9 (org name preservado).  
-**2026-07-22** — 3ª rodada: M11 (dashboard: local time, subtrai idle, confiança documentada), M15 (purga local screenshot sem remote_path), M16 (idle periods não enfileirados no outbox).
+**2026-07-22** — 3ª rodada: M11 (dashboard: local time, subtrai idle, confiança documentada), M15 (purga local screenshot sem remote_path), M16 (idle periods não enfileirados no outbox).  
+**2026-07-22 (4ª rodada):** N1 (buffer claim após auth), N2 (ended_at estimado no crash), N3 (períodos idle órfãos no crash).  
+**2026-07-22 (5ª rodada):** M10 (tela de Settings como página com desfoque, inatividade, mini widget).  
+**2026-07-22 (6ª rodada):** Stop na UI (main window, mini widget, tray).

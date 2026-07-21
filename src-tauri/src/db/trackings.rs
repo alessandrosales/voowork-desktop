@@ -170,6 +170,36 @@ impl Database {
         Ok(Some((ended - started).num_seconds().max(0) as u64))
     }
 
+    /// Estima o `ended_at` real de um tracking usando o timestamp mais recente
+    /// entre screenshots e peripheral_events. Se não houver dados, retorna `None`
+    /// (neste caso, o chamador deve usar `started_at` como fallback seguro).
+    pub fn estimate_tracking_ended_at(&self, tracking_id: &str) -> AgentResult<Option<String>> {
+        let result: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT MAX(ts) FROM (
+                    SELECT MAX(captured_at) as ts FROM tracking_screenshots WHERE tracking_id = ?1
+                    UNION ALL
+                    SELECT MAX(ended_at) as ts FROM tracking_peripheral_events WHERE tracking_id = ?1
+                )",
+                params![tracking_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(result)
+    }
+
+    /// Retorna o `started_at` de um tracking (fallback para `estimate_tracking_ended_at`).
+    pub fn get_tracking_started_at(&self, tracking_id: &str) -> AgentResult<String> {
+        self.conn
+            .query_row(
+                "SELECT started_at FROM trackings WHERE id = ?1",
+                params![tracking_id],
+                |row| row.get(0),
+            )
+            .map_err(crate::error::AgentError::from)
+    }
+
     pub fn get_tracking_site(&self, site_id: &str) -> AgentResult<crate::models::TrackingSiteRow> {
         self.conn.query_row(
             "SELECT id, tracking_id, address, started_at, ended_at

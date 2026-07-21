@@ -1,6 +1,6 @@
 use crate::app_state::AppState;
 use crate::db::frontend_settings::ensure_frontend_setting_key;
-use crate::error::AgentResult;
+use crate::error::{AgentError, AgentResult};
 use crate::locale::LOCALE_SETTING_KEY;
 use crate::models::{TrackingInactivityConfig, TrackingCapabilities, TrackingConfig};
 use crate::screenshot::{normalize_jpeg_quality, SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY};
@@ -10,6 +10,15 @@ use crate::tracking_inactivity::{
 use crate::tray::{
     refresh_tray_menu, schedule_tray_refresh, SETTING_SELECTED_PROJECT_ID, SETTING_SELECTED_TASK_ID,
 };
+use crate::windows::{self, SETTING_MINI_WIDGET_ENABLED};
+
+/// Perfis de inatividade válidos.
+pub(crate) const VALID_INACTIVITY_PROFILES: &[&str] = &[
+    "standard",
+    "data_entry",
+    "knowledge",
+    "meeting_heavy",
+];
 
 #[tauri::command]
 pub fn get_setting(state: tauri::State<'_, AppState>, key: String) -> AgentResult<Option<String>> {
@@ -31,6 +40,18 @@ pub fn set_setting(
     let apply_locale = key == LOCALE_SETTING_KEY;
     let apply_tray_selection =
         key == SETTING_SELECTED_PROJECT_ID || key == SETTING_SELECTED_TASK_ID;
+    let apply_mini_widget = key == SETTING_MINI_WIDGET_ENABLED;
+
+    // Validar perfil de inatividade
+    if key == SETTING_INACTIVITY_PROFILE
+        && !VALID_INACTIVITY_PROFILES.contains(&value.as_str())
+    {
+        return Err(AgentError::Other(format!(
+            "invalid inactivity profile: {value}. Valid values: {}",
+            VALID_INACTIVITY_PROFILES.join(", ")
+        )));
+    }
+
     {
         let db = state.db.lock();
         db.set_setting(&key, &value)?;
@@ -53,7 +74,18 @@ pub fn set_setting(
         }
     }
     if apply_tray_selection {
-        schedule_tray_refresh(app);
+        schedule_tray_refresh(app.clone());
+    }
+    if apply_mini_widget {
+        let visible = value == "true" || value == "1";
+        if visible {
+            // show_mini_timer verifica autenticação internamente via should_show_mini_widget
+            if let Err(err) = windows::show_mini_timer(&app) {
+                log::warn!("failed to show mini widget: {err}");
+            }
+        } else {
+            windows::hide_mini_timer(&app);
+        }
     }
     Ok(())
 }
