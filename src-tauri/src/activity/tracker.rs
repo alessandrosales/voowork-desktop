@@ -142,7 +142,11 @@ impl ActivityTracker {
                     bucket_guard.automation_flags = analysis.flags;
                 }
 
-                // Verifica tempo desde último input (teclado + mouse)
+                // A12(a): no macOS, seconds_since_last_input usa
+                // kCGAnyInputEventType (teclado + mouse), inflando
+                // keyboard_events. Ideal seria kCGEventKeyboardEventType
+                // para métrica separada, mas a API atual não distingue.
+                // Pendente: implementar para macOS quando disponível.
                 let secs = platform::seconds_since_last_input();
 
                 if secs.is_finite() && secs < (HARDWARE_LISTENER_POLL_MS as f64 / 1000.0) * 2.0 {
