@@ -6,7 +6,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { useTrackingSession } from "@/hooks/use-tracking-session"
 import { LanguageToggle } from "@/components/language-toggle"
 import { ProfileMenu } from "@/components/profile-menu"
-import { SyncIndicator } from "@/components/sync-indicator"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { TrackingInactivityOverlay } from "@/components/tracking-inactivity-overlay"
 import { BufferAlert } from "@/components/buffer-alert"
@@ -376,7 +375,6 @@ export function TimerApp() {
             ) : null}
             <LanguageToggle />
             <ThemeToggle />
-            <SyncIndicator enabled={auth.isAuthenticated} />
             <ProfileMenu
               auth={auth}
               loading={loading || authLoading}
