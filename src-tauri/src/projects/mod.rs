@@ -9,7 +9,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 pub use api::ProjectsClient;
-pub use cache::ensure_can_start_tracking;
+pub use cache::{ensure_can_start_tracking, ensure_task_belongs_to_project};
 
 pub fn invalidate_project_cache_if_org_changed(
     db: &Database,
