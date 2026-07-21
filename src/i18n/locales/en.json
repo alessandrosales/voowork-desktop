@@ -27,7 +27,9 @@
     "task": "Task",
     "noTask": "No task",
     "noProjects": "No assigned projects. Ask your manager for access or sync after signing in.",
-    "openWebPanel": "Open web dashboard"
+    "openWebPanel": "Open web dashboard",
+    "stop": "Stop",
+    "confirmStop": "Stop the active session? The timer will be finalized."
   },
   "workspace": {
     "title": "Workspace",
@@ -91,6 +93,33 @@
     "pt-BR": "Português",
     "en": "English",
     "es": "Español"
+  },
+  "settings": {
+    "title": "Settings",
+    "sectionGeneral": "General",
+    "sectionScreenshots": "Screenshots",
+    "sectionInactivity": "Inactivity",
+    "sectionWidget": "Mini Widget",
+    "appVersion": "App version",
+    "screenshotBlur": "Blur screenshots",
+    "screenshotBlurDesc": "Applies blur to screenshots to protect sensitive information.",
+    "inactivityProfile": "Inactivity profile",
+    "inactivityProfileDesc": "Sets how long before the timer pauses due to inactivity.",
+    "profileStandard": "Standard (2 min)",
+    "profileDataEntry": "Data entry (3 min)",
+    "profileKnowledge": "Knowledge work (15 min)",
+    "profileMeetingHeavy": "Heavy meetings (30 min)",
+    "profileCustom": "Custom",
+    "inactivityThreshold": "Inactivity threshold (minutes)",
+    "inactivityThresholdDesc": "Time without activity before the inactivity warning. Only used with 'Custom' profile.",
+    "inactivityCountdown": "Confirmation time",
+    "inactivityCountdownDesc": "Time to confirm you're working before pausing.",
+    "miniWidgetEnabled": "Show mini widget",
+    "miniWidgetEnabledDesc": "Shows a compact timer on screen when the main window is minimized.",
+    "takesEffectNextTracking": "This change will only take effect on the next tracking session.",
+    "minutesLabel": "minutes",
+    "profileNote": "When selecting a profile, the manual threshold below is ignored. Select 'Custom' to set a manual value.",
+    "profileCustomPlaceholder": "Custom"
   },
   "permission": {
     "inputMonitoring": {

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react"
-import { GripVertical, PauseIcon, PlayIcon } from "lucide-react"
+import { GripVertical, PauseIcon, PlayIcon, SquareIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { isTauri } from "@tauri-apps/api/core"
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window"
@@ -32,6 +32,7 @@ export function MiniTimerWidget() {
     loading,
     pauseTracking,
     resumeTracking,
+    stopTracking,
     startLastTracking,
     openMainWindow,
   } = useMiniTimer()
@@ -108,6 +109,12 @@ export function MiniTimerWidget() {
     pauseTracking().catch(() => undefined)
   }
 
+  const handleStop = () => {
+    if (loading) return
+    if (!window.confirm(t("timer.confirmStop"))) return
+    stopTracking().catch(console.error)
+  }
+
   const openMain = () => {
     openMainWindow().catch(() => undefined)
   }
@@ -156,6 +163,21 @@ export function MiniTimerWidget() {
             <PauseIcon className="size-3 fill-current" />
           )}
         </Button>
+
+        {isRunning ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            data-no-drag
+            className="voowork-mini-no-drag size-4 shrink-0 rounded-full cursor-pointer"
+            disabled={loading}
+            aria-label={t("timer.stop")}
+            onClick={handleStop}
+          >
+            <SquareIcon className="size-3 fill-current" />
+          </Button>
+        ) : null}
 
         <button
           type="button"

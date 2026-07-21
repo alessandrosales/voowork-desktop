@@ -3,6 +3,42 @@
 
   "default_agent": "desktop-agent-orchestrator",
 
+  "permission": {
+    "read": "allow",
+    "edit": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "task": "allow",
+    "skill": "allow",
+
+    "webfetch": "ask",
+    "websearch": "ask",
+
+    "bash": {
+      "*": "allow",
+
+      "ls *": "allow",
+      "cat *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "wc *": "allow",
+      "find *": "allow",
+      "grep *": "allow",
+      "rg *": "allow",
+
+      "npm *": "allow",
+      "npx *": "allow",
+      "cargo *": "allow",
+
+      "git *": "allow",
+      "git commit *": "ask",
+      "git push *": "deny",
+      "rm *": "deny",
+      "sudo *": "deny"
+    }
+  },
+
   "instructions": [
     "AGENTS.md",
     ".opencode/rules/local-config-isolation.md",
@@ -64,7 +100,7 @@
   "mcp": {
     "voowork_production_pg_write": {
       "type": "local",
-      "command": ["npx", "-y", "mcp-postgres-full-access", "{env:VOOWORK_MCP_PG_WRITE_URL}"],
+      "command": ["npx", "-y", "mcp-postgres-full-access", "postgresql://postgres:postgres@localhost:5434/voowork_db"],
       "enabled": true,
       "env": {
         "TRANSACTION_TIMEOUT_MS": "60000",

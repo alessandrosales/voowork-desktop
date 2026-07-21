@@ -27,7 +27,9 @@
     "task": "Tarea",
     "noTask": "Sin tarea",
     "noProjects": "No hay proyectos asignados. Pide acceso a tu gestor o sincroniza después de iniciar sesión.",
-    "openWebPanel": "Abrir panel web"
+    "openWebPanel": "Abrir panel web",
+    "stop": "Detener",
+    "confirmStop": "¿Detener la sesión activa? El temporizador se finalizará."
   },
   "workspace": {
     "title": "Espacio de trabajo",
@@ -91,6 +93,33 @@
     "pt-BR": "Português",
     "en": "English",
     "es": "Español"
+  },
+  "settings": {
+    "title": "Configuración",
+    "sectionGeneral": "General",
+    "sectionScreenshots": "Captura de Pantalla",
+    "sectionInactivity": "Inactividad",
+    "sectionWidget": "Mini Widget",
+    "appVersion": "Versión de la app",
+    "screenshotBlur": "Desenfocar capturas de pantalla",
+    "screenshotBlurDesc": "Aplica desenfoque a las capturas para proteger información sensible.",
+    "inactivityProfile": "Perfil de inactividad",
+    "inactivityProfileDesc": "Define el tiempo de inactividad antes de pausar el temporizador.",
+    "profileStandard": "Estándar (2 min)",
+    "profileDataEntry": "Escritura intensa (3 min)",
+    "profileKnowledge": "Trabajo cognitivo (15 min)",
+    "profileMeetingHeavy": "Muchas reuniones (30 min)",
+    "profileCustom": "Personalizado",
+    "inactivityThreshold": "Límite de inatividad (minutos)",
+    "inactivityThresholdDesc": "Tiempo sin actividad antes del aviso. Solo se usa con perfil 'Personalizado'.",
+    "inactivityCountdown": "Tiempo de confirmación",
+    "inactivityCountdownDesc": "Tiempo para confirmar que estás trabajando antes de pausar.",
+    "miniWidgetEnabled": "Mostrar mini widget",
+    "miniWidgetEnabledDesc": "Muestra un temporizador compacto cuando la ventana principal está minimizada.",
+    "takesEffectNextTracking": "Este cambio solo tendrá efecto en el próximo período de tracking.",
+    "minutesLabel": "minutos",
+    "profileNote": "Al seleccionar un perfil, el límite manual se ignora. Selecciona 'Personalizado' para definir un valor manual.",
+    "profileCustomPlaceholder": "Personalizado"
   },
   "permission": {
     "inputMonitoring": {

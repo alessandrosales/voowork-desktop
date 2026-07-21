@@ -1,4 +1,4 @@
-import { LogOutIcon, User2Icon } from "lucide-react"
+import { LogOutIcon, SettingsIcon, User2Icon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import type { AuthState } from "@/hooks/use-auth"
@@ -18,11 +18,13 @@ export function ProfileMenu({
   auth,
   loading,
   onLogout,
+  onOpenSettings,
   className,
 }: Readonly<{
   auth: AuthState
   loading?: boolean
   onLogout: () => Promise<void>
+  onOpenSettings?: () => void
   className?: string
 }>) {
   const { t } = useTranslation()
@@ -60,6 +62,16 @@ export function ProfileMenu({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          {onOpenSettings && (
+            <DropdownMenuItem
+              onClick={() => {
+                onOpenSettings()
+              }}
+            >
+              <SettingsIcon />
+              {t("settings.title")}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             variant="destructive"
             onClick={() => {

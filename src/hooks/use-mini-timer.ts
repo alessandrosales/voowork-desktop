@@ -139,6 +139,16 @@ export function useMiniTimer() {
     }
   }, [refresh])
 
+  const stopTracking = useCallback(async () => {
+    setLoading(true)
+    try {
+      await trackedInvoke("stop_tracking")
+      await refresh()
+    } finally {
+      setLoading(false)
+    }
+  }, [refresh])
+
   const startLastTracking = useCallback(async () => {
     setLoading(true)
     try {
@@ -173,6 +183,7 @@ export function useMiniTimer() {
     loading,
     pauseTracking,
     resumeTracking,
+    stopTracking,
     startLastTracking,
     openMainWindow,
     refresh,
