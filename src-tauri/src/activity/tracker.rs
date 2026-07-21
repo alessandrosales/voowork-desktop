@@ -1,6 +1,7 @@
 use super::automation::SampleBuffer;
 use super::constants::{HARDWARE_LISTENER_POLL_MS, MAX_MOUSE_POSITIONS, SAMPLE_BUFFER_CAPACITY};
 use super::platform;
+use crate::tracking_inactivity::DEFAULT_INACTIVITY_THRESHOLD_MINUTES;
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -155,18 +156,21 @@ impl ActivityTracker {
                     bucket_guard.confidence = analysis.confidence;
                     bucket_guard.automation_flags = analysis.flags;
                 } else if !secs.is_finite() || secs > 1_000_000_000.0 {
-                    // No macOS 14+, sem permissão de Input Monitoring,
-                    // CGEventSourceSecondsSinceLastEventType() retorna
-                    // um valor sentinela (f64::MAX, kCGNever = 1e20,
-                    // ou f64::INFINITY). A API não consegue determinar
-                    // o tempo desde o último input — NÃO podemos assumir
-                    // que o usuário está inativo.
+                    // A API do SO não consegue determinar o tempo desde
+                    // o último input (ex: macOS sem permissão de Input
+                    // Monitoring retorna f64::MAX/kCGNever). Neste caso
+                    // não podemos detectar teclado — apenas mouse.
                     //
-                    // Usamos um heartbeat para evitar falsos alertas de
-                    // inatividade enquanto mouse polling não detecta
-                    // movimento (ex: usuário só digitando).
+                    // Usamos um heartbeat curto (threshold de inatividade)
+                    // para dar ao usuário que só digita um buffer antes
+                    // de entrar em inatividade, sem fingir input para
+                    // sempre. Após o heartbeat, a inatividade dispara
+                    // normalmente pela falta de movimento do mouse.
                     let elapsed = last_input_at.lock().elapsed();
-                    if elapsed >= Duration::from_secs(15) {
+                    let heartbeat_secs = Duration::from_secs(
+                        DEFAULT_INACTIVITY_THRESHOLD_MINUTES * 60,
+                    );
+                    if elapsed >= heartbeat_secs {
                         Self::touch_input(&last_input_at, &last_input_wall_at);
                     }
                 }

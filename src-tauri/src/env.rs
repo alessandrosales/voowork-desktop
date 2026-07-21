@@ -49,15 +49,16 @@ fn load_from_files() {
 /// Release: restaura variáveis compiladas no binário pelo build.rs
 fn load_from_compile_time() {
     restore_env!("API_URL");
+    restore_env!("FRONTEND_URL");
     restore_env!("S3_ENDPOINT");
     restore_env!("S3_REGION");
     restore_env!("S3_ACCESS_KEY");
     restore_env!("S3_SECRET_KEY");
     restore_env!("S3_BUCKET");
-    restore_env!("VITE_WEB_URL");
     restore_env!("VITE_APP_VERSION");
+    // SCREENSHOT_INTERVAL_SECS não é restaurada em release por design:
+    // o build.rs só a injeta em dev, deixando a setting do SQLite prevalecer.
     restore_env!("SCREENSHOT_INTERVAL_SECS");
-    restore_env!("WEB_PANEL_URL");
 
     // Fallback: tenta carregar vars do sistema
     let _ = dotenvy::dotenv();

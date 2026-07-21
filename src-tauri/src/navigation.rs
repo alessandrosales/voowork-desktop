@@ -7,13 +7,18 @@ const DEFAULT_WEB_PANEL_URL_DEV: &str = "http://localhost:5173";
 const DEFAULT_WEB_PANEL_URL_PROD: &str = "https://app.voowork.com";
 
 pub fn configured_web_panel_url() -> String {
-    std::env::var(ENV_WEB_PANEL_URL).unwrap_or_else(|_| {
-        if cfg!(debug_assertions) {
-            DEFAULT_WEB_PANEL_URL_DEV.to_string()
-        } else {
-            DEFAULT_WEB_PANEL_URL_PROD.to_string()
-        }
-    })
+    std::env::var(ENV_WEB_PANEL_URL)
+        .or_else(|_| std::env::var("VITE_WEB_URL"))
+        .map(|v| v.trim().to_string())
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| {
+            if cfg!(debug_assertions) {
+                DEFAULT_WEB_PANEL_URL_DEV.to_string()
+            } else {
+                DEFAULT_WEB_PANEL_URL_PROD.to_string()
+            }
+        })
 }
 
 pub fn open_allowed_url<R: tauri::Runtime>(

@@ -51,6 +51,19 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
     tracking.inactivity.phase,
   ])
 
+  /**
+   * Desfaz o congelamento otimista feito por freezeDisplayElapsed() quando o
+   * pause falha (A11). Sem isso, o relógio ficaria travado num valor obsoleto
+   * enquanto o tracking continua correndo no backend.
+   */
+  const cancelPauseFreeze = useCallback(() => {
+    pauseIntentRef.current = false
+    frozenElapsedRef.current = null
+    if (tracking.active && BILLABLE_PHASES.has(tracking.inactivity.phase)) {
+      setElapsedAnchor({ seconds: tracking.elapsedSeconds, at: Date.now() })
+    }
+  }, [tracking.active, tracking.elapsedSeconds, tracking.inactivity.phase])
+
   useEffect(() => {
     if (!tracking.active) {
       pauseIntentRef.current = false
@@ -132,5 +145,5 @@ export function useDisplayElapsed(tracking: TrackingStatus) {
     tracking.inactivity.phase,
   ])
 
-  return { displayElapsedSeconds, freezeDisplayElapsed }
+  return { displayElapsedSeconds, freezeDisplayElapsed, cancelPauseFreeze }
 }

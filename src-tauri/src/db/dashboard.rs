@@ -5,8 +5,12 @@ use rusqlite::params;
 
 impl Database {
     pub fn dashboard_summary(&self) -> AgentResult<DashboardSummary> {
-        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        // Usar hora local para que "hoje" corresponda ao fuso do usuário.
+        // Em UTC, "hoje" vira às 21h em GMT-3 (M11).
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
+        // Soma wall-clock dos trackings completados hoje, menos os
+        // períodos de inatividade (para alinhar com o timer na UI).
         let hours_today_seconds: u64 = self
             .conn
             .query_row(
@@ -16,6 +20,12 @@ impl Database {
                         THEN CAST((julianday(ended_at) - julianday(started_at)) * 86400 AS INTEGER)
                         ELSE 0
                     END
+                ), 0) - COALESCE((
+                    SELECT COALESCE(SUM(COALESCE(duration_seconds, 0)), 0)
+                    FROM tracking_inactivity_periods ip
+                    INNER JOIN trackings t2 ON t2.id = ip.tracking_id
+                    WHERE substr(t2.started_at, 1, 10) = ?1
+                      AND ip.status IN ('resumed', 'classified', 'discarded')
                 ), 0)
                  FROM trackings
                  WHERE substr(started_at, 1, 10) = ?1 AND status = 'inactive'",
@@ -30,6 +40,10 @@ impl Database {
             |row| row.get(0),
         )?;
 
+        // O score de confiança da atividade (anti-automação) não é
+        // persistido no SQLite — só existe em memória no ActivityTracker.
+        // Idealmente seria amostrado periodicamente no DB. Por enquanto
+        // usamos 1.0 (sem penalidade) como fallback seguro.
         let avg_activity_confidence: f64 = 1.0;
 
         let (sync_pending, _, sync_confirmed) = self.sync_queue_stats()?;

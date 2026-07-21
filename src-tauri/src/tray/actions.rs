@@ -166,6 +166,7 @@ fn start_last_session(state: &AppState) -> AgentResult<()> {
     {
         let db = state.db.lock();
         ensure_can_start_tracking(&db, &project_id)?;
+        crate::projects::ensure_task_belongs_to_project(&db, &project_id, &task_id)?;
     }
 
     state

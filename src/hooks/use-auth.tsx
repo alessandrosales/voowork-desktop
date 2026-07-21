@@ -48,7 +48,11 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 10_000
+// Safety net acima do timeout HTTP do Rust (30s) para nunca travar a tela de
+// boot. NÃO usamos um timeout de corrida menor: o Rust já decide (mantém a
+// sessão em falha de rede/timeout, só desloga em 401/403). Um timeout menor
+// aqui derrubava sessões válidas em redes lentas (A10).
+const AUTH_BOOTSTRAP_SAFETY_TIMEOUT_MS = 45_000
 
 type RawAuthState = AuthState & {
   is_authenticated?: boolean
@@ -63,22 +67,9 @@ function normalizeAuthState(state: RawAuthState): AuthState {
 }
 
 function requestAuthValidation(): Promise<AuthState> {
-  const promise = trackedInvoke<RawAuthState>("validate_auth_session").then(
+  return trackedInvoke<RawAuthState>("validate_auth_session").then(
     normalizeAuthState
   )
-  return promise
-}
-
-function validateAuthSessionWithTimeout(): Promise<AuthState> {
-  return Promise.race([
-    requestAuthValidation(),
-    new Promise<AuthState>((_, reject) => {
-      window.setTimeout(
-        () => reject(new Error("Tempo esgotado ao validar sessão.")),
-        AUTH_BOOTSTRAP_TIMEOUT_MS
-      )
-    }),
-  ])
 }
 
 /** Safety net: force initializing to false after a generous timeout. */
@@ -86,7 +77,7 @@ function useInitializingSafetyTimeout(setInitializing: (v: boolean) => void) {
   useEffect(() => {
     const timer = window.setTimeout(
       () => setInitializing(false),
-      AUTH_BOOTSTRAP_TIMEOUT_MS + 5_000,
+      AUTH_BOOTSTRAP_SAFETY_TIMEOUT_MS,
     )
     return () => window.clearTimeout(timer)
   }, [setInitializing])
@@ -172,7 +163,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           return
         }
 
-        const validated = await validateAuthSessionWithTimeout()
+        const validated = await requestAuthValidation()
         if (!cancelled) {
           setAuth(validated)
           setError(null)

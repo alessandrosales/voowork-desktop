@@ -13,7 +13,8 @@
   },
   "profile": {
     "menuLabel": "Menu do perfil",
-    "logout": "Sair"
+    "logout": "Sair",
+    "confirmLogoutWhileTracking": "O timer está ativo e será encerrado. Deseja realmente sair?"
   },
   "timer": {
     "clickToStart": "Selecione projeto e tarefa para iniciar",

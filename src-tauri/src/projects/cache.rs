@@ -85,7 +85,130 @@ pub fn ensure_can_start_tracking(db: &Database, project_id: &str) -> AgentResult
     Ok(())
 }
 
+/// Validates that `task_id` belongs to `project_id` in the local cache.
+///
+/// If the project has zero cached tasks (cache not yet loaded), validation
+/// passes by default — we can't validate what we don't have, and the
+/// backend will enforce referential integrity on sync.
+pub fn ensure_task_belongs_to_project(
+    db: &Database,
+    project_id: &str,
+    task_id: &str,
+) -> AgentResult<()> {
+    if !requires_populated_project_cache(db)? {
+        return Ok(());
+    }
+
+    // Check if the project has any tasks cached at all
+    let task_count: i64 = db
+        .conn()
+        .query_row(
+            "SELECT COUNT(*) FROM tasks WHERE project_id = ?1",
+            rusqlite::params![project_id],
+            |row| row.get(0),
+        )
+        .map_err(AgentError::from)?;
+
+    // If no tasks are cached for this project, we're offline-first: allow
+    // the tracking to proceed (backend will validate on sync).
+    if task_count == 0 {
+        return Ok(());
+    }
+
+    // Check if the specific task exists under this project
+    match db.task_name(project_id, task_id)? {
+        Some(_) => Ok(()),
+        None => Err(AgentError::Session(format!(
+            "tarefa '{task_id}' não pertence ao projeto '{project_id}'"
+        ))),
+    }
+}
+
 pub fn organization_id_from_session(db: &Database) -> AgentResult<String> {
     read_organization_id(db)?
         .ok_or_else(|| AgentError::Auth("usuário não autenticado".into()))
+}
+
+#[cfg(test)]
+mod task_validation_tests {
+    use super::*;
+    use crate::auth::KEY_AUTHENTICATED;
+    use crate::db::Database;
+    use std::path::PathBuf;
+
+    fn test_db() -> Database {
+        let dir = PathBuf::from(std::env::temp_dir())
+            .join(format!("voowork-m7-test-{}", uuid::Uuid::new_v4()));
+        let db = Database::open(dir).unwrap();
+        // Mark as authenticated so requires_populated_project_cache passes
+        db.set_setting(KEY_AUTHENTICATED, "true").unwrap();
+        db
+    }
+
+    fn insert_project(db: &Database, id: &str, name: &str) {
+        let now = chrono::Utc::now().to_rfc3339();
+        db.conn()
+            .execute(
+                "INSERT INTO projects (id, account_id, name, featured, created_at, updated_at)
+                 VALUES (?1, 'acc-1', ?2, 0, ?3, ?3)",
+                rusqlite::params![id, name, now],
+            )
+            .unwrap();
+    }
+
+    fn insert_task(db: &Database, project_id: &str, id: &str, name: &str) {
+        let now = chrono::Utc::now().to_rfc3339();
+        db.conn()
+            .execute(
+                "INSERT INTO tasks (id, account_id, project_id, name, position, created_at, updated_at)
+                 VALUES (?1, 'acc-1', ?2, ?3, 0, ?4, ?4)",
+                rusqlite::params![id, project_id, name, now],
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn ensure_task_belongs_to_project_accepts_valid() {
+        let db = test_db();
+        insert_project(&db, "proj-1", "Project 1");
+        insert_task(&db, "proj-1", "task-1", "Task 1");
+
+        let result = ensure_task_belongs_to_project(&db, "proj-1", "task-1");
+        assert!(result.is_ok(), "valid task should be accepted");
+    }
+
+    #[test]
+    fn ensure_task_belongs_to_project_rejects_foreign() {
+        let db = test_db();
+        insert_project(&db, "proj-1", "Project 1");
+        insert_task(&db, "proj-1", "task-1", "Task 1");
+        insert_project(&db, "proj-2", "Project 2");
+        insert_task(&db, "proj-2", "task-2", "Task 2");
+
+        // task-2 belongs to proj-2, not proj-1
+        let result = ensure_task_belongs_to_project(&db, "proj-1", "task-2");
+        assert!(result.is_err(), "foreign task should be rejected");
+    }
+
+    #[test]
+    fn ensure_task_belongs_to_project_rejects_unknown() {
+        let db = test_db();
+        insert_project(&db, "proj-1", "Project 1");
+        insert_task(&db, "proj-1", "task-1", "Task 1");
+
+        // task-999 doesn't exist
+        let result = ensure_task_belongs_to_project(&db, "proj-1", "task-999");
+        assert!(result.is_err(), "unknown task should be rejected");
+    }
+
+    #[test]
+    fn ensure_task_belongs_to_project_allows_empty_cache() {
+        let db = test_db();
+        insert_project(&db, "proj-1", "Project 1");
+        // No tasks inserted for proj-1
+
+        // Empty task cache: allow (offline-first pragmatic)
+        let result = ensure_task_belongs_to_project(&db, "proj-1", "any-task");
+        assert!(result.is_ok(), "empty task cache should allow any task");
+    }
 }

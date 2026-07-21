@@ -20,6 +20,11 @@ pub async fn start_tracking(
     {
         let db = state.db.lock();
         crate::projects::ensure_can_start_tracking(&db, &request.project_id)?;
+        crate::projects::ensure_task_belongs_to_project(
+            &db,
+            &request.project_id,
+            &request.task_id,
+        )?;
     }
 
     if request.task_id.trim().is_empty() {
@@ -57,6 +62,11 @@ pub async fn restart_tracking(
     {
         let db = state.db.lock();
         crate::projects::ensure_can_start_tracking(&db, &request.project_id)?;
+        crate::projects::ensure_task_belongs_to_project(
+            &db,
+            &request.project_id,
+            &request.task_id,
+        )?;
     }
 
     if request.task_id.trim().is_empty() {

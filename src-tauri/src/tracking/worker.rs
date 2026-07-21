@@ -132,11 +132,15 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                     &period_start,
                     time_category,
                 ) {
-                    Ok(record) => {
-                        period_start = record.captured_at.clone();
+                    Ok(outcome) => {
+                        let period_end = outcome.period_end;
+                        period_start = period_end.clone();
                         if let Some(active_tracking) = active.lock().as_mut() {
-                            active_tracking.last_screenshot_at = Some(record.captured_at.clone());
-                            active_tracking.current_period_start = record.captured_at;
+                            active_tracking.current_period_start = period_end;
+                            if let Some(ref record) = outcome.screenshot {
+                                active_tracking.last_screenshot_at =
+                                    Some(record.captured_at.clone());
+                            }
                         }
                     }
                     Err(err) => log::warn!("screenshot capture failed: {err}"),

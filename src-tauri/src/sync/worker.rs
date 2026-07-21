@@ -4,7 +4,7 @@ use crate::error::AgentError;
 use crate::sync::{
     constants::{
         BACKEND_SYNC_ENABLED, ENTITY_TRACKING_SCREENSHOT, EVENT_AUTH_SESSION_EXPIRED, HTTP_TIMEOUT_SECS,
-        PENDING_BATCH_SIZE, WORKER_IDLE_AFTER_SESSION_REVOKED_SECS,
+        MAX_SYNC_ATTEMPTS, PENDING_BATCH_SIZE, WORKER_IDLE_AFTER_SESSION_REVOKED_SECS,
         WORKER_IDLE_BETWEEN_BATCHES_SECS, WORKER_IDLE_EMPTY_QUEUE_SECS, WORKER_IDLE_NO_TOKEN_SECS,
     },
     fetch_pending_batch, mark_tracking_screenshot_synced, tracking_screenshot_file_path, send_sync_item,
@@ -20,6 +20,10 @@ use tokio::time::sleep;
 pub struct SyncWorker {
     running: Arc<AtomicBool>,
     api_base_url: String,
+    /// Callback invoked when the sync worker detects a 401 (session revoked).
+    /// Stored as `Option` inside a `Mutex` so it can be set after construction
+    /// and accessed by both `start` and `flush_blocking`.
+    on_session_revoked: parking_lot::Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 impl SyncWorker {
@@ -27,7 +31,13 @@ impl SyncWorker {
         Self {
             running: Arc::new(AtomicBool::new(false)),
             api_base_url,
+            on_session_revoked: parking_lot::Mutex::new(None),
         }
+    }
+
+    /// Set the callback to invoke when a 401 is received during sync.
+    pub fn set_on_session_revoked(&self, cb: Arc<dyn Fn() + Send + Sync>) {
+        *self.on_session_revoked.lock() = Some(cb);
     }
 
     pub fn is_enabled(&self) -> bool {
@@ -50,6 +60,8 @@ impl SyncWorker {
                 .expect("failed to build sync http client");
 
             while worker.running.load(Ordering::SeqCst) {
+                let on_session_revoked = worker.on_session_revoked.lock().clone();
+
                 let batch = load_pending_batch(&db);
                 let Some(access_token) = batch.access_token else {
                     sleep(Duration::from_secs(WORKER_IDLE_NO_TOKEN_SECS)).await;
@@ -67,6 +79,7 @@ impl SyncWorker {
                     &access_token,
                     &db,
                     &app,
+                    &on_session_revoked,
                     batch.items,
                 )
                 .await;
@@ -105,6 +118,7 @@ impl SyncWorker {
         };
 
         let api_base_url = self.api_base_url.clone();
+        let on_session_revoked = self.on_session_revoked.lock().clone();
 
         rt.block_on(async move {
             let http_client = match reqwest::Client::builder()
@@ -148,6 +162,7 @@ impl SyncWorker {
                     &batch.access_token.unwrap(),
                     &db,
                     &app,
+                    &on_session_revoked,
                     batch.items,
                 )
                 .await;
@@ -185,6 +200,7 @@ async fn process_batch(
     access_token: &str,
     db: &Arc<Mutex<Database>>,
     app: &AppHandle,
+    on_session_revoked: &Option<Arc<dyn Fn() + Send + Sync>>,
     items: Vec<PendingSyncItem>,
 ) -> bool {
     let mut session_revoked = false;
@@ -204,7 +220,7 @@ async fn process_batch(
         )
         .await;
 
-        session_revoked = apply_sync_result(db, app, &item, result);
+        session_revoked = apply_sync_result(db, app, &item, result, on_session_revoked);
     }
 
     session_revoked
@@ -253,6 +269,7 @@ fn apply_sync_result(
     app: &AppHandle,
     item: &PendingSyncItem,
     result: Result<Option<String>, AgentError>,
+    on_session_revoked: &Option<Arc<dyn Fn() + Send + Sync>>,
 ) -> bool {
     let db_guard = db.lock();
     match result {
@@ -271,16 +288,31 @@ fn apply_sync_result(
             log::info!("sync stopped: {message}");
             let _ = invalidate_session(&db_guard);
             let _ = app.emit(EVENT_AUTH_SESSION_EXPIRED, ());
+            // Dispatch the session-revoked callback (stop tracking, flag auth false)
+            if let Some(cb) = on_session_revoked.clone() {
+                tauri::async_runtime::spawn_blocking(move || {
+                    cb();
+                });
+            }
             true
         }
+        Err(AgentError::SyncTerminal(message)) => {
+            log::warn!("sync item {} permanently rejected (dead-letter): {message}", item.id);
+            let _ = SyncOutbox::mark_dead(db_guard.conn(), &item.id, &message);
+            false
+        }
         Err(err) => {
-            log::warn!("sync item {} failed: {err}", item.id);
-            let _ = SyncOutbox::mark_failed(
-                db_guard.conn(),
-                &item.id,
-                &err.to_string(),
-                item.attempts + 1,
-            );
+            let attempts = item.attempts + 1;
+            if attempts >= MAX_SYNC_ATTEMPTS {
+                log::warn!(
+                    "sync item {} exceeded max attempts ({attempts}) → dead-letter: {err}",
+                    item.id
+                );
+                let _ = SyncOutbox::mark_dead(db_guard.conn(), &item.id, &err.to_string());
+            } else {
+                log::warn!("sync item {} failed (attempt {attempts}): {err}", item.id);
+                let _ = SyncOutbox::mark_failed(db_guard.conn(), &item.id, &err.to_string(), attempts);
+            }
             false
         }
     }
