@@ -13,12 +13,14 @@ O produto está **substancialmente implementado**: o núcleo de um time tracker 
 
 **Porém existiam 4 defeitos críticos e ~12 altos que afetam produção**, incluindo: um widget que exibe `00:00:00` permanentemente quando parado, uma configuração de release que pode apontar a API para `localhost`, perda sistemática do último período de atividade de cada sessão para a API, itens de sync perdidos em crash, e retry infinito de erros permanentes.
 
-**Veredito (atualizado em 2026-07-22):** os 4 itens P0 e 11 dos ~12 itens P1 foram corrigidos na branch `fix/p0-p1-remediation-round`. O produto está **pronto para release** com ressalva de 1 item P1 pendente (A12 — métrica de teclado inflada, limitação da API macOS) e itens P2 não iniciados.
+**Veredito (atualizado em 2026-07-22):** os 4 itens P0 e 11 dos ~12 itens P1 foram corrigidos na branch `fix/p0-p1-remediation-round`.  
+**Veredito (2026-07-22, 7ª rodada):** todos os itens P1 restantes (M12, M13, M14, M17, M18, A12a) foram corrigidos na branch `fix/auditoria-pendentes`. O produto está **pronto para release** com ressalva de itens P2 não iniciados.
 
 **Rodadas adicionais (2026-07-22 em diante):**
 - **N1, N2, N3** — Correções de dados na análise de fluxo: buffer claim após auth, `ended_at` estimado no crash, períodos idle órfãos fechados no crash. ✅
 - **M10** — Tela de Settings implementada como página (desfoque, inatividade, mini widget). ✅
 - **Stop na UI** — Botão "Encerrar" adicionado na janela principal, mini widget e tray. ✅
+- **M12, M13, M14, M17, M18, A12(a)** — Sétima rodada na branch `fix/auditoria-pendentes`: contadores em memória (M12), commands pesados fora da main thread (M13), flush no exit em background (M14), screenshots durante pausa manual (M17), token SQLite documentado (M18), métrica de teclado documentada (A12a). ✅
 
 | Severidade | Quantidade | Tema dominante |
 |---|---|---|
@@ -286,13 +288,13 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 | M9 | `auth/client.rs:174-177`, `auth/commands.rs:120-127` | `validate_auth_session` sobrescreve o nome da organização com `""` | ✅ |
 | M10 | `frontend_settings.rs:16-29`, `components/settings-view.tsx` | Settings prontas (blur, thresholds, profile, mini widget) agora com **página SettingsView** acessível via ProfileMenu. Qualidade e intervalo removidos (admin define no webapp). | ✅ |
 | M11 | `db/dashboard.rs:7-60` | `avg_activity_confidence` hardcoded `1.0` (TODO documentado); "hoje" agora usa `chrono::Local`; `hours_today_seconds` subtrai períodos de inatividade | ✅ |
-| M12 | `tray/refresh.rs:61-89`, `tracking/status_report.rs:26-44`, `db/task_time.rs:48-98` | Status 3×/s (main window, mini-timer, tray) faz **scan completo + parse RFC3339 de todas as screenshots** do tracking; tray roda isso **na main thread** — degrada sessões longas | ❌ |
-| M13 | `commands/tracking.rs:194-201`, `commands/dashboard.rs`, `tray/actions.rs:70` | Captura de screenshot (xcap + encode) e queries N+1 (`db/trackings.rs:105-127`, ~200 queries por listagem) executadas **na main thread** — UI congela por centenas de ms | ❌ |
-| M14 | `lib.rs:236-243`, `sync/worker.rs:90-160` | `flush_blocking` bloqueia a main thread até 30s no exit; request in-flight de 60s estoura o deadline; worker em batch concorre com o flush (janela de duplo envio — coberta pela idempotência UUID, **se** o backend a honrar) | ❌ |
+| M12 | `tray/refresh.rs:61-89`, `tracking/status_report.rs:26-44`, `db/task_time.rs:48-98` | Status 3×/s (main window, mini-timer, tray) faz **scan completo + parse RFC3339 de todas as screenshots** do tracking; tray roda isso **na main thread** — degrada sessões longas | ✅ |
+| M13 | `commands/tracking.rs:194-201`, `commands/dashboard.rs`, `tray/actions.rs:70` | Captura de screenshot (xcap + encode) e queries N+1 (`db/trackings.rs:105-127`, ~200 queries por listagem) executadas **na main thread** — UI congela por centenas de ms | ✅ |
+| M14 | `lib.rs:236-243`, `sync/worker.rs:90-160` | `flush_blocking` bloqueia a main thread até 30s no exit; request in-flight de 60s estoura o deadline; worker em batch concorre com o flush (janela de duplo envio — coberta pela idempotência UUID, **se** o backend a honrar) | ✅ |
 | M15 | `sync/outbox.rs:100-131` | Se a API não retornar `path` (inclui duplicado), o arquivo local nunca é purgado | ✅ |
 | M16 | `sync/api.rs:51-52`, `tracking_inactivity/persistence.rs:68,104,131,148` | Períodos de inatividade são enfileirados no outbox para serem imediatamente pulados ("local only") — churn desnecessário da fila | ✅ |
-| M17 | `tracking/worker.rs:118-144` | Pausa **manual** continua capturando screenshots + atividade (categoria `inactivity`). Spec confirma para pausa por inatividade, mas é **omissa para pausa manual** — decisão de privacidade/produto a explicitar (TimeDoctor para de capturar na pausa) | ❌ |
-| M18 | `auth/store.rs:125, 217-232` | Token JWT em texto claro no SQLite (fallback permanente, nunca limpo) — risco aceitável para threat model local, mas deve ser decisão documentada | ❌ |
+| M17 | `tracking/worker.rs:118-144` | Pausa **manual** continua capturando screenshots + atividade (categoria `inactivity`). Spec confirma para pausa por inatividade, mas é **omissa para pausa manual** — decisão de privacidade/produto a explicitar (TimeDoctor para de capturar na pausa) | ✅ |
+| M18 | `auth/store.rs:125, 217-232` | Token JWT em texto claro no SQLite (fallback permanente, nunca limpo) — risco aceitável para threat model local, mas deve ser decisão documentada | ✅ |
 
 ---
 
@@ -344,11 +346,11 @@ Login → token (keyring + fallback SQLite) → cache de projetos → UI no time
 
 ### 9.3 Start → tracking → pause/resume → stop
 UI valida seleção → `start_tracking` (claim do buffer, INSERT + enqueue POST) → worker 1s: atividade (200ms thread), foco (15s), screenshot (~300s) → pause congela billing → resume → stop (screenshot final + drain + enqueue PATCH).
-**Falhas:** ~~TOCTOU e `unwrap` com race (A7)~~ ✅; ~~claim do buffer antes da validação de auth (perde buffer em start sem sessão) (N1)~~ ✅; ~~race worker↔finalize (A8)~~ ✅; task agora validada contra projeto (M7 ✅); ~~**stop não existe na UI**~~ ✅ (botão na main, mini widget e tray); pause manual continua capturando (M17) ❌; último período de atividade não sincroniza (A1) — ver A1 corrigido acima.
+**Falhas:** ~~TOCTOU e `unwrap` com race (A7)~~ ✅; ~~claim do buffer antes da validação de auth (perde buffer em start sem sessão) (N1)~~ ✅; ~~race worker↔finalize (A8)~~ ✅; task agora validada contra projeto (M7 ✅); ~~**stop não existe na UI**~~ ✅ (botão na main, mini widget e tray); ~~pause manual continua capturando (M17)~~ ✅; último período de atividade não sincroniza (A1) — ver A1 corrigido acima.
 
 ### 9.4 Pipeline de screenshot + eventos de atividade
 `capture_screenshot`: drain bucket → score → captura xcap (todos os monitores, stitch) → WebP → SQLite + disco → flush peripheral events → enqueue (screenshot + eventos) → worker sync: upload S3 → POST metadados → purge local.
-**Falhas:** ~~eventos morrem com falha de captura (A4)~~ ✅; ~~drain final sem enqueue (A1)~~ ✅; chave S3 raiz vs `path` com prefixo — consistente com a doc, mas depende do webapp *(verificar)*; ~~cache sem eviction (M6)~~ ✅; purge ausente quando `path` não retorna (M15) ❌; captura na main thread em alguns commands (M13) ❌. **Divergência:** docs dizem JPEG e "monitor da janela ativa"; código é WebP e todos os monitores.
+**Falhas:** ~~eventos morrem com falha de captura (A4)~~ ✅; ~~drain final sem enqueue (A1)~~ ✅; chave S3 raiz vs `path` com prefixo — consistente com a doc, mas depende do webapp *(verificar)*; ~~cache sem eviction (M6)~~ ✅; purge ausente quando `path` não retorna (M15) ❌; ~~captura na main thread em alguns commands (M13)~~ ✅. **Divergência:** docs dizem JPEG e "monitor da janela ativa"; código é WebP e todos os monitores.
 
 ### 9.5 Inatividade
 Controller 1s: `Active → Warning → Countdown(60s) → PausedInactivity` → input → `ResumePrompt` → classificar (billable/descarte) ou pular.
@@ -356,7 +358,7 @@ Controller 1s: `Active → Warning → Countdown(60s) → PausedInactivity` → 
 
 ### 9.6 Sync outbox + shutdown
 Enqueue (SQLite) → worker a cada 2–5s busca 10 `pending`/`failed` → `sending` → HTTP → `confirmed`/`failed` (backoff 2^n cap 3600). Quit: dois caminhos (tray: captura+finaliza, flush em thread, `_exit`; `RunEvent::Exit`: flush na main thread até 30s).
-**Falhas:** A1 ❌; ~~A2~~ ✅; ~~A3~~ ✅ (dead-letter + `MAX_SYNC_ATTEMPTS=8`); M14 ❌; M15 ❌; M16 ❌; retry diverge da spec; classificação de erro por string matching no body (`sync/api.rs:292-308`) — frágil a mudanças de mensagem no Rails *(gap de contrato — backend fora de escopo)*.
+**Falhas:** A1 ❌; ~~A2~~ ✅; ~~A3~~ ✅ (dead-letter + `MAX_SYNC_ATTEMPTS=8`); ~~M14~~ ✅; M15 ❌; ~~M16~~ ✅; retry diverge da spec; classificação de erro por string matching no body (`sync/api.rs:292-308`) — frágil a mudanças de mensagem no Rails *(gap de contrato — backend fora de escopo)*.
 
 ### 9.7 Recuperação de crash
 Boot finaliza trackings/apps/sites órfãos e segue.
@@ -397,11 +399,15 @@ Boot finaliza trackings/apps/sites órfãos e segue.
 | **M8** — confirmar logout durante tracking | ✅ |
 | **M9** — org name preservado no validate_auth_session | ✅ |
 | **M11** — dashboard: local time, subtrai idle, TODO confidence | ✅ |
+| **M12** — scan completo de screenshots 3×/s (contadores em memória) | ✅ |
+| **M13** — screenshot + DB na main thread (async + spawn_blocking) | ✅ |
+| **M14** — flush_blocking na main thread no exit (background thread) | ✅ |
 | **M15** — purge local screenshot sem remote_path | ✅ |
 | **M16** — idle periods não enfileirados no outbox | ✅ |
-| A12(a) — métrica de teclado inflada (limitação macOS) | ⚠️ |
+| **M17** — pausa manual capturando screenshots (skip durante manual) | ✅ |
+| **M18** — token JWT em texto claro (decisão documentada) | ✅ |
+| A12(a) — métrica de teclado inflada (documentada no código) | ✅ |
 | Expor **stop na UI** (decisão de produto) | ✅ |
-| Expor **indicador de sync** (decisão de produto) | ❌ |
 | A12(b) — heartbeat infinito (corrigido) | ✅ |
 
 ### P2 — dívida técnica e gargalos de desenvolvimento
@@ -477,3 +483,4 @@ Pelo backend-boundary, estas hipóteses **não** foram confirmadas e exigem insp
 **2026-07-22 (4ª rodada):** N1 (buffer claim após auth), N2 (ended_at estimado no crash), N3 (períodos idle órfãos no crash).  
 **2026-07-22 (5ª rodada):** M10 (tela de Settings como página com desfoque, inatividade, mini widget).  
 **2026-07-22 (6ª rodada):** Stop na UI (main window, mini widget, tray).
+**2026-07-22 (7ª rodada):** M12 (contadores em memória), M13 (commands off main thread), M14 (flush background no exit), M17 (skip screenshots na pausa manual), M18 (token SQLite documentado), A12(a) (métrica de teclado documentada).
