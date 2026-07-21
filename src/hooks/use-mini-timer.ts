@@ -51,7 +51,7 @@ export function useMiniTimer() {
   const [taskElapsedSeconds, setTaskElapsedSeconds] = useState(0)
   const [loading, setLoading] = useState(false)
 
-  const { displayElapsedSeconds, freezeDisplayElapsed } =
+  const { displayElapsedSeconds, freezeDisplayElapsed, cancelPauseFreeze } =
     useDisplayElapsed(tracking)
 
   const refresh = useCallback(async () => {
@@ -65,7 +65,7 @@ export function useMiniTimer() {
     const taskId = status.taskId
     if (!status.active && taskId) {
       const seconds = await trackedInvoke<number>("get_task_elapsed_seconds", {
-        task_id: taskId,
+        taskId,
       })
       setTaskElapsedSeconds(seconds)
       return
@@ -77,7 +77,7 @@ export function useMiniTimer() {
       })
       if (lastTaskId) {
         const seconds = await trackedInvoke<number>("get_task_elapsed_seconds", {
-          task_id: lastTaskId,
+          taskId: lastTaskId,
         })
         setTaskElapsedSeconds(seconds)
       } else {
@@ -90,14 +90,18 @@ export function useMiniTimer() {
   const refreshMs = tracking.active ? ACTIVE_POLL_MS : IDLE_POLL_MS
 
   useEffect(() => {
-    refresh().catch(() => undefined)
+    const logRefreshError = (err: unknown) => {
+      console.error("mini-timer refresh failed", err)
+    }
+
+    refresh().catch(logRefreshError)
     const interval = window.setInterval(() => {
-      refresh().catch(() => undefined)
+      refresh().catch(logRefreshError)
     }, refreshMs)
 
     let unlisten: (() => void) | undefined
     listen("tracking-inactivity-changed", () => {
-      refresh().catch(() => undefined)
+      refresh().catch(logRefreshError)
     })
       .then((dispose) => {
         unlisten = dispose
@@ -112,14 +116,18 @@ export function useMiniTimer() {
 
   const pauseTracking = useCallback(async () => {
     setLoading(true)
+    freezeDisplayElapsed()
     try {
-      freezeDisplayElapsed()
       await trackedInvoke("pause_tracking")
       await refresh()
+    } catch (err) {
+      // Pause falhou: desfaz o freeze otimista para o relógio não travar (A11).
+      cancelPauseFreeze()
+      console.error("mini-timer pause failed", err)
     } finally {
       setLoading(false)
     }
-  }, [freezeDisplayElapsed, refresh])
+  }, [freezeDisplayElapsed, cancelPauseFreeze, refresh])
 
   const resumeTracking = useCallback(async () => {
     setLoading(true)

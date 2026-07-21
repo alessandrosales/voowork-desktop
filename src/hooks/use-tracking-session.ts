@@ -116,7 +116,7 @@ export function useTrackingSession() {
   const [taskElapsedSeconds, setTaskElapsedSeconds] = useState(0)
   const taskElapsedReqId = useRef(0)
 
-  const { displayElapsedSeconds, freezeDisplayElapsed } =
+  const { displayElapsedSeconds, freezeDisplayElapsed, cancelPauseFreeze } =
     useDisplayElapsed(tracking)
 
   const refreshTaskElapsed = useCallback(async (taskId: string | null) => {
@@ -287,10 +287,19 @@ export function useTrackingSession() {
         tracking.taskId && tracking.taskId !== "__none__" ? tracking.taskId : null
       )
     } catch (err) {
+      // Pause falhou: o tracking segue correndo, então desfazemos o freeze
+      // otimista para o relógio não travar num valor obsoleto (A11).
+      cancelPauseFreeze()
       setError(err instanceof Error ? err.message : String(err))
       throw err
     }
-  }, [freezeDisplayElapsed, refreshTrackingStatus, refreshTaskElapsed, tracking.taskId])
+  }, [
+    freezeDisplayElapsed,
+    cancelPauseFreeze,
+    refreshTrackingStatus,
+    refreshTaskElapsed,
+    tracking.taskId,
+  ])
 
   const resumeTracking = useCallback(async () => {
     setLoading(true)
