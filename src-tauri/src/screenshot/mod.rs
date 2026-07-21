@@ -2,7 +2,6 @@ use crate::crypto::DeviceKeys;
 use crate::error::{guard_native, AgentError, AgentResult};
 use chrono::{SecondsFormat, Utc};
 use rusqlite::{params, Connection};
-use std::io::Cursor;
 use std::path::PathBuf;
 use uuid::Uuid;
 
@@ -18,7 +17,7 @@ pub use process::normalize_jpeg_quality;
 pub use remote::resolve_screenshot_image;
 pub use storage::upload_capture;
 
-use process::process_capture_bytes;
+use process::process_raw_rgba;
 use std::path::Path;
 
 /// Captura todos os monitores conectados e combina em uma única imagem
@@ -88,7 +87,7 @@ impl ScreenshotCapture {
         let file_path = self.output_dir.join(&file_name);
 
         let (stored_width, stored_height, stored_bytes) =
-            process_capture_bytes(image_bytes, self.blur_enabled, self.jpeg_quality)?;
+            process_raw_rgba(image_bytes, width, height, self.blur_enabled, self.jpeg_quality)?;
         let width = if stored_width > 0 { stored_width } else { width };
         let height = if stored_height > 0 { stored_height } else { height };
 
@@ -221,13 +220,7 @@ fn capture_all_monitors_png() -> AgentResult<(i32, i32, Vec<u8>)> {
             image::imageops::overlay(&mut canvas, &img, offset_x, offset_y);
         }
 
-        let mut png_bytes: Vec<u8> = Vec::new();
-        let mut cursor = Cursor::new(&mut png_bytes);
-        canvas
-            .write_to(&mut cursor, xcap::image::ImageFormat::Png)
-            .map_err(|e| AgentError::Other(e.to_string()))?;
-
-        Ok((canvas_w as i32, canvas_h as i32, png_bytes))
+        Ok((canvas_w as i32, canvas_h as i32, canvas.into_raw()))
     })
 }
 

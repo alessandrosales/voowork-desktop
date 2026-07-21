@@ -78,7 +78,8 @@ pub fn run() {
         .on_menu_event(|app, event| handle_tray_menu_event(app, event.id().as_ref()))
         .setup(|app| {
             let app_data_dir = dirs::data_dir()
-                .unwrap_or_else(std::env::temp_dir)
+                .or_else(|| dirs::home_dir().map(|p| p.join(".local").join("share")))
+                .unwrap_or_else(|| std::path::PathBuf::from("/var/lib/voowork-desktop"))
                 .join("voowork-desktop");
 
             let db = Database::open(app_data_dir.clone())?;

@@ -71,6 +71,7 @@ pub struct TrackingInactivityController {
     last_input_at: Arc<Mutex<Instant>>,
     last_input_wall_at: Arc<Mutex<String>>,
     last_polled_input: Mutex<Instant>,
+    warning_started_at: Mutex<Option<Instant>>,
     countdown_started_at: Mutex<Option<Instant>>,
     inactivity_started_at: Mutex<Option<String>>,
     paused_at: Mutex<Option<String>>,
@@ -104,6 +105,7 @@ impl TrackingInactivityController {
             last_input_at,
             last_input_wall_at,
             last_polled_input: Mutex::new(now),
+            warning_started_at: Mutex::new(None),
             countdown_started_at: Mutex::new(None),
             inactivity_started_at: Mutex::new(None),
             paused_at: Mutex::new(None),
@@ -275,7 +277,10 @@ impl TrackingInactivityController {
                 }
             }
             TrackingInactivityPhase::Warning => {
-                self.start_inactivity_countdown();
+                let warning_elapsed = self.warning_started_at.lock().map(|w| now_instant.duration_since(w));
+                if warning_elapsed.is_none_or(|d| d >= Duration::from_secs(5)) {
+                    self.start_inactivity_countdown();
+                }
             }
             TrackingInactivityPhase::Countdown => {
                 let countdown_start = self.countdown_started_at.lock().unwrap_or(now_instant);
@@ -676,6 +681,7 @@ impl TrackingInactivityController {
             return;
         }
         *self.phase.lock() = TrackingInactivityPhase::Warning;
+        *self.warning_started_at.lock() = Some(Instant::now());
         *self.inactivity_started_at.lock() = Some(self.last_input_wall_at.lock().clone());
         log::info!("idle: warning — no input for {}s", self.threshold_secs);
     }

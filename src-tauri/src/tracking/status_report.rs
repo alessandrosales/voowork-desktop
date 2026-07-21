@@ -53,6 +53,11 @@ impl TrackingManager {
                 .map(|snapshot| inactivity_status_from_snapshot(snapshot.clone()))
                 .unwrap_or_default();
 
+            let clock_skew_detected = self.started_at_monotonic.lock().as_ref().is_some_and(|start| {
+                let monotonic_elapsed = start.elapsed().as_secs();
+                monotonic_elapsed.abs_diff(elapsed_seconds as u64) > 60
+            });
+
             return TrackingStatus {
                 active: true,
                 tracking_id: Some(tracking.tracking_id),
@@ -66,7 +71,7 @@ impl TrackingManager {
                 activity_buffer_alert: buffer.alert_pending,
                 mouse_events: totals.mouse_events,
                 keyboard_events: totals.keyboard_events,
-                clock_skew_detected: false,
+                clock_skew_detected,
                 activity_confidence: totals.last_confidence,
                 activity_score: totals.last_activity_score,
                 tracker_mode: Some(tracker_mode_label(self.tracker.lock().mode()).into()),

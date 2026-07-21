@@ -15,6 +15,7 @@ pub fn screenshot_interval_from_env() -> Option<u64> {
         .filter(|&secs| secs >= MIN_SCREENSHOT_INTERVAL_SECS)
 }
 
+#[allow(dead_code)]
 pub fn screenshot_interval_source_label() -> &'static str {
     if screenshot_interval_from_env().is_some() {
         "SCREENSHOT_INTERVAL_SECS (.env)"

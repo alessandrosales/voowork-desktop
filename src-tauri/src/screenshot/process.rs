@@ -1,17 +1,21 @@
 use crate::error::{AgentError, AgentResult};
 use image::imageops::FilterType;
-use image::DynamicImage;
+use image::{DynamicImage, RgbaImage};
 use webp::Encoder as WebpEncoder;
 
 use super::constants::{DEFAULT_JPEG_QUALITY, MAX_SCREENSHOT_LONG_EDGE_PX};
 
-pub(crate) fn process_capture_bytes(
-    png_bytes: &[u8],
+pub(crate) fn process_raw_rgba(
+    rgba_bytes: &[u8],
+    width: i32,
+    height: i32,
     blur_enabled: bool,
     quality: u8,
 ) -> AgentResult<(i32, i32, Vec<u8>)> {
-    let image = image::load_from_memory(png_bytes)
-        .map_err(|err| AgentError::Other(format!("failed to decode screenshot: {err}")))?;
+    let image = DynamicImage::ImageRgba8(
+        RgbaImage::from_raw(width as u32, height as u32, rgba_bytes.to_vec())
+            .ok_or_else(|| AgentError::Other("invalid RGBA dimensions".into()))?,
+    );
     let processed = if blur_enabled {
         image.blur(super::constants::BLUR_SIGMA)
     } else {
@@ -55,27 +59,24 @@ pub fn normalize_jpeg_quality(quality: u8) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{ImageBuffer, ImageFormat, Rgba};
+    use image::RgbaImage;
 
-    fn sample_png_bytes(width: u32, height: u32) -> Vec<u8> {
-        let image = ImageBuffer::from_fn(width, height, |x, y| {
-            Rgba([
+    fn sample_rgba_bytes(width: u32, height: u32) -> (Vec<u8>, i32, i32) {
+        let image = RgbaImage::from_fn(width, height, |x, y| {
+            image::Rgba([
                 ((x * 3) % 256) as u8,
                 ((y * 5) % 256) as u8,
                 ((x + y) % 256) as u8,
                 255,
             ])
         });
-        let mut bytes = Vec::new();
-        image
-            .write_to(&mut std::io::Cursor::new(&mut bytes), ImageFormat::Png)
-            .unwrap();
-        bytes
+        (image.into_raw(), width as i32, height as i32)
     }
 
     #[test]
     fn produces_valid_webp() {
-        let (_, _, webp) = process_capture_bytes(&sample_png_bytes(128, 128), false, 80).unwrap();
+        let (rgba, w, h) = sample_rgba_bytes(128, 128);
+        let (_, _, webp) = process_raw_rgba(&rgba, w, h, false, 80).unwrap();
         assert!(webp.starts_with(b"RIFF"), "expected WEBP RIFF header");
         assert!(
             webp.windows(4).any(|w| w == b"WEBP"),
@@ -85,32 +86,18 @@ mod tests {
 
     #[test]
     fn blur_changes_output_when_enabled() {
-        let png = sample_png_bytes(128, 128);
-        let (_, _, without_blur) = process_capture_bytes(&png, false, 80).unwrap();
-        let (_, _, with_blur) = process_capture_bytes(&png, true, 80).unwrap();
+        let (rgba, w, h) = sample_rgba_bytes(128, 128);
+        let (_, _, without_blur) = process_raw_rgba(&rgba, w, h, false, 80).unwrap();
+        let (_, _, with_blur) = process_raw_rgba(&rgba, w, h, true, 80).unwrap();
         assert_ne!(without_blur, with_blur);
     }
 
     #[test]
-    fn webp_is_smaller_than_png() {
-        let png = sample_png_bytes(128, 128);
-        let (_, _, webp) = process_capture_bytes(&png, false, 80).unwrap();
-        assert!(webp.len() < png.len());
-    }
-
-    #[test]
     fn downscales_large_captures_before_encoding() {
-        let png = sample_png_bytes(3840, 2160);
-        let (width, height, webp) = process_capture_bytes(&png, false, 80).unwrap();
+        let (rgba, w, h) = sample_rgba_bytes(3840, 2160);
+        let (width, height, webp) = process_raw_rgba(&rgba, w, h, false, 80).unwrap();
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
         assert!(webp.starts_with(b"RIFF"));
-    }
-
-    #[test]
-    fn large_capture_is_much_smaller_than_full_resolution_png() {
-        let png = sample_png_bytes(2560, 1440);
-        let (_, _, webp) = process_capture_bytes(&png, false, 80).unwrap();
-        assert!(webp.len() < png.len() / 4);
     }
 }

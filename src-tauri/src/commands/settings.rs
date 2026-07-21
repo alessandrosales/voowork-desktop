@@ -1,9 +1,11 @@
+use crate::activity::TrackerMode;
 use crate::app_state::AppState;
 use crate::db::frontend_settings::ensure_frontend_setting_key;
 use crate::error::{AgentError, AgentResult};
 use crate::locale::LOCALE_SETTING_KEY;
 use crate::models::{TrackingInactivityConfig, TrackingCapabilities, TrackingConfig};
 use crate::screenshot::{normalize_jpeg_quality, SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY};
+use crate::tracking_focus::capture_active_window;
 use crate::tracking_inactivity::{
     load_inactivity_threshold_minutes, COUNTDOWN_SECS, SETTING_INACTIVITY_PROFILE,
 };
@@ -120,23 +122,38 @@ pub fn get_tracking_config(state: tauri::State<'_, AppState>) -> AgentResult<Tra
 }
 
 #[tauri::command]
-pub fn get_tracking_capabilities() -> TrackingCapabilities {
+pub fn get_tracking_capabilities(state: tauri::State<'_, AppState>) -> TrackingCapabilities {
+    let tracker_mode = state.tracking_manager.tracker.lock().mode();
+    let input_granted = matches!(tracker_mode, TrackerMode::Hardware);
+    let input_label = if input_granted {
+        "Captura de mouse/teclado em tempo real".into()
+    } else {
+        "Heartbeat — apenas threshold de inatividade".into()
+    };
+
+    let window_tracking_works = capture_active_window().is_some();
+    let window_label = if window_tracking_works {
+        "Captura de janela ativa".into()
+    } else {
+        "Indisponível (Wayland sem portal ou permissão negada)".into()
+    };
+
     TrackingCapabilities {
         input_capture: crate::models::PermissionCheck {
-            granted: true,
-            label: "Captura de mouse/teclado".into(),
+            granted: input_granted,
+            label: input_label,
             action: None,
         },
         window_tracking: crate::models::PermissionCheck {
-            granted: true,
-            label: "Janela ativa".into(),
+            granted: window_tracking_works,
+            label: window_label,
             action: None,
         },
         screenshots: crate::models::PermissionCheck {
             granted: true,
-            label: "Captura de tela".into(),
+            label: "Captura de tela (xcap)".into(),
             action: None,
         },
-        notes: vec!["Permissões verificadas na inicialização.".into()],
+        notes: vec![],
     }
 }

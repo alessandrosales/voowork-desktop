@@ -22,6 +22,7 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
+use std::time::Instant;
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
@@ -50,6 +51,8 @@ pub struct TrackingManager {
     pub(crate) screenshot: Arc<Mutex<ScreenshotCapture>>,
     pub(crate) active: Arc<Mutex<Option<ActiveTracking>>>,
     pub(crate) tracking_active_flag: Arc<AtomicBool>,
+    /// Monotonic clock snapshot when tracking started — used for skew detection.
+    started_at_monotonic: Mutex<Option<Instant>>,
     pub(crate) worker_running: Arc<AtomicBool>,
     pub(crate) worker_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
     pub(crate) totals: Arc<Mutex<TrackingTotals>>,
@@ -102,6 +105,7 @@ impl TrackingManager {
             session_authenticated: Arc::new(AtomicBool::new(false)),
             buffer_eligible: Arc::new(AtomicBool::new(false)),
             state_transition: parking_lot::Mutex::new(()),
+            started_at_monotonic: Mutex::new(None),
         }
     }
 
@@ -238,6 +242,7 @@ impl TrackingManager {
             current_period_start: period_start,
         };
         *self.active.lock() = Some(tracking.clone());
+        *self.started_at_monotonic.lock() = Some(std::time::Instant::now());
         self.spawn_worker();
         Self::defer_initial_focus_capture(
             Arc::clone(&self.db),
