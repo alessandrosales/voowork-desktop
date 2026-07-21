@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react"
-import { listen } from "@tauri-apps/api/event"
 import { AlertTriangleIcon, InfoIcon, MonitorIcon, SettingsIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 
 import { isTauriReady, trackedInvoke } from "@/lib/tauri"
 import { Button } from "@/components/ui/button"
+import { getCurrentWindow } from "@tauri-apps/api/window"
 
 type PlatformInfo = {
   os: string
@@ -37,27 +37,7 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
 
     let cancelled = false
 
-    const init = async () => {
-      // Load platform info first
-      try {
-        const info = await trackedInvoke<PlatformInfo>("get_platform_info")
-        if (!cancelled) {
-          setPlatform(info)
-        }
-      } catch {
-        // if command fails, assume default behaviour (macOS-like)
-        if (!cancelled) {
-          setPlatform({
-            os: "macos",
-            desktopEnv: null,
-            needsInputMonitoringPermission: true,
-            needsScreenRecordingPermission: true,
-            alwaysAllowsWindowTracking: false,
-            note: null,
-          })
-        }
-      }
-
+    const checkPermissions = async () => {
       // Only check input-monitoring permission on platforms that need it
       // (macOS).  On Linux + Windows the Rust backend always returns true.
       const needsInput = await trackedInvoke<boolean>(
@@ -79,20 +59,52 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
       }
     }
 
+    const init = async () => {
+      // Load platform info first
+      try {
+        const info = await trackedInvoke<PlatformInfo>("get_platform_info")
+        if (!cancelled) {
+          setPlatform(info)
+        }
+      } catch {
+        // if command fails, assume default behaviour (macOS-like)
+        if (!cancelled) {
+          setPlatform({
+            os: "macos",
+            desktopEnv: null,
+            needsInputMonitoringPermission: true,
+            needsScreenRecordingPermission: true,
+            alwaysAllowsWindowTracking: false,
+            note: null,
+          })
+        }
+      }
+
+      await checkPermissions()
+    }
+
     void init()
 
-    const unlistenPromise = listen<never>(
-      "permission:input-monitoring-denied",
-      () => {
-        if (!cancelled) {
-          setInputState("denied")
-        }
-      },
-    )
+    // Re-check permissions on window focus (e.g. user granted permission
+    // in System Settings and returned to the app).
+    let unlistenFocus: (() => void) | undefined
+    const setupFocusListener = async () => {
+      try {
+        const appWindow = getCurrentWindow()
+        unlistenFocus = await appWindow.onFocusChanged(({ payload: focused }) => {
+          if (focused && !cancelled) {
+            void checkPermissions()
+          }
+        })
+      } catch {
+        // Focus events not available outside Tauri (browser dev, etc.)
+      }
+    }
+    void setupFocusListener()
 
     return () => {
       cancelled = true
-      unlistenPromise.then((dispose) => dispose()).catch(() => undefined)
+      unlistenFocus?.()
     }
   }, [checkActiveWindow])
 

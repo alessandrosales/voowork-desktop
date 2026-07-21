@@ -116,7 +116,12 @@ pub async fn validate_auth_session(
     };
 
     match client::fetch_me_profile(&api_base_url, &session.access_token).await {
-        Ok((user, org, _projects_list)) => {
+        Ok((user, mut org, _projects_list)) => {
+            // Preservar o nome da organização do cache local quando a API
+            // /auth/me não o incluir (MeResponse não tem organization.name).
+            if org.name.is_empty() && !session.organization.name.is_empty() {
+                org.name = session.organization.name.clone();
+            }
             let updated = AuthSession {
                 access_token: session.access_token,
                 user,

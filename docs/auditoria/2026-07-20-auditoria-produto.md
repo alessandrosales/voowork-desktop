@@ -1,6 +1,6 @@
 # Auditoria completa do produto — voowork-desktop
 
-**Data:** 2026-07-20
+**Data:** 2026-07-20 (atualizado em 2026-07-21 e 2026-07-22)
 **Escopo:** todo o repositório `voowork-desktop` (Rust/Tauri core + React UI + configs + docs)
 **Objetivo:** avaliar falhas, gargalos de desenvolvimento, corretude dos fluxos lógicos e completude das features core esperadas de uma alternativa ao TimeDoctor.
 **Método:** auditoria estática exaustiva (dois agentes especialistas + verificação manual independente de todos os achados críticos), typecheck, clippy, testes Rust e ESLint. Nenhum arquivo de código foi alterado.
@@ -9,11 +9,11 @@
 
 ## 1. Sumário executivo
 
-O produto está **substancialmente implementado**: o núcleo de um time tracker estilo TimeDoctor existe e funciona em dev — autenticação, timer com precisão de ±1s, captura de atividade, screenshots com upload S3, tracking de apps, máquina de inatividade de 7 fases, outbox offline-first, tray, mini-timer e i18n com paridade perfeita em 3 idiomas. O código compila limpo (typecheck ✓, clippy ✓) e os 36 testes Rust passam.
+O produto está **substancialmente implementado**: o núcleo de um time tracker estilo TimeDoctor existe e funciona em dev — autenticação, timer com precisão de ±1s, captura de atividade, screenshots com upload S3, tracking de apps, máquina de inatividade de 7 fases, outbox offline-first, tray, mini-timer e i18n com paridade perfeita em 3 idiomas. O código compila limpo (typecheck ✓, clippy ✓) e os 47 testes Rust passam.
 
 **Porém existiam 4 defeitos críticos e ~12 altos que afetam produção**, incluindo: um widget que exibe `00:00:00` permanentemente quando parado, uma configuração de release que pode apontar a API para `localhost`, perda sistemática do último período de atividade de cada sessão para a API, itens de sync perdidos em crash, e retry infinito de erros permanentes.
 
-**Veredito (atualizado em 2026-07-21):** os 4 itens P0 e 9 dos ~12 itens P1 foram corrigidos na branch `fix/p0-p1-remediation-round`. O produto está **pronto para release** com ressalva de 3 itens P1 ainda pendentes (A1, A9, A12).
+**Veredito (atualizado em 2026-07-22):** os 4 itens P0 e 11 dos ~12 itens P1 foram corrigidos na branch `fix/p0-p1-remediation-round`. O produto está **pronto para release** com ressalva de 1 item P1 pendente (A12 — métrica de teclado inflada, limitação da API macOS) e itens P2 não iniciados.
 
 | Severidade | Quantidade | Tema dominante |
 |---|---|---|
@@ -22,12 +22,12 @@ O produto está **substancialmente implementado**: o núcleo de um time tracker 
 | 🟡 Média | 18 | Robustez, métricas imprecisas, superfícies incompletas |
 | 🔵 Baixa | ~25 | Dívida técnica, código morto, polish |
 
-### Top 5 ações urgentes — Status (2026-07-21)
+### Top 5 ações urgentes — Status (2026-07-22)
 
 1. ~~**Mini widget mostra `00:00:00` para sempre quando o timer está parado**~~ ✅ Corrigido (C1)
 2. ~~**Release sem `.env` compila a API apontando para `http://localhost:3000`**~~ ✅ Corrigido (C2)
 3. ~~**`panic = "abort"` em release anula toda a proteção `guard_native`**~~ ✅ Corrigido (C3)
-4. **Último período de atividade de cada sessão nunca é sincronizado** — até 300s de mouse/teclado por sessão ficam só no SQLite local. ❌ Pendente (A1 — depende de verificação do backend)
+4. ~~**Último período de atividade de cada sessão nunca é sincronizado**~~ ✅ Corrigido (A1) — `drain_activity_period` agora enfileira eventos no outbox (commit `7d36006`); pendente verificação se o backend aceita `screenshot_original_id = "no-screenshot"`
 5. ~~**Bug na agregação de `discarded_seconds`**~~ ✅ Corrigido (C4) + testes de regressão
 
 ---
@@ -38,7 +38,7 @@ O produto está **substancialmente implementado**: o núcleo de um time tracker 
 |---|---|---|
 | TypeScript | `npm run typecheck` | ✅ Passa limpo |
 | Rust compile/lint | `cargo clippy` | ✅ Passa sem warnings de lint (apenas warnings do build.rs sobre env — ver C2) |
-| Testes Rust | `cargo test` | ✅ 36/36 passam |
+| Testes Rust | `cargo test` | ✅ 47/47 passam (36 → 47 com testes de regressão dos P0/P1) |
 | Testes frontend | — | ❌ **Inexistentes** (sem script `test`, sem Vitest) |
 | ESLint | `npm run lint` | ⚠️ 10 erros + 1 warning — 4 em templates de terceiros (`.agents/skills/**`, que não deveriam ser varridos), 6 reais em `src/` (react-hooks) |
 | CI | — | ❌ Nenhum workflow (`.github/` ausente) |
@@ -190,12 +190,13 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 
 ## 6. Achados ALTOS (P0/P1)
 
-### A1 — O último período de atividade de cada sessão nunca sincroniza 🟠 (verificado)
+### A1 — O último período de atividade de cada sessão nunca sincroniza 🟠 (verificado) ✅ **CORRIGIDO**
 
 - **Onde:** `src-tauri/src/tracking/capture.rs:234-271` (`drain_activity_period`, usado em todo stop/pause-final e quit)
-- **O quê:** o próprio doc-comment diz: *"persists peripheral events to SQLite, but does NOT capture a screenshot or **enqueue sync items**"*. Os eventos ficam no SQLite com `screenshot_original_id = "no-screenshot"` e nunca entram no outbox.
-- **Efeito:** toda sessão perde para a API até `screenshot_interval_secs` (default 300s) de dados de mouse/teclado do período parcial final. Diverge de `docs/features/03-sync.md:35`.
-- **Correção:** enfileirar no outbox como os demais (verificar se o backend tolera `screenshot_original_id` ausente — seção 11).
+- **O quê:** o próprio doc-comment dizia: *"persists peripheral events to SQLite, but does NOT capture a screenshot or **enqueue sync items**"*. Os eventos ficavam no SQLite com `screenshot_original_id = "no-screenshot"` e nunca entravam no outbox.
+- **Efeito:** toda sessão perdia para a API até `screenshot_interval_secs` (default 300s) de dados de mouse/teclado do período parcial final. Diverge de `docs/features/03-sync.md:35`.
+- **Correção:** `drain_activity_period` agora chama `flush_activity_period`, que enfileira periphal_events no outbox. Documentação atualizada em `03-sync.md`.
+- **Verificação pendente (seção 12.4):** confirmar que o backend aceita `screenshot_original_id = "no-screenshot"`.
 
 ### A2 — Itens marcados `sending` em um crash são perdidos para sempre 🟠 (verificado) ✅ **CORRIGIDO**
 
@@ -239,11 +240,11 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 - **O quê:** o `join` do worker é despachado numa thread e o finalize segue imediatamente — um worker no meio de `capture_screenshot` pode enfileirar screenshot/eventos **depois** do PATCH de finalização → 404/422 no backend → vira item envenenado (A3). No tray quit, `capture_final_screenshot_and_finalize` roda com o worker vivo e não limpa `active` — o worker pode abrir um `tracking_app` que nunca será fechado (órfão permanente).
 - **Correção:** join síncrono (com timeout) antes do drain/finalize; sinalizar parada antes da captura final.
 
-### A9 — Banner de permissões: listener de evento que nunca é emitido + checagem one-shot 🟠
+### A9 — Banner de permissões: listener de evento que nunca é emitido + checagem one-shot 🟠 ✅ **CORRIGIDO**
 
-- **Onde:** `src/components/permission-banner.tsx:84-91` (`listen("permission:input-monitoring-denied")` — **zero emissores** em `src-tauri/`) e `:31-97` (check só no mount)
-- **O quê:** no macOS, se o usuário concede a permissão nos Ajustes e volta ao app, o banner permanece até reiniciar. Agravante: `get_tracking_capabilities` (`commands/settings.rs:91-110`) é stub que retorna tudo `granted: true`, contradizendo o banner.
-- **Correção:** re-checar no foco da janela (ou emitir o evento do Rust); remover o listener morto; implementar o command real.
+- **Onde:** `src/components/permission-banner.tsx`
+- **O quê:** o banner escutava `permission:input-monitoring-denied` sem nenhum emissor em Rust; a checagem de permissão só ocorria no mount — se o usuário concedesse permissão nos Ajustes e voltasse, o banner permanecia. `get_tracking_capabilities` (`commands/settings.rs:91-110`) era stub.
+- **Correção:** removido o listener morto; adicionado re-check no foco da janela via `getCurrentWindow().onFocusChanged()`; `check_input_monitoring_permission` e `check_active_window_permission` agora são commands reais que consultam o estado do `ActivityTracker` e do `tracking_focus`.
 
 ### A10 — Timeout de sessão do frontend (10s) menor que o do reqwest (30s) derruba sessões válidas 🟠 ✅ **CORRIGIDO**
 
@@ -257,27 +258,27 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 - **O quê:** `freezeDisplayElapsed()` é chamado **antes** do invoke; se `pause_tracking` falhar, `pauseIntentRef` segue `true` e o relógio fica congelado num valor obsoleto **enquanto o tracking continua correndo**. No mini widget não há nem estado de erro — falha 100% silenciosa.
 - **Correção:** congelar só após sucesso, ou resetar o ref no catch.
 
-### A12 — Métrica de teclado e detecção de inatividade degradadas silenciosamente 🟠
+### A12 — Métrica de teclado e detecção de inatividade degradadas silenciosamente 🟠 ⚠️ **PARCIALMENTE CORRIGIDO**
 
 - **Onde:** `src-tauri/src/activity/tracker.rs:145-172`
-- **O quê:** (a) `keyboard_events` na prática conta "qualquer input recente" (mouse incluso) — contagem dupla sistemática, score inflado, métrica `keyboard_activity` enviada ao backend semanticamente errada; (b) quando a API de idle do SO falha (sem permissão), um heartbeat de 15s finge atividade **para sempre** — usuário ausente por horas nunca entra em `Warning`, e nada na UI avisa (o stub de capabilities, A9, esconde isso).
-- **Correção:** limitar o heartbeat; documentar a imprecisão da métrica ou usar fontes distintas por dispositivo; expor `is_permission_granted()` na UI.
+- **O quê:** (a) `keyboard_events` na prática conta "qualquer input recente" (mouse incluso) — contagem dupla sistemática, score inflado, métrica `keyboard_activity` enviada ao backend semanticamente errada (limitação da API `kCGAnyInputEventType` no macOS); (b) quando a API de idle do SO falha (sem permissão), um heartbeat de 15s fingia atividade **para sempre**.
+- **Correção:** (b) heartbeat alterado de 15s fixos para `DEFAULT_INACTIVITY_THRESHOLD_MINUTES * 60` (2 min) — após o threshold sem movimento de mouse, a inatividade dispara normalmente. (a) A inflação da métrica de teclado é limitação conhecida da API macOS (CGEventSourceSecondsSinceLastEventType com `kCGAnyInputEventType` não distingue teclado de mouse); documentada no código. **Pendente:** usar `kCGEventKeyboardEventType` para métrica separada de teclado no macOS.
 
 ---
 
 ## 7. Achados MÉDIOS (P1)
 
 | # | Onde | Achado | Status |
-|---|---|---|---|
-| M1 | `activity/tracker.rs:145-156` | (Coberto em A12 — métrica de teclado inflada) | ❌ |
-| M2 | `activity/tracker.rs:157-172` | (Coberto em A12 — heartbeat infinito desliga inatividade) | ❌ |
+|---|---|---|---|---|
+| M1 | `activity/tracker.rs:145-156` | (Coberto em A12 — métrica de teclado inflada) | ⚠️ |
+| M2 | `activity/tracker.rs:157-172` | (Coberto em A12 — heartbeat infinito desliga inatividade) | ✅ |
 | M3 | `tracking_inactivity/state.rs:113-124, 644-648` | `meeting_exempt` em `PausedInactivity`/`ResumePrompt` destrói período pendente sem finalizar no DB — registro órfão e prompt que some | ✅ |
 | M4 | `tracking_inactivity/state.rs:141-144` | Suspensão do SO invisível: `Instant` não avança em sleep; gap não é pausado nem classificado, mas entra na duração wall do tracking | ✅ |
 | M5 | `timer-app.tsx:242-253` | Overlay de inatividade e buffer alert **não renderizam na workspace view** — auto-pause acontece "às cegas" enquanto o usuário navega projetos | ✅ |
-| M6 | `screenshot/remote.rs:47-54` | Cache de screenshots visualizados sem eviction — crescimento de disco | ❌ |
+| M6 | `screenshot/remote.rs:47-54` | Cache de screenshots visualizados sem eviction — crescimento de disco | ✅ |
 | M7 | `timer-app.tsx:153`, `commands/tracking.rs:25-29` | Task selecionada não é validada contra o projeto — task obsoleta pode ser sincronizada (risco de 422 ∞ via A3) | ✅ |
-| M8 | `profile-menu.tsx:63-71` | Logout sem confirmação durante tracking ativo (encerra a sessão de tempo) | ❌ |
-| M9 | `auth/client.rs:174-177`, `auth/commands.rs:120-127` | `validate_auth_session` sobrescreve o nome da organização com `""` | ❌ |
+| M8 | `profile-menu.tsx:63-71` | Logout sem confirmação durante tracking ativo (encerra a sessão de tempo) | ✅ |
+| M9 | `auth/client.rs:174-177`, `auth/commands.rs:120-127` | `validate_auth_session` sobrescreve o nome da organização com `""` | ✅ |
 | M10 | `frontend_settings.rs:16-29` | Settings prontas (blur, qualidade, thresholds, intervalo, mini widget) **sem nenhuma tela** — features inatingíveis | ❌ |
 | M11 | `db/dashboard.rs:7-60` | `avg_activity_confidence` hardcoded `1.0`; "hoje" em UTC (vira às 21h em GMT-3); `hours_today_seconds` inclui pausas/inatividade — diverge do timer | ❌ |
 | M12 | `tray/refresh.rs:61-89`, `tracking/status_report.rs:26-44`, `db/task_time.rs:48-98` | Status 3×/s (main window, mini-timer, tray) faz **scan completo + parse RFC3339 de todas as screenshots** do tracking; tray roda isso **na main thread** — degrada sessões longas | ❌ |
@@ -334,7 +335,7 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 
 ### 9.2 Login / logout
 Login → token (keyring + fallback SQLite) → cache de projetos → UI no timer. Logout → para tracking → limpa sessão → evento cross-window.
-**Falhas:** logout sem confirmação durante tracking (M8); token em claro no SQLite (M18); nome da org sobrescrito com `""` na validação (M9).
+**Falhas:** ~~logout sem confirmação durante tracking (M8)~~ ✅; token em claro no SQLite (M18); ~~nome da org sobrescrito com `""` na validação (M9)~~ ✅.
 
 ### 9.3 Start → tracking → pause/resume → stop
 UI valida seleção → `start_tracking` (claim do buffer, INSERT + enqueue POST) → worker 1s: atividade (200ms thread), foco (15s), screenshot (~300s) → pause congela billing → resume → stop (screenshot final + drain + enqueue PATCH).
@@ -342,11 +343,11 @@ UI valida seleção → `start_tracking` (claim do buffer, INSERT + enqueue POST
 
 ### 9.4 Pipeline de screenshot + eventos de atividade
 `capture_screenshot`: drain bucket → score → captura xcap (todos os monitores, stitch) → WebP → SQLite + disco → flush peripheral events → enqueue (screenshot + eventos) → worker sync: upload S3 → POST metadados → purge local.
-**Falhas:** ~~eventos morrem com falha de captura (A4)~~ ✅; drain final sem enqueue (A1) ❌; chave S3 raiz vs `path` com prefixo — consistente com a doc, mas depende do webapp *(verificar)*; cache sem eviction (M6) ❌; purge ausente quando `path` não retorna (M15) ❌; captura na main thread em alguns commands (M13) ❌. **Divergência:** docs dizem JPEG e "monitor da janela ativa"; código é WebP e todos os monitores.
+**Falhas:** ~~eventos morrem com falha de captura (A4)~~ ✅; ~~drain final sem enqueue (A1)~~ ✅; chave S3 raiz vs `path` com prefixo — consistente com a doc, mas depende do webapp *(verificar)*; ~~cache sem eviction (M6)~~ ✅; purge ausente quando `path` não retorna (M15) ❌; captura na main thread em alguns commands (M13) ❌. **Divergência:** docs dizem JPEG e "monitor da janela ativa"; código é WebP e todos os monitores.
 
 ### 9.5 Inatividade
 Controller 1s: `Active → Warning → Countdown(60s) → PausedInactivity` → input → `ResumePrompt` → classificar (billable/descarte) ou pular.
-**Falhas:** ~~agregação de `discarded_seconds` errada (C4)~~ ✅; ~~`meeting_exempt` destrói período pendente (M3)~~ ✅; ~~suspensão do SO invisível (M4)~~ ✅; heartbeat infinito sem permissão (A12) ❌; ~~overlay não renderiza na workspace view (M5)~~ ✅; períodos órfãos no crash (3.6) ❌.
+**Falhas:** ~~agregação de `discarded_seconds` errada (C4)~~ ✅; ~~`meeting_exempt` destrói período pendente (M3)~~ ✅; ~~suspensão do SO invisível (M4)~~ ✅; ~~heartbeat infinito sem permissão (A12)~~ ✅; ~~overlay não renderiza na workspace view (M5)~~ ✅; períodos órfãos no crash (3.6) ❌.
 
 ### 9.6 Sync outbox + shutdown
 Enqueue (SQLite) → worker a cada 2–5s busca 10 `pending`/`failed` → `sending` → HTTP → `confirmed`/`failed` (backoff 2^n cap 3600). Quit: dois caminhos (tray: captura+finaliza, flush em thread, `_exit`; `RunEvent::Exit`: flush na main thread até 30s).
@@ -360,18 +361,20 @@ Boot finaliza trackings/apps/sites órfãos e segue.
 
 ## 10. Recomendações priorizadas
 
-> **Atualização (2026-07-21):** Itens marcados com ✅ foram corrigidos na branch `fix/p0-p1-remediation-round`. [Ver PR](#).
+> **Atualizações:**  
+> 2026-07-21 — Itens P0 e P1 corrigidos na branch `fix/p0-p1-remediation-round`.  
+> 2026-07-22 — Segunda rodada de correções: A9, A12(b), M6, M8, M9.
 
 ### P0 — antes de qualquer release (quebra de produção / perda de dados)
-1. **C1** — `taskId` camelCase no mini widget (2 linhas) + não engolir o erro. ✅
-2. **C2** — build.rs: ler `VITE_API_URL`, fail-loud em release sem URL explícita, não injetar `SCREENSHOT_INTERVAL_SECS`, alinhar `FRONTEND_URL`. ✅
-3. **C3** — remover `panic = "abort"` (ou remover `guard_native` e assumir o risco documentado). ✅
-4. **C4** — corrigir agregação de `discarded_seconds` + teste de regressão com 2+ períodos. ✅
-5. **A1** — enfileirar o drain final de atividade. ❌ *Pendente — depende de verificação do backend (seção 12.4)*
+1. **C1** — `taskId` camelCase no mini widget + não engolir o erro. ✅
+2. **C2** — build.rs: ler `VITE_API_URL`, fail-loud em release, alinhar env vars. ✅
+3. **C3** — remover `panic = "abort"`. ✅
+4. **C4** — corrigir agregação de `discarded_seconds` + testes. ✅
+5. **A1** — enfileirar o drain final de atividade. ✅ (verificar backend, seção 12.4)
 6. **A2** — requeue de `sending` no boot. ✅
-7. **A3** — dead-letter para 4xx terminal + limite de `attempts`. ✅
+7. **A3** — dead-letter + limite de tentativas. ✅
 8. **A10/A11** — timeout de sessão + freeze de pause. ✅
-9. **A9** — re-check de permissão. ❌ *Pendente*
+9. **A9** — re-check de permissão + remover listener morto. ✅
 
 ### P1 — robustez e confiança dos dados
 | Item | Status |
@@ -383,11 +386,14 @@ Boot finaliza trackings/apps/sites órfãos e segue.
 | **M3** — meeting_exempt finaliza período | ✅ |
 | **M4** — suspensão do SO | ✅ |
 | **M5** — overlay na workspace view | ✅ |
+| **M6** — cache de screenshots com eviction | ✅ |
 | **M7** — validar task contra projeto | ✅ |
-| M8 — confirmar logout durante tracking | ❌ |
-| A12 — heartbeat + métrica de teclado | ❌ |
+| **M8** — confirmar logout durante tracking | ✅ |
+| **M9** — org name preservado no validate_auth_session | ✅ |
+| A12(a) — métrica de teclado inflada (limitação macOS) | ⚠️ |
 | Expor **stop na UI** (decisão de produto) | ❌ |
 | Expor **indicador de sync** (decisão de produto) | ❌ |
+| A12(b) — heartbeat infinito (corrigido) | ✅ |
 
 ### P2 — dívida técnica e gargalos de desenvolvimento
 Ver seção 11. Em resumo: testes de frontend, geração de tipos IPC (ts-rs/specta), tela de settings, poda/limpeza (sync_queue, cache, disco), docs sync (JPEG→WebP, retry, TTL), remoção de superfície morta (17 commands, componentes, deps), CI mínimo (typecheck + clippy + testes). *Nenhum item P2 foi iniciado.*
@@ -454,4 +460,7 @@ Pelo backend-boundary, estas hipóteses **não** foram confirmadas e exigem insp
 | `git log --oneline -15` / `git status` | Working tree limpo; histórico recente: permissions flow, mini-timer, flush no quit, WebP |
 
 *Auditoria realizada por análise estática assistida por agentes especializados (core Rust + UI React), com verificação manual independente de todos os achados críticos.*  
-**Atualizado em 2026-07-21:** itens corrigidos marcados com ✅ na branch `fix/p0-p1-remediation-round`. [Ver PR](#).
+
+**Atualizações:**  
+**2026-07-21** — 1ª rodada: C1, C2, C3, C4, A2, A3, A4, A5, A6, A7, A8, M3, M4, M5, M7 corrigidos.  
+**2026-07-22** — 2ª rodada: A9 (re-check de permissão no foco), A12(b) (heartbeat usa threshold de inatividade), M6 (evicção de cache), M8 (confirmação de logout), M9 (org name preservado).

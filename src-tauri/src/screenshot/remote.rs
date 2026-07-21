@@ -2,11 +2,52 @@ use crate::auth::HTTP_TIMEOUT_SECS;
 use crate::error::{AgentError, AgentResult};
 use crate::models::TrackingScreenshotImage;
 use serde_json::Value;
+use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
 use super::storage::download_capture;
 use super::{cache_dir_for_db, cache_file_path};
+
+/// Número máximo de arquivos no cache de screenshots antes de fazer
+/// evicção dos mais antigos.
+const CACHE_MAX_FILES: usize = 200;
+
+/// Verifica o diretório de cache e remove os arquivos mais antigos se
+/// o número total exceder `CACHE_MAX_FILES`.
+fn evict_cache_if_needed(db_path: &Path) {
+    let cache_dir = cache_dir_for_db(db_path);
+    if !cache_dir.is_dir() {
+        return;
+    }
+
+    let mut entries: Vec<_> = match fs::read_dir(&cache_dir) {
+        Ok(reader) => reader
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_file())
+            .collect(),
+        Err(_) => return,
+    };
+
+    if entries.len() <= CACHE_MAX_FILES {
+        return;
+    }
+
+    // Ordenar por data de modificação (mais antigos primeiro)
+    entries.sort_by_key(|a| {
+        a.metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+    });
+
+    // Remover o excesso (mais antigos)
+    let to_remove = entries.len() - CACHE_MAX_FILES;
+    for entry in entries.into_iter().take(to_remove) {
+        if let Err(err) = fs::remove_file(entry.path()) {
+            log::warn!("failed to evict cache file {:?}: {err}", entry.path());
+        }
+    }
+}
 
 pub async fn resolve_screenshot_image(
     api_base_url: &str,
@@ -44,6 +85,7 @@ pub async fn resolve_screenshot_image(
         fetch_remote_path(api_base_url, access_token, tracking_id, screenshot_id).await?;
     let bytes = download_capture(&remote_path).await?;
 
+    evict_cache_if_needed(db_path);
     std::fs::create_dir_all(cache_dir_for_db(db_path))?;
     std::fs::write(&cache_path, bytes)?;
 

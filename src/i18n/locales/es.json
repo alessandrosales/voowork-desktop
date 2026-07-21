@@ -13,7 +13,8 @@
   },
   "profile": {
     "menuLabel": "Menú de perfil",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "confirmLogoutWhileTracking": "El temporizador está activo y se detendrá. ¿Realmente deseas salir?"
   },
   "timer": {
     "clickToStart": "Haz clic para iniciar tu sesión de trabajo",

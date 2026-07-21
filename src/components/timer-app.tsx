@@ -231,6 +231,10 @@ export function TimerApp() {
     Boolean(resolvedProjectId) && resolvedTaskId !== NO_TASK_ID
   const canStart = !active && hasSelection
   const handleLogout = async () => {
+    if (active) {
+      const confirmed = window.confirm(t("profile.confirmLogoutWhileTracking"))
+      if (!confirmed) return
+    }
     await logout()
   }
 

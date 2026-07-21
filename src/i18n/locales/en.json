@@ -13,7 +13,8 @@
   },
   "profile": {
     "menuLabel": "Profile menu",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "confirmLogoutWhileTracking": "The timer is active and will be stopped. Do you really want to sign out?"
   },
   "timer": {
     "clickToStart": "Select project and task to start",
