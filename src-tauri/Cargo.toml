@@ -36,7 +36,6 @@ xcap = "0.4.1"
 active-win-pos-rs = "0.11"
 image = "0.25"
 tauri-plugin-notification = "2"
-mozjpeg-rs = "0.9.2"
 keyring = "3"
 webp = "0.3.1"
 

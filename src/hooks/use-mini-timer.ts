@@ -2,46 +2,8 @@ import { useCallback, useEffect, useState } from "react"
 import { listen } from "@tauri-apps/api/event"
 
 import { useDisplayElapsed } from "@/hooks/use-display-elapsed"
-import type { TrackingStatus } from "@/hooks/use-tracking-session"
+import { EMPTY_TRACKING, type TrackingStatus } from "@/hooks/use-tracking-session"
 import { trackedInvoke, isTauriReady } from "@/lib/tauri"
-
-const EMPTY_TRACKING: TrackingStatus = {
-  active: false,
-  trackingId: null,
-  projectId: null,
-  taskId: null,
-  startedAt: null,
-  elapsedSeconds: 0,
-  inactivitySeconds: 0,
-  taskAccumulatedSeconds: 0,
-  activityBufferSeconds: 0,
-  activityBufferAlert: false,
-  mouseEvents: 0,
-  keyboardEvents: 0,
-  clockSkewDetected: false,
-  activityConfidence: 1,
-  activityScore: 0,
-  trackerMode: null,
-  currentApp: null,
-  currentWindowTitle: null,
-  screenshotCount: 0,
-  lastScreenshotAt: null,
-  inactivity: {
-    phase: "active",
-    thresholdSecs: 120,
-    countdownSecs: 60,
-    countdownRemainingSecs: null,
-    countdownEndsAt: null,
-    inactivityStartedAt: null,
-    pausedAt: null,
-    awaySeconds: null,
-    pendingPeriodId: null,
-    meetingExempt: false,
-    activeSeconds: 0,
-    inactivityDiscardedSeconds: 0,
-    inactivityReclassifiedSeconds: 0,
-  },
-}
 
 const ACTIVE_POLL_MS = 1_000
 const IDLE_POLL_MS = 5_000
@@ -94,13 +56,19 @@ export function useMiniTimer() {
       console.error("mini-timer refresh failed", err)
     }
 
-    refresh().catch(logRefreshError)
     const interval = window.setInterval(() => {
       refresh().catch(logRefreshError)
     }, refreshMs)
 
+    // Initial fetch: deferred to avoid set-state-during-render
+    queueMicrotask(() => refresh().catch(logRefreshError))
+
+    let cancelled = false
     let unlisten: (() => void) | undefined
     listen("tracking-inactivity-changed", () => {
+      if (cancelled) {
+        return
+      }
       refresh().catch(logRefreshError)
     })
       .then((dispose) => {
@@ -109,6 +77,7 @@ export function useMiniTimer() {
       .catch(() => undefined)
 
     return () => {
+      cancelled = true
       window.clearInterval(interval)
       unlisten?.()
     }

@@ -2,7 +2,9 @@
   "common": {
     "loading": "Loading...",
     "hello": "Hello",
-    "call": "Call"
+    "call": "Call",
+    "seconds": "{{count}}s",
+    "ipcError": "App communication error: {{command}}"
   },
   "auth": {
     "tagline": "Sign in to track your Voowork.",
@@ -40,6 +42,7 @@
     "selectWork": "Select your work",
     "searchPlaceholder": "Search projects...",
     "noResults": "No projects found",
+    "loading": "Loading...",
     "noTasks": "No tasks",
     "task": "task",
     "tasks": "tasks"

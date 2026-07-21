@@ -44,6 +44,7 @@ use tauri::{Manager, RunEvent};
 use tauri_plugin_log::{Target, TargetKind};
 use tray::{handle_tray_menu_event, setup_tray_from_state, spawn_refresh_loop};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use windows::{
     begin_mini_widget_drag, open_main_window, reset_mini_widget_position, setup_windows,
 };
@@ -77,11 +78,15 @@ pub fn run() {
         .on_menu_event(|app, event| handle_tray_menu_event(app, event.id().as_ref()))
         .setup(|app| {
             let app_data_dir = dirs::data_dir()
-                .unwrap_or_else(std::env::temp_dir)
+                .or_else(|| dirs::home_dir().map(|p| p.join(".local").join("share")))
+                .unwrap_or_else(|| std::path::PathBuf::from("/var/lib/voowork-desktop"))
                 .join("voowork-desktop");
 
             let db = Database::open(app_data_dir.clone())?;
-            let device_name = std::env::var("HOSTNAME").unwrap_or_else(|_| "voowork-device".into());
+            let device_name = std::env::var("HOSTNAME")
+                .or_else(|_| std::env::var("COMPUTERNAME"))
+                .or_else(|_| std::env::var("hostname"))
+                .unwrap_or_else(|_| "voowork-device".into());
             DeviceKeys::ensure(db.conn(), &device_name)?;
 
             // Default settings
@@ -233,13 +238,14 @@ pub fn run() {
                     if let Err(err) = state.tracking_manager.shutdown_for_quit() {
                         log::error!("failed to reset tracking on exit: {err}");
                     }
-                    // Flush pending sync items before process termination.
+                    // Flush in background thread to avoid blocking main thread.
                     state.sync_worker.stop();
-                    state.sync_worker.flush_blocking(
-                        state.db.clone(),
-                        app_handle.clone(),
-                        SYNC_FLUSH_TIMEOUT_SECS,
-                    );
+                    let sync_worker = state.sync_worker.clone();
+                    let db = state.db.clone();
+                    let handle = app_handle.clone();
+                    thread::spawn(move || {
+                        sync_worker.flush_blocking(db, handle, SYNC_FLUSH_TIMEOUT_SECS);
+                    });
                 }
             }
         });

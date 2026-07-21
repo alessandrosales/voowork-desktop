@@ -49,8 +49,8 @@ A screenshot é o "coração" do sistema — ela dispara o pipeline completo:
 
 1. `drain_bucket()` — esvazia o `ActivityBucket` atômico
 2. `compute_activity_score()` — calcula score 0-100 com confiança anti-automação
-3. `capture_pixels()` — captura a tela via `xcap` (monitor da janela ativa)
-4. `persist_capture()` — INSERT no SQLite + escreve JPEG no disco
+3. `capture_pixels()` — captura a tela via `xcap` (todos os monitores, stitch)
+4. `persist_capture()` — INSERT no SQLite + escreve WebP no disco
 5. `flush_tracking_peripheral_events_for_period()` — cria `tracking_peripheral_events`
 6. `SyncOutbox::enqueue()` — enfileira screenshot + peripheral events
 
@@ -62,18 +62,34 @@ O `TrackingInactivityController` avalia o estado a cada 1s:
 Active → Warning → Countdown (60s) → PausedInactivity
 ```
 
+- Durante `PausedInactivity` (inatividade automática): screenshots continuam, mas marcadas como `time_category = 'inactivity'`
+- Durante `ManualPaused` / `ManualWorkCheck` (pausa manual): screenshots são **puladas** (compatível com TimeDoctor)
 - Durante `PausedInactivity`: screenshots continuam, mas marcadas como `time_category = 'inactivity'`
-- Ao detectar input: transiciona para `ResumePrompt` pedindo classificação ao usuário
+- Ao detectar input após inatividade: transiciona para `ResumePrompt` pedindo classificação ao usuário
 - Se for app de comunicação: `meeting_exempt` suspende a inatividade
 
-## Finalização (shutdown)
+## Buffer de atividade
 
-Ao fechar o app (`RunEvent::Exit`):
-1. Screenshot final é capturada (`flush_period_screenshot`)
-2. Worker é parado
+O `ActivityBuffer` acumula o primeiro minuto de atividade antes do timer começar:
+- O buffer persiste no SQLite a cada segundo
+- Ao iniciar o tracking (`start_tracking`), o buffer é "claimado" — os eventos do buffer viram o primeiro período de atividade
+- Se o usuário não iniciar o tracking (apenas logou), o buffer é descartado após 1 minuto
+- O buffer sobrevive a restart do app (se houver sessão auth válida)
+
+## Finalização (stop e shutdown)
+
+Ao parar o timer (`stop_tracking`):
+1. Screenshot final é capturada com UUID real (fail-loud)
+2. Peripheral events do período final são enfileirados com o mesmo UUID
+3. Apps/sites abertos são fechados
+4. Tracking é finalizado via PATCH na API (`status: inactive`, `ended_at`)
+
+Ao fechar o app (quit/tray):
+1. Screenshot final é capturada
+2. Worker é parado com join síncrono (timeout configurável)
 3. Apps/sites abertos são fechados
 4. Tracking é finalizado via PATCH na API
-5. Trackings órfãos (crash anterior) são finalizados no boot
+5. Trackings órfãos (crash anterior) são finalizados no boot com `ended_at` estimado
 
 ## Código
 

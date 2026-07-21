@@ -5,25 +5,15 @@ use std::time::Duration;
 use crate::error::{AgentError, AgentResult};
 use crate::sync::{SyncOutbox, ENTITY_TRACKING};
 
-use super::capture::{close_open_apps, close_open_sites, drain_activity_period};
+use super::capture::{close_open_apps, close_open_sites};
 use super::constants::WORKER_JOIN_TIMEOUT_SECS;
 use super::worker::{spawn_tracking_worker, TrackingWorkerContext};
 use super::TrackingManager;
 
 impl TrackingManager {
-    /// Public wrapper that acquires the state-transition guard before
-    /// delegating to the inner implementation.
-    #[allow(dead_code)]
-    pub(crate) fn finalize_active_tracking(
-        &self,
-        clear_inactivity_controller: bool,
-    ) -> AgentResult<()> {
-        let _guard = self.state_transition.lock();
-        self.finalize_active_tracking_inner(clear_inactivity_controller)
-    }
-
-    /// Inner implementation — no lock on `state_transition`; callers must
-    /// hold it if concurrency safety is required.
+    /// Finaliza a tracking ativa — captura screenshot final, fecha apps/sites,
+    /// enfileira PATCH com endedAt. Callers externos devem adquirir
+    /// `state_transition` antes se concorrência for relevante.
     pub(super) fn finalize_active_tracking_inner(
         &self,
         clear_inactivity_controller: bool,
@@ -38,15 +28,29 @@ impl TrackingManager {
         // Stop worker FIRST to release any locks it holds (screenshot, db).
         self.stop_worker();
 
-        // Lightweight drain: save activity data locally without screenshot capture.
+        // Capture final screenshot + flush activity period with real original_id.
+        // The screenshot category (active vs inactivity) is determined by the
+        // current inactivity phase. Screenshot capture must succeed (fail-loud).
         let period_start = tracking.current_period_start.clone();
-        let _ = drain_activity_period(
+        let time_category = self
+            .inactivity_controller
+            .lock()
+            .as_ref()
+            .map(|ctrl| {
+                let phase = ctrl.snapshot().phase;
+                super::capture::screenshot_time_category(phase)
+            })
+            .unwrap_or(crate::db::TIME_CATEGORY_ACTIVE);
+
+        super::capture::capture_screenshot(
             &self.db,
+            &self.screenshot,
             &self.tracker,
             &self.totals,
             &tracking,
             &period_start,
-        );
+            time_category,
+        )?;
 
         let _ = close_open_apps(&self.db, &self.active_app_id);
         let _ = close_open_sites(&self.db, &self.active_site_id, &self.last_site_address);

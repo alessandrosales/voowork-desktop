@@ -47,6 +47,7 @@ export function CompactLogin() {
                 autoComplete="email"
                 aria-label={t("auth.email")}
                 disabled={loading}
+                required
                 className="h-11 rounded-xl bg-background shadow-sm"
               />
               <Input
@@ -58,6 +59,7 @@ export function CompactLogin() {
                 autoComplete="current-password"
                 aria-label={t("auth.password")}
                 disabled={loading}
+                required
                 className="h-11 rounded-xl bg-background shadow-sm"
               />
 

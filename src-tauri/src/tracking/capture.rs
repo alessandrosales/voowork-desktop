@@ -6,6 +6,7 @@ use crate::tracking_focus::{
     ActiveWindowSample,
 };
 use crate::db::{Database, TIME_CATEGORY_ACTIVE, TIME_CATEGORY_INACTIVITY};
+use crate::db::period_duration_seconds;
 use crate::error::AgentResult;
 use crate::tracking_inactivity::{TrackingInactivityController, TrackingInactivityPhase};
 use crate::screenshot::{ScreenshotCapture, TrackingScreenshotCaptureContext, TrackingScreenshotRecord};
@@ -80,7 +81,7 @@ mod flush_tests {
         let period_start = chrono::Utc::now().to_rfc3339();
         let period_end = chrono::Utc::now().to_rfc3339();
 
-        flush_activity_period(&db, &tracking, &period_start, &period_end, &bucket, "no-screenshot").unwrap();
+        flush_activity_period(&db, &tracking, &period_start, &period_end, &bucket, None).unwrap();
 
         // Assert sync_queue has peripheral event rows
         let db_guard = db.lock();
@@ -232,12 +233,13 @@ pub(crate) fn flush_activity_period(
     period_start: &str,
     period_end: &str,
     bucket: &ActivityBucket,
-    screenshot_original_id: &str,
+    screenshot_original_id: Option<&str>,
 ) -> AgentResult<()> {
     let db_guard = db.lock();
+    let screenshot_id_for_db = screenshot_original_id.unwrap_or("");
     let peripheral_events = db_guard.flush_tracking_peripheral_events_for_period(
         &tracking.tracking_id,
-        screenshot_original_id,
+        screenshot_id_for_db,
         period_start,
         period_end,
         bucket.mouse_events,
@@ -249,19 +251,22 @@ pub(crate) fn flush_activity_period(
             "keyboard_activity" => bucket.keyboard_events as f64,
             _ => bucket.mouse_events as f64,
         };
+        let mut event = serde_json::json!({
+            "eventId": event_id,
+            "trackingId": tracking.tracking_id,
+            "event": event_type,
+            "count": count,
+            "startedAt": period_start,
+            "endedAt": period_end,
+        });
+        if let Some(original_id) = screenshot_original_id {
+            event["screenshotOriginalId"] = serde_json::json!(original_id);
+        }
         SyncOutbox::enqueue(
             db_guard.conn(),
             ENTITY_TRACKING_PERIPHERAL_EVENT,
             &event_id,
-            serde_json::json!({
-                "eventId": event_id,
-                "trackingId": tracking.tracking_id,
-                "event": event_type,
-                "count": count,
-                "screenshotOriginalId": screenshot_original_id,
-                "startedAt": period_start,
-                "endedAt": period_end,
-            }),
+            event,
         )?;
     }
 
@@ -321,7 +326,17 @@ pub(crate) fn capture_screenshot(
             };
 
             let period_end = record.captured_at.clone();
-            flush_activity_period(db, tracking, period_start, &period_end, &bucket, &record.original_id)?;
+
+            let duration_secs = period_duration_seconds(period_start, &period_end)?;
+            {
+                let mut t = totals.lock();
+                t.screenshot_count += 1;
+                if time_category == TIME_CATEGORY_INACTIVITY {
+                    t.inactivity_seconds += duration_secs;
+                }
+            }
+
+            flush_activity_period(db, tracking, period_start, &period_end, &bucket, Some(&record.original_id))?;
 
             SyncOutbox::enqueue(
                 db.lock().conn(),
@@ -348,7 +363,7 @@ pub(crate) fn capture_screenshot(
         Err(err) => {
             log::warn!("screenshot capture failed: {err} — flushing activity without screenshot");
             let period_end = chrono::Utc::now().to_rfc3339();
-            flush_activity_period(db, tracking, period_start, &period_end, &bucket, "no-screenshot")?;
+            flush_activity_period(db, tracking, period_start, &period_end, &bucket, None)?;
             Ok(CaptureOutcome {
                 screenshot: None,
                 period_end,
@@ -357,36 +372,7 @@ pub(crate) fn capture_screenshot(
     }
 }
 
-/// Lightweight period drain: drains the tracker bucket and persists
-/// peripheral events to SQLite, but does NOT capture a screenshot or
-/// enqueue sync items. This is used on pause/stop to save activity
-/// data without the expensive xcap capture + file I/O.
-///
-/// Callers should ensure the worker is stopped before this to avoid
-/// lock contention on `screenshot` and `tracker`.
-pub(crate) fn drain_activity_period(
-    db: &Arc<Mutex<Database>>,
-    tracker: &Arc<Mutex<ActivityTracker>>,
-    totals: &Arc<Mutex<TrackingTotals>>,
-    tracking: &ActiveTracking,
-    period_start: &str,
-) -> AgentResult<()> {
-    let bucket = tracker.lock().drain_bucket();
-    let raw_score = compute_activity_score(bucket.mouse_events, bucket.keyboard_events);
-    let activity_score = apply_activity_confidence(raw_score, bucket.confidence);
-    {
-        let mut totals_guard = totals.lock();
-        totals_guard.mouse_events += bucket.mouse_events;
-        totals_guard.keyboard_events += bucket.keyboard_events;
-        totals_guard.last_confidence = bucket.confidence;
-        totals_guard.last_activity_score = activity_score;
-    }
 
-    let period_end = chrono::Utc::now().to_rfc3339();
-    flush_activity_period(db, tracking, period_start, &period_end, &bucket, "no-screenshot")?;
-
-    Ok(())
-}
 
 pub(crate) fn close_open_sites(
     db: &Arc<Mutex<Database>>,

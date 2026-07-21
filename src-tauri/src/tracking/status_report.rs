@@ -25,27 +25,38 @@ impl TrackingManager {
             let inactivity_phase = inactivity_snapshot.as_ref().map(|s| s.phase);
             let (screenshot_count, last_screenshot_at, elapsed_seconds, inactivity_seconds) = {
                 let db = self.db.lock();
-                let (screenshot_count, last_screenshot_at) = db
-                    .screenshot_stats_for_tracking(&tracking.tracking_id)
-                    .unwrap_or((0, None));
-                let (elapsed_seconds, inactivity_seconds) = compute_display_times(
-                    &db,
-                    &tracking,
-                    inactivity_phase,
-                    session_active_secs,
-                )
-                .unwrap_or((0, 0));
+                let task_base = db.get_task_active_seconds(&tracking.task_id).unwrap_or(0);
+                drop(db);
+                let session_active = session_active_secs.unwrap_or(0);
+                let elapsed = task_base + session_active;
+                let extra_idle = match inactivity_phase {
+                    Some(TrackingInactivityPhase::PausedInactivity)
+                    | Some(TrackingInactivityPhase::ResumePrompt) => {
+                        let now = chrono::Utc::now().to_rfc3339();
+                        crate::db::period_duration_seconds(
+                            &tracking.current_period_start,
+                            &now,
+                        )
+                        .unwrap_or(0)
+                    }
+                    _ => 0,
+                };
                 (
-                    screenshot_count,
-                    last_screenshot_at,
-                    elapsed_seconds,
-                    inactivity_seconds,
+                    totals.screenshot_count,
+                    tracking.last_screenshot_at.clone(),
+                    elapsed,
+                    totals.inactivity_seconds + extra_idle,
                 )
             };
             let inactivity_status = inactivity_snapshot
                 .as_ref()
                 .map(|snapshot| inactivity_status_from_snapshot(snapshot.clone()))
                 .unwrap_or_default();
+
+            let clock_skew_detected = self.started_at_monotonic.lock().as_ref().is_some_and(|start| {
+                let monotonic_elapsed = start.elapsed().as_secs();
+                monotonic_elapsed.abs_diff(elapsed_seconds) > 60
+            });
 
             return TrackingStatus {
                 active: true,
@@ -60,7 +71,7 @@ impl TrackingManager {
                 activity_buffer_alert: buffer.alert_pending,
                 mouse_events: totals.mouse_events,
                 keyboard_events: totals.keyboard_events,
-                clock_skew_detected: false,
+                clock_skew_detected,
                 activity_confidence: totals.last_confidence,
                 activity_score: totals.last_activity_score,
                 tracker_mode: Some(tracker_mode_label(self.tracker.lock().mode()).into()),
@@ -114,16 +125,10 @@ impl TrackingManager {
             .lock()
             .as_ref()
             .map(|controller| controller.snapshot());
-        let inactivity_phase = inactivity_snapshot.as_ref().map(|snapshot| snapshot.phase);
-        let session_active = inactivity_snapshot.as_ref().map(|snapshot| snapshot.active_seconds);
+        let session_active = inactivity_snapshot.as_ref().map(|snapshot| snapshot.active_seconds).unwrap_or(0);
         let db = self.db.lock();
-        let (elapsed, _) = compute_display_times(
-            &db,
-            &tracking,
-            inactivity_phase,
-            session_active,
-        )?;
-        Ok(elapsed)
+        let task_base = db.get_task_active_seconds(&tracking.task_id)?;
+        Ok(task_base + session_active)
     }
 }
 

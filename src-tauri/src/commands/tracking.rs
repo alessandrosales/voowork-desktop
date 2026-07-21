@@ -201,13 +201,25 @@ pub fn skip_tracking_inactivity_classification(state: tauri::State<'_, AppState>
 }
 
 #[tauri::command]
-pub fn dismiss_inactivity_period(state: tauri::State<'_, AppState>) -> AgentResult<()> {
-    state.tracking_manager.dismiss_inactivity_period()
+pub async fn dismiss_inactivity_period(state: tauri::State<'_, AppState>) -> AgentResult<()> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        app_state.tracking_manager.dismiss_inactivity_period()
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("dismiss inactivity period failed: {err}")))??;
+    Ok(())
 }
 
 #[tauri::command]
-pub fn classify_paused_inactivity_period(state: tauri::State<'_, AppState>) -> AgentResult<()> {
-    state.tracking_manager.classify_paused_inactivity_period()
+pub async fn classify_paused_inactivity_period(state: tauri::State<'_, AppState>) -> AgentResult<()> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        app_state.tracking_manager.classify_paused_inactivity_period()
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("classify paused inactivity period failed: {err}")))??;
+    Ok(())
 }
 
 #[tauri::command]

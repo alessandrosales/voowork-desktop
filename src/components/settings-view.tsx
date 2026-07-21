@@ -73,8 +73,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
   // Load settings on mount
   useEffect(() => {
-    setLoading(true)
-
     Promise.all([
       trackedInvoke<string | null>("get_setting", { key: "screenshot_blur_enabled" }).catch(() => null),
       trackedInvoke<string | null>("get_setting", { key: "tracking_inactivity_profile" }).catch(() => null),
@@ -317,7 +315,7 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                       id="inactivity-countdown"
                       className="text-muted-foreground text-sm tabular-nums"
                     >
-                      {countdownSecs}s
+                      {t("common.seconds", { count: countdownSecs })}
                     </p>
                   </div>
                 </div>

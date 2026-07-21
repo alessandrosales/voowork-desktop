@@ -19,6 +19,7 @@ export const NO_TASK_ID = "__none__"
 
 type WorkspaceViewProps = Readonly<{
   projects: ProjectOption[]
+  projectsLoading: boolean
   resolvedProjectId: string
   resolvedTaskId: string
   disabled?: boolean
@@ -28,6 +29,7 @@ type WorkspaceViewProps = Readonly<{
 
 export function WorkspaceView({
   projects,
+  projectsLoading,
   resolvedProjectId,
   resolvedTaskId,
   disabled = false,
@@ -74,7 +76,7 @@ export function WorkspaceView({
   // Auto-expand all matching projects during search
   useEffect(() => {
     if (query) {
-      setExpandedProjects(new Set(filteredProjects.map((p) => p.id)))
+      queueMicrotask(() => setExpandedProjects(new Set(filteredProjects.map((p) => p.id))))
     }
   }, [query, filteredProjects])
 
@@ -85,6 +87,17 @@ export function WorkspaceView({
   const noProjects = projects.length === 0
 
   const renderBody = () => {
+    if (projectsLoading) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center py-16">
+          <div className="border-primary/30 size-8 animate-spin rounded-full border-2 border-t-transparent" />
+          <p className="text-muted-foreground mt-4 text-center text-sm">
+            {t("workspace.loading")}
+          </p>
+        </div>
+      )
+    }
+
     if (noProjects) {
       return (
         <div className="flex flex-1 flex-col items-center justify-center py-16">

@@ -15,7 +15,7 @@ use super::capture::{
     screenshot_time_category,
 };
 use super::constants::{
-    load_screenshot_interval_secs, screenshot_interval_source_label, APP_FOCUS_POLL_SECS,
+    load_screenshot_interval_secs, APP_FOCUS_POLL_SECS,
 };
 use super::inactivity_ui::handle_inactivity_phase_transition;
 use super::{ActiveTracking, TrackingTotals};
@@ -55,15 +55,6 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
         let mut screenshot_elapsed = Duration::ZERO;
         let mut tracking_focus_elapsed = Duration::ZERO;
         let tracking_focus_interval = Duration::from_secs(APP_FOCUS_POLL_SECS);
-        let screenshot_base_interval = {
-            let db_guard = db.lock();
-            load_screenshot_interval_secs(db_guard.conn())
-        };
-        log::info!(
-            "screenshot capture interval: {screenshot_base_interval}s from {}",
-            screenshot_interval_source_label()
-        );
-        let screenshot_interval = Duration::from_secs(screenshot_base_interval);
         let mut period_start = chrono::Utc::now().to_rfc3339();
 
         while worker_running.load(Ordering::SeqCst) {
@@ -115,6 +106,11 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                 handle_inactivity_phase_transition(&app, before, after);
             }
 
+            let screenshot_interval = {
+                let db_guard = db.lock();
+                Duration::from_secs(load_screenshot_interval_secs(db_guard.conn()))
+            };
+
             if screenshot_elapsed >= screenshot_interval {
                 screenshot_elapsed = Duration::ZERO;
                 let screenshot_phase = inactivity_controller
@@ -122,6 +118,17 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                     .clone()
                     .map(|ctrl| ctrl.snapshot().phase)
                     .unwrap_or(TrackingInactivityPhase::Active);
+
+                // M17: skip screenshots during manual pause — TimeDoctor compat.
+                if matches!(
+                    screenshot_phase,
+                    TrackingInactivityPhase::ManualPaused
+                        | TrackingInactivityPhase::ManualWorkCheck
+                ) {
+                    period_start = chrono::Utc::now().to_rfc3339();
+                    continue;
+                }
+
                 let time_category = screenshot_time_category(screenshot_phase);
                 match capture_screenshot(
                     &db,

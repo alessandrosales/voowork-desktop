@@ -129,18 +129,6 @@ impl Database {
         Ok(trackings)
     }
 
-    pub fn screenshot_stats_for_tracking(
-        &self,
-        tracking_id: &str,
-    ) -> AgentResult<(u64, Option<String>)> {
-        let (count, last_captured_at): (i64, Option<String>) = self.conn.query_row(
-            "SELECT COUNT(*), MAX(captured_at) FROM tracking_screenshots WHERE tracking_id = ?1",
-            params![tracking_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
-        Ok((count.max(0) as u64, last_captured_at))
-    }
-
     fn tracking_sync_status(&self, tracking_id: &str) -> AgentResult<String> {
         let status: Option<String> = self
             .conn

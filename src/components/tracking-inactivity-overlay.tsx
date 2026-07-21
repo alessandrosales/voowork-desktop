@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { AlertTriangleIcon, PauseCircleIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import type { TFunction } from "i18next"
@@ -54,7 +54,7 @@ function TrackingInactivityCountdownPanel({
       <div className="flex items-center justify-between text-sm">
         <span className="text-muted-foreground">{t("idle.autoPauseIn")}</span>
         <span className="font-mono text-2xl font-bold tabular-nums text-amber-500">
-          {remaining}s
+          {t("common.seconds", { count: remaining })}
         </span>
       </div>
       <div className="bg-muted h-2 overflow-hidden rounded-full">
@@ -88,16 +88,36 @@ export function TrackingInactivityOverlay({
   const countdownSeed =
     inactivity.countdownRemainingSecs ?? inactivity.countdownSecs
 
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = overlayRef.current
+    if (!el) return
+    const first = el.querySelector<HTMLButtonElement>("button")
+    first?.focus()
+  })
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Escape" && onReturnToWork) {
+        onReturnToWork()
+      }
+    },
+    [onReturnToWork],
+  )
+
   if (!showWarning && !showPaused && !showResume && !showManualWork) {
     return null
   }
 
   return (
     <div
+      ref={overlayRef}
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="idle-alert-title"
+      onKeyDown={handleKeyDown}
     >
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
