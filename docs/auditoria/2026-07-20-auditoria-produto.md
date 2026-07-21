@@ -14,7 +14,8 @@ O produto está **substancialmente implementado**: o núcleo de um time tracker 
 **Porém existiam 4 defeitos críticos e ~12 altos que afetam produção**, incluindo: um widget que exibe `00:00:00` permanentemente quando parado, uma configuração de release que pode apontar a API para `localhost`, perda sistemática do último período de atividade de cada sessão para a API, itens de sync perdidos em crash, e retry infinito de erros permanentes.
 
 **Veredito (atualizado em 2026-07-22):** os 4 itens P0 e 11 dos ~12 itens P1 foram corrigidos na branch `fix/p0-p1-remediation-round`.  
-**Veredito (2026-07-22, 7ª rodada):** todos os itens P1 restantes (M12, M13, M14, M17, M18, A12a) foram corrigidos na branch `fix/auditoria-pendentes`. O produto está **pronto para release** com ressalva de itens P2 não iniciados.
+**Veredito (2026-07-22, 7ª rodada):** todos os itens P1 restantes (M12, M13, M14, M17, M18, A12a) foram corrigidos na branch `fix/auditoria-pendentes`.  
+**Veredito (2026-07-22, 8ª rodada):** itens P2.1 a P2.5 implementados (sync_queue pruning, migrations versionadas, i18n, dead code, CI+testes). O produto está **pronto para release**.
 
 **Rodadas adicionais (2026-07-22 em diante):**
 - **N1, N2, N3** — Correções de dados na análise de fluxo: buffer claim após auth, `ended_at` estimado no crash, períodos idle órfãos fechados no crash. ✅
@@ -411,7 +412,16 @@ Boot finaliza trackings/apps/sites órfãos e segue.
 | A12(b) — heartbeat infinito (corrigido) | ✅ |
 
 ### P2 — dívida técnica e gargalos de desenvolvimento
-Ver seção 11. Em resumo: testes de frontend, geração de tipos IPC (ts-rs/specta), poda/limpeza (sync_queue, cache, disco), docs sync (JPEG→WebP, retry, TTL), remoção de superfície morta (17 commands, componentes, deps), CI mínimo (typecheck + clippy + testes). *Nenhum item P2 foi iniciado (M10 era P1, não P2).*
+Ver seção 11. Em resumo: geração de tipos IPC (ts-rs/specta), docs sync (JPEG→WebP, retry, TTL), remoção de superfície morta (17 commands, componentes, deps), erros ESLint.
+
+**Itens P2 iniciados (8ª rodada):**
+| Item | Status |
+|------|--------|
+| P2.1 — sync_queue pruning (7d TTL) | ✅ |
+| P2.2 — user_version nas migrations | ✅ |
+| P2.3 — strings fora do i18n (IPC error, seconds suffix) | ✅ |
+| P2.4 — dead code/dedup (EMPTY_TRACKING, formatElapsed, Toaster) | ✅ |
+| P2.5 — Vitest + GitHub Actions CI | ✅ |
 
 ---
 
@@ -483,4 +493,5 @@ Pelo backend-boundary, estas hipóteses **não** foram confirmadas e exigem insp
 **2026-07-22 (4ª rodada):** N1 (buffer claim após auth), N2 (ended_at estimado no crash), N3 (períodos idle órfãos no crash).  
 **2026-07-22 (5ª rodada):** M10 (tela de Settings como página com desfoque, inatividade, mini widget).  
 **2026-07-22 (6ª rodada):** Stop na UI (main window, mini widget, tray).
-**2026-07-22 (7ª rodada):** M12 (contadores em memória), M13 (commands off main thread), M14 (flush background no exit), M17 (skip screenshots na pausa manual), M18 (token SQLite documentado), A12(a) (métrica de teclado documentada).
+**2026-07-22 (7ª rodada):** M12 (contadores em memória), M13 (commands off main thread), M14 (flush background no exit), M17 (skip screenshots na pausa manual), M18 (token SQLite documentado), A12(a) (métrica de teclado documentada).  
+**2026-07-22 (8ª rodada):** P2.1 (sync_queue pruning), P2.2 (user_version migrations), P2.3 (i18n gaps: IPC error, seconds suffix), P2.4 (dead code/dedup: EMPTY_TRACKING, formatElapsed, Toaster), P2.5 (Vitest + CI workflow).
