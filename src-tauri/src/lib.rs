@@ -44,6 +44,7 @@ use tauri::{Manager, RunEvent};
 use tauri_plugin_log::{Target, TargetKind};
 use tray::{handle_tray_menu_event, setup_tray_from_state, spawn_refresh_loop};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
 use windows::{
     begin_mini_widget_drag, open_main_window, reset_mini_widget_position, setup_windows,
 };
@@ -233,13 +234,14 @@ pub fn run() {
                     if let Err(err) = state.tracking_manager.shutdown_for_quit() {
                         log::error!("failed to reset tracking on exit: {err}");
                     }
-                    // Flush pending sync items before process termination.
+                    // Flush in background thread to avoid blocking main thread.
                     state.sync_worker.stop();
-                    state.sync_worker.flush_blocking(
-                        state.db.clone(),
-                        app_handle.clone(),
-                        SYNC_FLUSH_TIMEOUT_SECS,
-                    );
+                    let sync_worker = state.sync_worker.clone();
+                    let db = state.db.clone();
+                    let handle = app_handle.clone();
+                    thread::spawn(move || {
+                        sync_worker.flush_blocking(db, handle, SYNC_FLUSH_TIMEOUT_SECS);
+                    });
                 }
             }
         });

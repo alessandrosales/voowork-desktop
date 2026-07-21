@@ -122,7 +122,7 @@ impl SyncWorker {
 
         rt.block_on(async move {
             let http_client = match reqwest::Client::builder()
-                .timeout(Duration::from_secs(HTTP_TIMEOUT_SECS))
+                .timeout(Duration::from_secs(timeout_secs))
                 .build()
             {
                 Ok(c) => c,
