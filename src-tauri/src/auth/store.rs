@@ -15,6 +15,18 @@ pub const DEFAULT_API_URL_DEV: &str = "http://localhost:3000";
 pub const DEFAULT_API_URL_PROD: &str = "https://api.voowork.com";
 pub const HTTP_TIMEOUT_SECS: u64 = 30;
 
+// ── Token storage design (M18) ──────────────────────────────────────────
+// The JWT access token is stored in two places:
+//   1. OS credential store (keyring) — preferred, encrypted at rest.
+//   2. SQLite `settings` table — permanent fallback in plaintext.
+//
+// This is intentional: the SQLite copy ensures sync and auth survive
+// keyring unavailability (dbus failure, headless environments, WSL).
+// The threat model assumes single-user workstation — file-system access
+// implies full compromise regardless of token encryption.
+// See docs/features/01-authentication.md for details.
+// ────────────────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuthUser {
