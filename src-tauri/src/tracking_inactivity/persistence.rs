@@ -69,14 +69,19 @@ pub fn insert_paused_inactivity_period(
     Ok(period_id)
 }
 
+/// Finaliza o período de inatividade ao retomar a atividade.
+///
+/// Retorna a **duração deste período** (wall-clock entre o início da
+/// inatividade e agora), que é gravada no próprio registro como
+/// `discarded_seconds`. O acumulado da sessão é responsabilidade do
+/// controller (soma as durações de cada período) — ver `state.rs`.
 pub fn finalize_inactivity_period_on_resume(
     conn: &Connection,
     period_id: &str,
     inactivity_started_at: &str,
-    previous_discarded: u64,
-) -> AgentResult<(u64, u64)> {
+) -> AgentResult<u64> {
     let resumed_at = chrono::Utc::now();
-    let total_discarded = chrono::DateTime::parse_from_rfc3339(inactivity_started_at)
+    let period_seconds = chrono::DateTime::parse_from_rfc3339(inactivity_started_at)
         .ok()
         .map(|start| {
             resumed_at
@@ -84,7 +89,7 @@ pub fn finalize_inactivity_period_on_resume(
                 .num_seconds()
                 .max(0) as u64
         })
-        .unwrap_or(previous_discarded);
+        .unwrap_or(0);
 
     let resumed_at_str = resumed_at.to_rfc3339();
     conn.execute(
@@ -92,29 +97,43 @@ pub fn finalize_inactivity_period_on_resume(
          SET resumed_at = ?2, duration_seconds = ?3, discarded_seconds = ?4,
              status = 'resumed', updated_at = ?2
          WHERE id = ?1",
-        rusqlite::params![period_id, resumed_at_str, total_discarded, total_discarded],
+        rusqlite::params![period_id, resumed_at_str, period_seconds, period_seconds],
     )?;
     let payload = serde_json::json!({
         "idlePeriodId": period_id,
         "resumedAt": resumed_at_str,
-        "discardedSeconds": total_discarded,
-        "durationSeconds": total_discarded,
+        "discardedSeconds": period_seconds,
+        "durationSeconds": period_seconds,
         "status": "resumed",
     });
     SyncOutbox::enqueue(conn, ENTITY_TRACKING_INACTIVITY_PERIOD, period_id, payload)?;
 
-    Ok((total_discarded, previous_discarded))
+    Ok(period_seconds)
 }
 
+/// Classifica um período. Usa o `discarded_seconds` **do próprio registro**
+/// (a duração daquele período) — nunca o acumulado da sessão — para calcular
+/// quanto tempo é creditado de volta (`reclassified_seconds`).
+///
+/// Retorna `(reclassificado?, segundos_do_período)`.
 pub fn classify_tracking_inactivity_period_record(
     conn: &Connection,
     period_id: &str,
     category: &str,
-    discarded_seconds: u64,
 ) -> AgentResult<(bool, u64)> {
+    let period_seconds: u64 = conn
+        .query_row(
+            "SELECT discarded_seconds FROM tracking_inactivity_periods WHERE id = ?1",
+            [period_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()?
+        .map(|v| v.max(0) as u64)
+        .unwrap_or(0);
+
     let reclassify = matches!(category, "meeting_call" | "offline_work");
     let now = chrono::Utc::now().to_rfc3339();
-    let reclassified_seconds = if reclassify { discarded_seconds } else { 0 };
+    let reclassified_seconds = if reclassify { period_seconds } else { 0 };
     conn.execute(
         "UPDATE tracking_inactivity_periods
          SET category = ?2, reclassified_seconds = ?3, status = 'classified', updated_at = ?4
@@ -125,11 +144,11 @@ pub fn classify_tracking_inactivity_period_record(
         "idlePeriodId": period_id,
         "category": category,
         "reclassified": reclassify,
-        "durationSeconds": discarded_seconds,
+        "durationSeconds": period_seconds,
         "resumedAt": now,
     });
     SyncOutbox::enqueue(conn, ENTITY_TRACKING_INACTIVITY_PERIOD, period_id, payload)?;
-    Ok((reclassify, discarded_seconds))
+    Ok((reclassify, period_seconds))
 }
 
 pub fn discard_inactivity_period_record(

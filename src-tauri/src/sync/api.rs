@@ -277,16 +277,19 @@ async fn parse_screenshot_response(response: reqwest::Response) -> AgentResult<O
         return Err(AgentError::Auth(error_message_from_body(&body)));
     }
 
-    if status == StatusCode::NOT_FOUND {
-        return Err(AgentError::Other(format!("sync not found {status}: {body}")));
-    }
-
     if status == StatusCode::UNPROCESSABLE_ENTITY && is_duplicate_screenshot_error(&body) {
         log::info!("screenshot already exists on server, treating sync as confirmed");
         return Ok(None);
     }
 
-    Err(AgentError::Other(format!("sync failed {status}: {body}")))
+    if status.is_client_error() {
+        // 4xx (exceto 401/403 e duplicado): rejeição permanente → dead-letter.
+        return Err(AgentError::SyncTerminal(format!(
+            "screenshot rejected {status}: {body}"
+        )));
+    }
+
+    Err(AgentError::Other(format!("screenshot sync failed {status}: {body}")))
 }
 
 fn is_duplicate_screenshot_error(body: &str) -> bool {
@@ -318,8 +321,10 @@ async fn parse_response(response: reqwest::Response) -> AgentResult<()> {
         return Err(AgentError::Auth(error_message_from_body(&body)));
     }
 
-    if status == StatusCode::NOT_FOUND {
-        return Err(AgentError::Other(format!("sync not found {status}: {body}")));
+    if status.is_client_error() {
+        // 4xx (exceto 401/403): tracking/task inexistente, validação, conflito.
+        // Nada disso passa em retry — encaminhar para dead-letter (A3).
+        return Err(AgentError::SyncTerminal(format!("sync rejected {status}: {body}")));
     }
 
     Err(AgentError::Other(format!("sync failed {status}: {body}")))

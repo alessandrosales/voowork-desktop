@@ -42,6 +42,18 @@ impl SyncOutbox {
         Ok(())
     }
 
+    /// Move o item para dead-letter (`status = 'dead'`): não é mais buscado
+    /// por `fetch_pending_batch`, encerrando o retry. Usado para erros
+    /// permanentes (4xx) e para itens que estouraram o limite de tentativas.
+    pub fn mark_dead(conn: &Connection, id: &str, error: &str) -> AgentResult<()> {
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE sync_queue SET status = 'dead', error_message = ?2, last_attempt_at = ?3, next_retry_at = NULL WHERE id = ?1",
+            params![id, error, now],
+        )?;
+        Ok(())
+    }
+
     pub fn mark_failed(conn: &Connection, id: &str, error: &str, attempts: i64) -> AgentResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
         let backoff_secs = (2_i64.pow(attempts.min(8) as u32)).min(3600);
@@ -62,6 +74,23 @@ pub struct PendingSyncItem {
     pub entity_id: String,
     pub payload_json: String,
     pub attempts: i64,
+}
+
+/// Recupera itens presos em `sending` após um crash/kill no meio de um envio.
+///
+/// Sem isso, um item marcado `sending` (attempts já incrementado) nunca mais
+/// é buscado por `fetch_pending_batch` — fica órfão para sempre. Devolvê-lo
+/// para `pending` no boot permite o reprocessamento; a idempotência por UUID
+/// no backend protege contra duplo envio caso o envio original tenha chegado.
+///
+/// Deve ser chamado no boot, antes de o worker de sync iniciar.
+pub fn requeue_stuck_sending_items(conn: &Connection) -> AgentResult<usize> {
+    let now = chrono::Utc::now().to_rfc3339();
+    let affected = conn.execute(
+        "UPDATE sync_queue SET status = 'pending', next_retry_at = ?1 WHERE status = 'sending'",
+        params![now],
+    )?;
+    Ok(affected)
 }
 
 pub fn fetch_pending_batch(conn: &Connection, limit: usize) -> AgentResult<Vec<PendingSyncItem>> {

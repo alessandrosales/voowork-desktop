@@ -9,7 +9,7 @@ pub use constants::{
     ENTITY_TRACKING_SCREENSHOT, ENTITY_TRACKING_SITE, EVENT_AUTH_SESSION_EXPIRED, SYNC_FLUSH_TIMEOUT_SECS,
 };
 pub use outbox::{
-    fetch_pending_batch, mark_tracking_screenshot_synced, tracking_screenshot_file_path,
-    PendingSyncItem, SyncOutbox,
+    fetch_pending_batch, mark_tracking_screenshot_synced, requeue_stuck_sending_items,
+    tracking_screenshot_file_path, PendingSyncItem, SyncOutbox,
 };
 pub use api::send_sync_item;

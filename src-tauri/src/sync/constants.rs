@@ -12,6 +12,11 @@ pub const ENTITY_TRACKING_SITE: &str = "tracking_site";
 /// Tamanho máximo de lote por ciclo do worker.
 pub const PENDING_BATCH_SIZE: usize = 10;
 
+/// Máximo de tentativas antes de mover um item para dead-letter (`dead`).
+/// Rede intermitente cabe folgadamente nesse limite; além disso, o item
+/// provavelmente está envenenado e não deve retentar para sempre (A3).
+pub const MAX_SYNC_ATTEMPTS: i64 = 8;
+
 /// Timeout HTTP para requisições de sync e upload.
 pub const HTTP_TIMEOUT_SECS: u64 = 60;
 
