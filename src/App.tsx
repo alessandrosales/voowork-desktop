@@ -5,8 +5,6 @@ import { MiniTimerWidget } from "@/components/mini-timer-widget"
 import { TimerApp } from "@/components/timer-app"
 import { PermissionBanner } from "@/components/permission-banner"
 import { useAuth } from "@/hooks/use-auth"
-import { Toaster } from "@/components/ui/sonner"
-
 function isMiniTimerView() {
   return new URLSearchParams(window.location.search).get("view") === "mini"
 }
@@ -40,7 +38,6 @@ export default function App() {
           )}
         </div>
       </div>
-      <Toaster />
     </>
   )
 }

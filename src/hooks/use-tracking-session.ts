@@ -71,7 +71,7 @@ const EMPTY_INACTIVITY: TrackingInactivityStatus = {
   inactivityReclassifiedSeconds: 0,
 }
 
-const EMPTY_TRACKING: TrackingStatus = {
+export const EMPTY_TRACKING: TrackingStatus = {
   active: false,
   trackingId: null,
   projectId: null,
