@@ -6,6 +6,7 @@ use crate::tracking_focus::{
     ActiveWindowSample,
 };
 use crate::db::{Database, TIME_CATEGORY_ACTIVE, TIME_CATEGORY_INACTIVITY};
+use crate::db::period_duration_seconds;
 use crate::error::AgentResult;
 use crate::tracking_inactivity::{TrackingInactivityController, TrackingInactivityPhase};
 use crate::screenshot::{ScreenshotCapture, TrackingScreenshotCaptureContext, TrackingScreenshotRecord};
@@ -321,6 +322,16 @@ pub(crate) fn capture_screenshot(
             };
 
             let period_end = record.captured_at.clone();
+
+            let duration_secs = period_duration_seconds(period_start, &period_end)?;
+            {
+                let mut t = totals.lock();
+                t.screenshot_count += 1;
+                if time_category == TIME_CATEGORY_INACTIVITY {
+                    t.inactivity_seconds += duration_secs;
+                }
+            }
+
             flush_activity_period(db, tracking, period_start, &period_end, &bucket, &record.original_id)?;
 
             SyncOutbox::enqueue(
