@@ -150,7 +150,29 @@ export function TimerApp() {
     () => projects.find((p) => p.id === resolvedProjectId),
     [projects, resolvedProjectId]
   )
-  const resolvedTaskId = taskId
+  const resolvedTaskId = useMemo(() => {
+    if (taskId === NO_TASK_ID) return NO_TASK_ID
+    if (
+      selectedProject?.tasks &&
+      !selectedProject.tasks.some((t) => t.id === taskId)
+    ) {
+      return NO_TASK_ID
+    }
+    return taskId
+  }, [taskId, selectedProject])
+  // Clear stale persisted task selection when task no longer exists in project
+  useEffect(() => {
+    if (
+      taskId !== NO_TASK_ID &&
+      selectedProject?.tasks &&
+      !selectedProject.tasks.some((t) => t.id === taskId)
+    ) {
+      trackedInvoke("set_setting", {
+        key: SETTING_SELECTED_TASK_ID,
+        value: "",
+      }).catch(() => undefined)
+    }
+  }, [taskId, selectedProject])
   const selectedTask = useMemo(
     () =>
       resolvedTaskId === NO_TASK_ID
@@ -238,17 +260,67 @@ export function TimerApp() {
     return () => window.clearInterval(interval)
   }, [view, loadProjects])
 
+  // ─── Overlays (shared across views) ──────────────────────
+  const inactivityOverlay =
+    active &&
+    (idlePhase === "manual_work_check" ||
+      idlePhase === "paused_inactivity" ||
+      idlePhase === "resume_prompt" ||
+      idlePhase === "warning" ||
+      idlePhase === "countdown") ? (
+      <TrackingInactivityOverlay
+        inactivity={tracking.inactivity}
+        loading={loading}
+        onConfirmStillWorking={confirmStillWorking}
+        onAcknowledgeReturn={skipTrackingInactivityClassification}
+        onClassifyInactivity={async () => {
+          if (tracking.inactivity.pendingPeriodId) {
+            await classifyTrackingInactivityPeriod(
+              tracking.inactivity.pendingPeriodId,
+              "offline_work"
+            )
+          }
+        }}
+        onClassifyPausedInactivity={classifyPausedInactivityPeriod}
+        onConfirmManualWork={confirmManualWork}
+        onDismissManualWork={dismissManualWorkCheck}
+        onPauseTracking={pauseTracking}
+        onReturnToWork={dismissInactivityPeriod}
+      />
+    ) : null
+
+  const bufferAlertBlock =
+    auth.isAuthenticated &&
+    !active &&
+    !loading &&
+    tracking.activityBufferAlert &&
+    resolvedTaskId !== NO_TASK_ID ? (
+      <BufferAlert
+        bufferSeconds={tracking.activityBufferSeconds}
+        loading={loading}
+        onDismiss={dismissActivityBuffer}
+        onStart={async () => {
+          if (!canStart) return
+          await startTracking(resolvedProjectId, resolvedTaskId)
+        }}
+      />
+    ) : null
+
   // ─── Workspace view ───────────────────────────────────────
   if (view === "workspace") {
     return (
-      <WorkspaceView
-        projects={projects}
-        resolvedProjectId={resolvedProjectId}
-        resolvedTaskId={resolvedTaskId}
-        disabled={active && !manuallyPaused}
-        onSelect={handleSelectTask}
-        onBack={handleBackToTimer}
-      />
+      <>
+        <WorkspaceView
+          projects={projects}
+          resolvedProjectId={resolvedProjectId}
+          resolvedTaskId={resolvedTaskId}
+          disabled={active && !manuallyPaused}
+          onSelect={handleSelectTask}
+          onBack={handleBackToTimer}
+        />
+        {inactivityOverlay}
+        {bufferAlertBlock}
+      </>
     )
   }
 
@@ -391,48 +463,9 @@ export function TimerApp() {
         </p>
       ) : null}
 
-      {active &&
-      (idlePhase === "manual_work_check" ||
-        idlePhase === "paused_inactivity" ||
-        idlePhase === "resume_prompt" ||
-        idlePhase === "warning" ||
-        idlePhase === "countdown") ? (
-        <TrackingInactivityOverlay
-          inactivity={tracking.inactivity}
-          loading={loading}
-          onConfirmStillWorking={confirmStillWorking}
-          onAcknowledgeReturn={skipTrackingInactivityClassification}
-          onClassifyInactivity={async () => {
-            if (tracking.inactivity.pendingPeriodId) {
-              await classifyTrackingInactivityPeriod(
-                tracking.inactivity.pendingPeriodId,
-                "offline_work"
-              )
-            }
-          }}
-          onClassifyPausedInactivity={classifyPausedInactivityPeriod}
-          onConfirmManualWork={confirmManualWork}
-          onDismissManualWork={dismissManualWorkCheck}
-          onPauseTracking={pauseTracking}
-          onReturnToWork={dismissInactivityPeriod}
-        />
-      ) : null}
+      {inactivityOverlay}
 
-      {auth.isAuthenticated &&
-      !active &&
-      !loading &&
-      tracking.activityBufferAlert &&
-      resolvedTaskId !== NO_TASK_ID ? (
-        <BufferAlert
-          bufferSeconds={tracking.activityBufferSeconds}
-          loading={loading}
-          onDismiss={dismissActivityBuffer}
-          onStart={async () => {
-            if (!canStart) return
-            await startTracking(resolvedProjectId, resolvedTaskId)
-          }}
-        />
-      ) : null}
+      {bufferAlertBlock}
     </div>
   )
 }
