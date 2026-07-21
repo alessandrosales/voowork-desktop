@@ -1,15 +1,30 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::error::{AgentError, AgentResult};
 use crate::sync::{SyncOutbox, ENTITY_TRACKING};
 
 use super::capture::{close_open_apps, close_open_sites, drain_activity_period};
+use super::constants::WORKER_JOIN_TIMEOUT_SECS;
 use super::worker::{spawn_tracking_worker, TrackingWorkerContext};
 use super::TrackingManager;
 
 impl TrackingManager {
+    /// Public wrapper that acquires the state-transition guard before
+    /// delegating to the inner implementation.
+    #[allow(dead_code)]
     pub(crate) fn finalize_active_tracking(
+        &self,
+        clear_inactivity_controller: bool,
+    ) -> AgentResult<()> {
+        let _guard = self.state_transition.lock();
+        self.finalize_active_tracking_inner(clear_inactivity_controller)
+    }
+
+    /// Inner implementation — no lock on `state_transition`; callers must
+    /// hold it if concurrency safety is required.
+    pub(super) fn finalize_active_tracking_inner(
         &self,
         clear_inactivity_controller: bool,
     ) -> AgentResult<()> {
@@ -94,12 +109,24 @@ impl TrackingManager {
         *self.worker_handle.lock() = Some(handle);
     }
 
-    fn stop_worker(&self) {
+    pub(super) fn stop_worker(&self) {
         self.worker_running.store(false, Ordering::SeqCst);
         if let Some(handle) = self.worker_handle.lock().take() {
+            // Synchronous join with timeout — never block quit forever.
+            let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
                 let _ = handle.join();
+                let _ = tx.send(());
             });
+            if rx
+                .recv_timeout(Duration::from_secs(WORKER_JOIN_TIMEOUT_SECS))
+                .is_err()
+            {
+                log::warn!(
+                    "worker did not stop within {}s — proceeding anyway",
+                    WORKER_JOIN_TIMEOUT_SECS
+                );
+            }
         }
     }
 }

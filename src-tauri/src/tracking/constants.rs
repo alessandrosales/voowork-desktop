@@ -1,6 +1,7 @@
 pub const SCREENSHOT_BASE_INTERVAL_SECS: u64 = 300;
 pub const APP_FOCUS_POLL_SECS: u64 = 15;
 pub const MIN_SCREENSHOT_INTERVAL_SECS: u64 = 10;
+pub const WORKER_JOIN_TIMEOUT_SECS: u64 = 5;
 
 pub const SETTING_SCREENSHOT_INTERVAL_SECS: &str = "screenshot_interval_secs";
 
