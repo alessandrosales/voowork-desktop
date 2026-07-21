@@ -34,8 +34,8 @@
       "git *": "allow",
       "git commit *": "ask",
       "git push *": "deny",
-      "rm *": "deny",
-      "sudo *": "deny"
+      "rm *": "ask",
+      "sudo *": "ask"
     }
   },
 
