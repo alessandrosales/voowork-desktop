@@ -1,5 +1,4 @@
 use crate::error::AgentResult;
-use crate::sync::{SyncOutbox, ENTITY_TRACKING_INACTIVITY_PERIOD};
 use rusqlite::{Connection, OptionalExtension};
 use uuid::Uuid;
 
@@ -57,15 +56,6 @@ pub fn insert_paused_inactivity_period(
          ) VALUES (?1, ?2, ?3, ?4, 'paused', ?5, ?5, ?6, ?6)",
         rusqlite::params![period_id, tracking_id, inactivity_started_at, paused_at, discarded_seconds, paused_at],
     )?;
-    let payload = serde_json::json!({
-        "idlePeriodId": period_id,
-        "trackingId": tracking_id,
-        "idleStartedAt": inactivity_started_at,
-        "pausedAt": paused_at,
-        "discardedSeconds": discarded_seconds,
-        "status": "paused",
-    });
-    SyncOutbox::enqueue(conn, ENTITY_TRACKING_INACTIVITY_PERIOD, &period_id, payload)?;
     Ok(period_id)
 }
 
@@ -99,15 +89,6 @@ pub fn finalize_inactivity_period_on_resume(
          WHERE id = ?1",
         rusqlite::params![period_id, resumed_at_str, period_seconds, period_seconds],
     )?;
-    let payload = serde_json::json!({
-        "idlePeriodId": period_id,
-        "resumedAt": resumed_at_str,
-        "discardedSeconds": period_seconds,
-        "durationSeconds": period_seconds,
-        "status": "resumed",
-    });
-    SyncOutbox::enqueue(conn, ENTITY_TRACKING_INACTIVITY_PERIOD, period_id, payload)?;
-
     Ok(period_seconds)
 }
 
@@ -140,14 +121,6 @@ pub fn classify_tracking_inactivity_period_record(
          WHERE id = ?1",
         rusqlite::params![period_id, category, reclassified_seconds, now],
     )?;
-    let payload = serde_json::json!({
-        "idlePeriodId": period_id,
-        "category": category,
-        "reclassified": reclassify,
-        "durationSeconds": period_seconds,
-        "resumedAt": now,
-    });
-    SyncOutbox::enqueue(conn, ENTITY_TRACKING_INACTIVITY_PERIOD, period_id, payload)?;
     Ok((reclassify, period_seconds))
 }
 
@@ -160,10 +133,5 @@ pub fn discard_inactivity_period_record(
         "UPDATE tracking_inactivity_periods SET status = 'discarded', updated_at = ?2 WHERE id = ?1",
         rusqlite::params![period_id, now],
     )?;
-    let payload = serde_json::json!({
-        "idlePeriodId": period_id,
-        "status": "discarded",
-    });
-    SyncOutbox::enqueue(conn, ENTITY_TRACKING_INACTIVITY_PERIOD, period_id, payload)?;
     Ok(())
 }

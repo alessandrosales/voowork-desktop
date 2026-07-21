@@ -141,19 +141,26 @@ pub fn mark_tracking_screenshot_synced(
              WHERE id = ?1",
             params![screenshot_id, now, remote_path],
         )?;
-
-        if let Some(local_path) = local_path {
-            if local_path != remote_path {
-                if let Err(err) = crate::screenshot::purge_local_file(&local_path) {
-                    log::warn!("failed to purge local screenshot {local_path}: {err}");
-                }
-            }
-        }
     } else {
         conn.execute(
             "UPDATE tracking_screenshots SET updated_at = ?2, synced_at = ?2 WHERE id = ?1",
             params![screenshot_id, now],
         )?;
+    }
+
+    // Purge o arquivo local independentemente de remote_path — se a API não
+    // retornou o path (ex: resposta sem campo `path` ou duplicata 422), o
+    // upload já foi confirmado e o arquivo local não é mais necessário.
+    //
+    // Apenas evitamos purge se local_path == remote_path (nunca acontece
+    // porque remote_path é S3 while local_path é disco).
+    if let Some(local_path) = local_path {
+        let is_same = remote_path.is_some_and(|r| r == local_path);
+        if !is_same {
+            if let Err(err) = crate::screenshot::purge_local_file(&local_path) {
+                log::warn!("failed to purge local screenshot {local_path}: {err}");
+            }
+        }
     }
 
     Ok(())

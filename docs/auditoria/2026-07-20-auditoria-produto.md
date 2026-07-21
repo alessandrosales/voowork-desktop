@@ -280,12 +280,12 @@ Todos os achados citam `arquivo:linha`. Achados marcados **(verificado)** foram 
 | M8 | `profile-menu.tsx:63-71` | Logout sem confirmação durante tracking ativo (encerra a sessão de tempo) | ✅ |
 | M9 | `auth/client.rs:174-177`, `auth/commands.rs:120-127` | `validate_auth_session` sobrescreve o nome da organização com `""` | ✅ |
 | M10 | `frontend_settings.rs:16-29` | Settings prontas (blur, qualidade, thresholds, intervalo, mini widget) **sem nenhuma tela** — features inatingíveis | ❌ |
-| M11 | `db/dashboard.rs:7-60` | `avg_activity_confidence` hardcoded `1.0`; "hoje" em UTC (vira às 21h em GMT-3); `hours_today_seconds` inclui pausas/inatividade — diverge do timer | ❌ |
+| M11 | `db/dashboard.rs:7-60` | `avg_activity_confidence` hardcoded `1.0` (TODO documentado); "hoje" agora usa `chrono::Local`; `hours_today_seconds` subtrai períodos de inatividade | ✅ |
 | M12 | `tray/refresh.rs:61-89`, `tracking/status_report.rs:26-44`, `db/task_time.rs:48-98` | Status 3×/s (main window, mini-timer, tray) faz **scan completo + parse RFC3339 de todas as screenshots** do tracking; tray roda isso **na main thread** — degrada sessões longas | ❌ |
 | M13 | `commands/tracking.rs:194-201`, `commands/dashboard.rs`, `tray/actions.rs:70` | Captura de screenshot (xcap + encode) e queries N+1 (`db/trackings.rs:105-127`, ~200 queries por listagem) executadas **na main thread** — UI congela por centenas de ms | ❌ |
 | M14 | `lib.rs:236-243`, `sync/worker.rs:90-160` | `flush_blocking` bloqueia a main thread até 30s no exit; request in-flight de 60s estoura o deadline; worker em batch concorre com o flush (janela de duplo envio — coberta pela idempotência UUID, **se** o backend a honrar) | ❌ |
-| M15 | `sync/outbox.rs:100-131` | Se a API não retornar `path` (inclui duplicado), o arquivo local nunca é purgado | ❌ |
-| M16 | `sync/api.rs:51-52`, `tracking_inactivity/persistence.rs:68,104,131,148` | Períodos de inatividade são enfileirados no outbox para serem imediatamente pulados ("local only") — churn desnecessário da fila | ❌ |
+| M15 | `sync/outbox.rs:100-131` | Se a API não retornar `path` (inclui duplicado), o arquivo local nunca é purgado | ✅ |
+| M16 | `sync/api.rs:51-52`, `tracking_inactivity/persistence.rs:68,104,131,148` | Períodos de inatividade são enfileirados no outbox para serem imediatamente pulados ("local only") — churn desnecessário da fila | ✅ |
 | M17 | `tracking/worker.rs:118-144` | Pausa **manual** continua capturando screenshots + atividade (categoria `inactivity`). Spec confirma para pausa por inatividade, mas é **omissa para pausa manual** — decisão de privacidade/produto a explicitar (TimeDoctor para de capturar na pausa) | ❌ |
 | M18 | `auth/store.rs:125, 217-232` | Token JWT em texto claro no SQLite (fallback permanente, nunca limpo) — risco aceitável para threat model local, mas deve ser decisão documentada | ❌ |
 
@@ -363,7 +363,8 @@ Boot finaliza trackings/apps/sites órfãos e segue.
 
 > **Atualizações:**  
 > 2026-07-21 — Itens P0 e P1 corrigidos na branch `fix/p0-p1-remediation-round`.  
-> 2026-07-22 — Segunda rodada de correções: A9, A12(b), M6, M8, M9.
+> 2026-07-22 — Segunda rodada: A9, A12(b), M6, M8, M9.  
+> 2026-07-22 — Terceira rodada: M11, M15, M16.
 
 ### P0 — antes de qualquer release (quebra de produção / perda de dados)
 1. **C1** — `taskId` camelCase no mini widget + não engolir o erro. ✅
@@ -390,6 +391,9 @@ Boot finaliza trackings/apps/sites órfãos e segue.
 | **M7** — validar task contra projeto | ✅ |
 | **M8** — confirmar logout durante tracking | ✅ |
 | **M9** — org name preservado no validate_auth_session | ✅ |
+| **M11** — dashboard: local time, subtrai idle, TODO confidence | ✅ |
+| **M15** — purge local screenshot sem remote_path | ✅ |
+| **M16** — idle periods não enfileirados no outbox | ✅ |
 | A12(a) — métrica de teclado inflada (limitação macOS) | ⚠️ |
 | Expor **stop na UI** (decisão de produto) | ❌ |
 | Expor **indicador de sync** (decisão de produto) | ❌ |
@@ -463,4 +467,5 @@ Pelo backend-boundary, estas hipóteses **não** foram confirmadas e exigem insp
 
 **Atualizações:**  
 **2026-07-21** — 1ª rodada: C1, C2, C3, C4, A2, A3, A4, A5, A6, A7, A8, M3, M4, M5, M7 corrigidos.  
-**2026-07-22** — 2ª rodada: A9 (re-check de permissão no foco), A12(b) (heartbeat usa threshold de inatividade), M6 (evicção de cache), M8 (confirmação de logout), M9 (org name preservado).
+**2026-07-22** — 2ª rodada: A9 (re-check de permissão no foco), A12(b) (heartbeat usa threshold de inatividade), M6 (evicção de cache), M8 (confirmação de logout), M9 (org name preservado).  
+**2026-07-22** — 3ª rodada: M11 (dashboard: local time, subtrai idle, confiança documentada), M15 (purga local screenshot sem remote_path), M16 (idle periods não enfileirados no outbox).
