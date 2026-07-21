@@ -509,6 +509,9 @@ impl TrackingManager {
             Ok(_) => {}
             Err(err) => log::warn!("failed to requeue stuck sync items: {err}"),
         }
+        if let Err(err) = db.purge_confirmed_sync_items() {
+            log::warn!("failed to purge old sync items: {err}");
+        }
         db.clear_task_time_totals()?;
         Ok(count)
     }
