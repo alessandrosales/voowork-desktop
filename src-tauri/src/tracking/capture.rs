@@ -1,3 +1,4 @@
+use crate::activity::constants::activity_level_from_score;
 use crate::activity::tracker::ActivityBucket;
 use crate::activity::{apply_activity_confidence, compute_activity_score, ActivityTracker};
 use crate::tracking_focus::{
@@ -64,6 +65,7 @@ mod flush_tests {
             task_id: "task".into(),
             started_at: chrono::Utc::now().to_rfc3339(),
             last_screenshot_at: None,
+            last_screenshot_hash: None,
             current_period_start: chrono::Utc::now().to_rfc3339(),
         };
 
@@ -275,6 +277,7 @@ pub(crate) fn capture_screenshot(
     let bucket = tracker.lock().drain_bucket();
     let raw_score = compute_activity_score(bucket.mouse_events, bucket.keyboard_events);
     let activity_score = apply_activity_confidence(raw_score, bucket.confidence);
+    let activity_level = activity_level_from_score(activity_score);
     {
         let mut totals_guard = totals.lock();
         totals_guard.mouse_events += bucket.mouse_events;
@@ -290,6 +293,19 @@ pub(crate) fn capture_screenshot(
 
     match capture_result {
         Ok((width, height, image_bytes)) => {
+            let jpeg_quality = screenshot.lock().jpeg_quality();
+            let hash_before_capture = {
+                let (_, _, stored_bytes) = crate::screenshot::process_raw_rgba(
+                    &image_bytes,
+                    width,
+                    height,
+                    jpeg_quality,
+                ).unwrap_or((width, height, image_bytes.clone()));
+                crate::crypto::DeviceKeys::hash_bytes(&stored_bytes)
+            };
+
+            let is_duplicate = tracking.last_screenshot_hash.as_deref() == Some(&hash_before_capture);
+
             let context = TrackingScreenshotCaptureContext {
                 tracking_id: &tracking.tracking_id,
                 period_start,
@@ -305,6 +321,8 @@ pub(crate) fn capture_screenshot(
                     width,
                     height,
                     &image_bytes,
+                    is_duplicate,
+                    activity_level,
                 )?
             };
 
@@ -332,6 +350,8 @@ pub(crate) fn capture_screenshot(
                     "sha256Hash": record.sha256_hash,
                     "width": record.width,
                     "height": record.height,
+                    "isDuplicate": record.is_duplicate,
+                    "activityLevel": record.activity_level,
                 }),
             )?;
 

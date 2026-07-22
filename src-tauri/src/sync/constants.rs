@@ -15,9 +15,12 @@ pub const MAX_SYNC_ATTEMPTS: i64 = 8;
 pub const HTTP_TIMEOUT_SECS: u64 = 60;
 
 pub const WORKER_IDLE_NO_TOKEN_SECS: u64 = 30;
-pub const WORKER_IDLE_EMPTY_QUEUE_SECS: u64 = 5;
+/// TimeDoctor-aligned: sync every ~15s when queue is empty (instead of 5s)
+pub const WORKER_IDLE_EMPTY_QUEUE_SECS: u64 = 15;
 pub const WORKER_IDLE_AFTER_SESSION_REVOKED_SECS: u64 = 60;
-pub const WORKER_IDLE_BETWEEN_BATCHES_SECS: u64 = 2;
+/// TimeDoctor-aligned: wait ~15s between batches (TimeDoctor syncs every 3-5 min;
+/// but we keep a more responsive cadence for UX while reducing churn)
+pub const WORKER_IDLE_BETWEEN_BATCHES_SECS: u64 = 15;
 
 pub const EVENT_AUTH_SESSION_EXPIRED: &str = "auth-session-expired";
 

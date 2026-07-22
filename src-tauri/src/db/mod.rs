@@ -166,6 +166,20 @@ impl Database {
                  ALTER TABLE tracking_screenshots ADD COLUMN synced_at TEXT;",
             )?;
         }
+
+        let has_is_duplicate: bool = self.conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('tracking_screenshots') WHERE name = 'is_duplicate'",
+            [],
+            |row| row.get::<_, i64>(0),
+        ).map(|count| count > 0).unwrap_or(false);
+
+        if !has_is_duplicate {
+            self.conn.execute_batch(
+                "ALTER TABLE tracking_screenshots ADD COLUMN is_duplicate INTEGER NOT NULL DEFAULT 0;
+                 ALTER TABLE tracking_screenshots ADD COLUMN activity_level TEXT NOT NULL DEFAULT 'medium';",
+            )?;
+        }
+
         Ok(())
     }
 

@@ -33,7 +33,8 @@ impl Database {
     ) -> AgentResult<Vec<TrackingScreenshotRow>> {
         let mut stmt = self.conn.prepare(
             "SELECT s.id, s.tracking_id, s.original_id, s.captured_at, s.path, s.remote_path, s.synced_at,
-                    COALESCE(q.status, 'local') AS sync_status
+                    COALESCE(q.status, 'local') AS sync_status,
+                    s.is_duplicate, s.activity_level
              FROM tracking_screenshots s
              LEFT JOIN sync_queue q ON q.entity_type = ?3 AND q.entity_id = s.id
              ORDER BY s.captured_at DESC
@@ -57,6 +58,8 @@ impl Database {
                     synced_at: row.get(6)?,
                     sync_status: row.get(7)?,
                     has_local_file,
+                    is_duplicate: row.get::<_, i64>(8)? != 0,
+                    activity_level: row.get(9)?,
                 })
             },
         )?;

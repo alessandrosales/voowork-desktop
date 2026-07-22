@@ -15,7 +15,7 @@ use super::capture::{
     close_open_sites_at, record_tracking_app_and_site, screenshot_time_category,
 };
 use super::constants::{
-    load_screenshot_interval_secs, APP_FOCUS_POLL_SECS,
+    load_randomized_screenshot_interval, APP_FOCUS_POLL_SECS,
 };
 use super::inactivity_ui::handle_inactivity_phase_transition;
 use super::{ActiveTracking, TrackingTotals};
@@ -124,7 +124,7 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
 
             let screenshot_interval = {
                 let db_guard = db.lock();
-                Duration::from_secs(load_screenshot_interval_secs(db_guard.conn()))
+                Duration::from_secs(load_randomized_screenshot_interval(db_guard.conn()))
             };
 
             if screenshot_elapsed >= screenshot_interval {
@@ -162,6 +162,8 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                             if let Some(ref record) = outcome.screenshot {
                                 active_tracking.last_screenshot_at =
                                     Some(record.captured_at.clone());
+                                active_tracking.last_screenshot_hash =
+                                    Some(record.sha256_hash.clone());
                             }
                         }
                     }
