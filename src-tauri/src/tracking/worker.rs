@@ -11,8 +11,8 @@ use std::time::Duration;
 use tauri::AppHandle;
 
 use super::capture::{
-    capture_screenshot, close_open_apps, close_open_sites, record_tracking_app_and_site,
-    screenshot_time_category,
+    capture_screenshot, close_open_apps, close_open_apps_at, close_open_sites,
+    close_open_sites_at, record_tracking_app_and_site, screenshot_time_category,
 };
 use super::constants::{
     load_screenshot_interval_secs, APP_FOCUS_POLL_SECS,
@@ -106,6 +106,22 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                 handle_inactivity_phase_transition(&app, before, after);
             }
 
+            if let Some(Some((ref idle_ctrl, after))) =
+                inactivity_transition.map(|(_, after)| {
+                    inactivity_controller
+                        .lock()
+                        .clone()
+                        .map(|ctrl| (ctrl, after))
+                })
+            {
+                if after == TrackingInactivityPhase::PausedInactivity {
+                    if let Some(ref started_at) = idle_ctrl.inactivity_started_at() {
+                        let _ = close_open_apps_at(&db, &active_app_id, started_at);
+                        let _ = close_open_sites_at(&db, &active_site_id, &last_site_address, started_at);
+                    }
+                }
+            }
+
             let screenshot_interval = {
                 let db_guard = db.lock();
                 Duration::from_secs(load_screenshot_interval_secs(db_guard.conn()))
@@ -119,7 +135,6 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                     .map(|ctrl| ctrl.snapshot().phase)
                     .unwrap_or(TrackingInactivityPhase::Active);
 
-                // M17: skip screenshots during manual pause — TimeDoctor compat.
                 if matches!(
                     screenshot_phase,
                     TrackingInactivityPhase::ManualPaused
@@ -138,6 +153,7 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                     &tracking,
                     &period_start,
                     time_category,
+                    &last_active_window,
                 ) {
                     Ok(outcome) => {
                         let period_end = outcome.period_end;

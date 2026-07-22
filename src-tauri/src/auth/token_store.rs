@@ -43,10 +43,6 @@ fn recv_keyring_result<T>(
     }
 }
 
-// Note: each keyring op spawns a detached thread with a 2s timeout.
-// If the keyring/DBus hangs, up to 3 threads per auth cycle can be
-// orphaned (store/read/clear). This is bounded and rare in practice.
-// A proper fix would use an async keyring crate or a thread-pool.
 pub fn store_access_token(token: &str) -> AgentResult<()> {
     let entry = entry()?;
     let token = token.to_string();

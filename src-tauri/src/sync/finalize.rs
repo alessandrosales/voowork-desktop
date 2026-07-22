@@ -7,20 +7,13 @@ use crate::sync::{
 use rusqlite::Connection;
 use serde_json::json;
 
-/// Finaliza trackings órfãos (crash/reboot anterior): fecha filhos abertos, enfileira PATCH e marca inactive localmente.
-///
-/// Usa o timestamp do último screenshot ou peripheral_event como `ended_at`
-/// para não inflar a duração com o tempo morto pós-crash. Se não houver dados
-/// de atividade (sessão muito curta), usa `started_at` → duração 0
-/// (subestimação conservadora — billing inflado é pior).
 pub fn finalize_orphaned_trackings(db: &Database) -> AgentResult<u32> {
     let orphans = db.list_active_tracking_ids()?;
 
     for tracking_id in &orphans {
         let started_at = db.get_tracking_started_at(tracking_id)?;
         let estimated = db.estimate_tracking_ended_at(tracking_id)?;
-        // Melhor estimativa disponível; se não houver dados de atividade,
-        // usar started_at (duração = 0) é conservador e evita billing inflado.
+
         let ended_at = estimated.unwrap_or(started_at);
         close_open_children_in_db(db, tracking_id, &ended_at)?;
         enqueue_tracking_stop(db.conn(), tracking_id, &ended_at)?;
@@ -30,11 +23,6 @@ pub fn finalize_orphaned_trackings(db: &Database) -> AgentResult<u32> {
     Ok(orphans.len() as u32)
 }
 
-/// Fecha apps/sites/períodos de inatividade ainda abertos no SQLite
-/// e enfileira POST para cada intervalo (apps/sites).
-///
-/// Períodos de inatividade são marcados como `abandoned` (não vão para o outbox,
-/// conforme M16 — são locais apenas).
 pub fn close_open_children_in_db(
     db: &Database,
     tracking_id: &str,

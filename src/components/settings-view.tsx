@@ -63,7 +63,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
 
-  // Settings state
   const [blurEnabled, setBlurEnabled] = useState(false)
   const [inactivityProfile, setInactivityProfile] = useState<Profile | "custom">("standard")
   const [inactivityThreshold, setInactivityThreshold] = useState("2")
@@ -71,7 +70,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   const [appVersion, setAppVersion] = useState("")
   const [countdownSecs, setCountdownSecs] = useState(60)
 
-  // Load settings on mount
   useEffect(() => {
     Promise.all([
       trackedInvoke<string | null>("get_setting", { key: "screenshot_blur_enabled" }).catch(() => null),
@@ -170,7 +168,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
   return (
     <div className="voowork-shell flex h-full min-h-0 flex-col">
-      {/* Header — apenas navegação */}
       <header className="flex items-center px-3 py-2">
         <button
           type="button"
@@ -182,7 +179,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         </button>
       </header>
 
-      {/* Content — scrollável */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="flex flex-col px-6 py-4">
           {loading ? (
@@ -191,10 +187,8 @@ export function SettingsView({ onBack }: SettingsViewProps) {
             </div>
           ) : (
             <div className="flex flex-col gap-12">
-              {/* Título da página */}
               <h1 className="text-lg font-semibold">{t("settings.title")}</h1>
 
-              {/* ─── General ─── */}
               <section>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                   {t("settings.sectionGeneral")}
@@ -212,7 +206,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 </div>
               </section>
 
-              {/* ─── Screenshots ─── */}
               <section>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                   {t("settings.sectionScreenshots")}
@@ -232,13 +225,11 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 </div>
               </section>
 
-              {/* ─── Inactivity ─── */}
               <section>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                   {t("settings.sectionInactivity")}
                 </h2>
                 <div className="space-y-8">
-                  {/* Profile */}
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="inactivity-profile" className="text-sm font-medium">
@@ -268,7 +259,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                     </p>
                   </div>
 
-                  {/* Threshold */}
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="inactivity-threshold" className="text-sm font-medium">
@@ -301,7 +291,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                     </p>
                   </div>
 
-                  {/* Countdown (read-only) */}
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="inactivity-countdown" className="text-sm font-medium">
@@ -321,7 +310,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                 </div>
               </section>
 
-              {/* ─── Mini Widget ─── */}
               <section>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
                   {t("settings.sectionWidget")}
@@ -345,7 +333,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="shrink-0 pb-6 pt-2">
         <AppMeta />
       </footer>

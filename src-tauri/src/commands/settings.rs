@@ -14,7 +14,6 @@ use crate::tray::{
 };
 use crate::windows::{self, SETTING_MINI_WIDGET_ENABLED};
 
-/// Perfis de inatividade válidos.
 pub(crate) const VALID_INACTIVITY_PROFILES: &[&str] = &[
     "standard",
     "data_entry",
@@ -49,7 +48,6 @@ pub fn set_setting(
         key == SETTING_SELECTED_PROJECT_ID || key == SETTING_SELECTED_TASK_ID;
     let apply_mini_widget = key == SETTING_MINI_WIDGET_ENABLED;
 
-    // Validar perfil de inatividade
     if key == SETTING_INACTIVITY_PROFILE
         && !VALID_INACTIVITY_PROFILES.contains(&value.as_str())
     {
@@ -86,7 +84,7 @@ pub fn set_setting(
     if apply_mini_widget {
         let visible = value == "true" || value == "1";
         if visible {
-            // show_mini_timer verifica autenticação internamente via should_show_mini_widget
+
             if let Err(err) = windows::show_mini_timer(&app) {
                 log::warn!("failed to show mini widget: {err}");
             }

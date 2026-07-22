@@ -85,7 +85,6 @@ fn bucket_for(config: &S3Config) -> AgentResult<Box<Bucket>> {
         .map_err(|err| AgentError::Other(format!("failed to configure S3 bucket: {err}")))
 }
 
-/// Uploads a local capture to S3/Garage and returns the metadata path (`screenshots/{id}.ext`).
 pub async fn upload_capture(local_path: &str, screenshot_id: &str) -> AgentResult<String> {
     let path = Path::new(local_path);
     if !path.is_file() {
@@ -123,7 +122,6 @@ pub async fn upload_capture(local_path: &str, screenshot_id: &str) -> AgentResul
     Ok(remote_path)
 }
 
-/// Downloads a capture from S3/Garage using the metadata path (`screenshots/{id}.ext`).
 pub async fn download_capture(path: &str) -> AgentResult<Vec<u8>> {
     let key = object_key_from_path(path)?;
     let config = s3_config()?;

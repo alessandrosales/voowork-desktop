@@ -143,7 +143,6 @@ impl Database {
             .collect::<Vec<_>>()
             .join(", ");
 
-        // Delete tasks first to avoid FOREIGN KEY constraint failure.
         let sql = format!("DELETE FROM tasks WHERE project_id NOT IN ({placeholders})");
         self.conn.execute(&sql, rusqlite::params_from_iter(ids.iter()))?;
 

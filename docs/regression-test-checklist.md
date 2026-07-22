@@ -10,36 +10,44 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ---
 
+
+
 ## 0. Preparação do ambiente
 
-- [ ] Backend Rails rodando e acessível em `VITE_API_URL`
-- [ ] S3/Garage configurado (`S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`)
-- [ ] Usuário de teste com pelo menos 1 projeto e 1 tarefa atribuídos
-- [ ] Banco local em estado conhecido (`~/.local/share/voowork-desktop/voowork-desktop.db`)
-- [ ] Verificações estáticas passando:
-  - [ ] `npm run typecheck`
-  - [ ] `npm run lint`
-  - [ ] `npm test` (vitest)
-  - [ ] `cargo check --manifest-path src-tauri/Cargo.toml`
-  - [ ] `cargo clippy --manifest-path src-tauri/Cargo.toml -D warnings`
-  - [ ] `cargo test --manifest-path src-tauri/Cargo.toml`
-- [ ] Build de produção funciona: `npm run build` e `npm run tauri build`
+- [x] Backend Rails rodando e acessível em `VITE_API_URL`
+- [x] S3/Garage configurado (`S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`)
+- [x] Usuário de teste com pelo menos 1 projeto e 1 tarefa atribuídos
+- [x] Banco local em estado conhecido (`~/.local/share/voowork-desktop/voowork-desktop.db`)
+- [x] Verificações estáticas passando:
+  - [x] `npm run typecheck`
+  - [x] `npm run lint`
+  - [x] `npm test` (vitest)
+  - [x] `cargo check --manifest-path src-tauri/Cargo.toml`
+  - [x] `cargo clippy --manifest-path src-tauri/Cargo.toml -D warnings`
+  - [x] `cargo test --manifest-path src-tauri/Cargo.toml`
+- [x] Build de produção funciona: `npm run build` e `npm run tauri build`
 
 ---
 
+
+
 ## 1. Autenticação
+
+
 
 ### 1.1 Login
 
-- [ ] Login com credenciais válidas autentica e abre a tela principal
-- [ ] Token e perfil são persistidos no SQLite (`settings`)
-- [ ] Token é armazenado no keyring do SO
-- [ ] Cache de projetos é sincronizado automaticamente após o login
-- [ ] Login com senha incorreta exibe **apenas** a mensagem da API (ex.: "E-mail ou senha inválidos"), sem prefixos técnicos
-- [ ] Login com e-mail inexistente exibe mensagem de erro amigável
+- [x] Login com credenciais válidas autentica e abre a tela principal
+- [x] Token e perfil são persistidos no SQLite (`settings`)
+- [x] Token é armazenado no keyring do SO
+- [x] Cache de projetos é sincronizado automaticamente após o login
+- [x] Login com senha incorreta exibe **apenas** a mensagem da API (ex.: "E-mail ou senha inválidos"), sem prefixos técnicos
+- [x] Login com e-mail inexistente exibe mensagem de erro amigável
 - [ ] Login com API fora do ar exibe erro de conexão sem quebrar a UI
 - [ ] Campos vazios / formato de e-mail inválido são validados antes do submit
 - [ ] Estado de loading no botão durante a autenticação (sem duplo submit)
+
+
 
 ### 1.2 Sessão
 
@@ -50,6 +58,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] API retornando 401 durante sync → evento `auth-session-expired` dispara logout automático na UI
 - [ ] `get_auth_state` retorna o estado correto sem chamada de rede e **não bloqueia** a main thread durante o lock do SQLite
 
+
+
 ### 1.3 Logout
 
 - [ ] Logout limpa a sessão local (SQLite + keyring)
@@ -57,6 +67,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Após logout, a tela de login é exibida e dados do usuário anterior não aparecem
 
 ---
+
+
 
 ## 2. Projetos e tarefas
 
@@ -71,7 +83,11 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ---
 
+
+
 ## 3. Timer — ciclo de vida do tracking
+
+
 
 ### 3.1 Iniciar
 
@@ -82,6 +98,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Não é possível iniciar um segundo tracking sem parar o atual
 - [ ] `restart_tracking` (trocar projeto/tarefa) funciona sem perder dados da sessão anterior
 
+
+
 ### 3.2 Durante a sessão
 
 - [ ] `get_tracking_status` (polling da UI) retorna estado e tempo decorrido corretos
@@ -89,12 +107,16 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Contador do timer não drifta após longos períodos (30min+)
 - [ ] Timer sobrevive a minimizar/fechar a janela (app continua via tray)
 
+
+
 ### 3.3 Pausar / retomar (manual)
 
 - [ ] `pause_tracking` pausa o contador e indica estado pausado na UI
 - [ ] Durante pausa manual, screenshots são **puladas** (compatível TimeDoctor)
 - [ ] `resume_tracking` retoma a contagem de onde parou
 - [ ] Tempo pausado **não** conta como tempo trabalhado
+
+
 
 ### 3.4 Parar (encerrar sessão de tracking)
 
@@ -108,12 +130,16 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] `PATCH /api/v1/trackings/:id` é enviado com `status: inactive` e `ended_at`
 - [ ] UI volta ao estado "sem tracking ativo" (timer principal, mini widget e tray)
 
+
+
 ### 3.5 Sair do app vs encerrar sessão
 
-| Ação no tray | Efeito |
-|--------------|--------|
-| **⏹ Encerrar** | Para o tracking ativo; o app **continua** rodando na bandeja |
-| **Sair** | Screenshot final (se houver sessão) + flush do sync + encerra o processo |
+
+| Ação no tray   | Efeito                                                                   |
+| -------------- | ------------------------------------------------------------------------ |
+| **⏹ Encerrar** | Para o tracking ativo; o app **continua** rodando na bandeja             |
+| **Sair**       | Screenshot final (se houver sessão) + flush do sync + encerra o processo |
+
 
 - [ ] **Sair** com tracking ativo: `capture_final_screenshot_and_finalize` roda antes do `_exit`
 - [ ] **Sair**: worker de sync é parado, `flush_blocking` envia itens pendentes, depois o processo termina
@@ -122,6 +148,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Trackings órfãos (crash/kill anterior) são finalizados no próximo boot com `ended_at` estimado
 
 ---
+
+
 
 ## 4. Captura de atividade (mouse/teclado)
 
@@ -135,6 +163,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ---
 
+
+
 ## 5. Captura de foco (apps e sites)
 
 - [ ] A cada 15s, a janela ativa é capturada (app + título)
@@ -145,6 +175,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Sem permissão de captura de janela ativa: comportamento degradado sem crash
 
 ---
+
+
 
 ## 6. Screenshots
 
@@ -158,7 +190,11 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ---
 
+
+
 ## 7. Inatividade
+
+
 
 ### 7.1 Máquina de estados
 
@@ -167,6 +203,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] `Countdown → PausedInactivity` ao fim da contagem sem input
 - [ ] Input do usuário durante Warning/Countdown cancela e volta para `Active`
 - [ ] Timer de tracking **pausa** em `PausedInactivity`
+
+
 
 ### 7.2 Overlay e prompts
 
@@ -179,10 +217,14 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] `dismiss_inactivity_period` descarta o período corretamente
 - [ ] `get_tracking_inactivity_config` retorna a configuração vigente
 
+
+
 ### 7.3 Work check manual
 
 - [ ] `confirm_manual_work` confirma trabalho durante `ManualWorkCheck`
 - [ ] `dismiss_manual_work_check` trata a dispensa corretamente
+
+
 
 ### 7.4 Exceções
 
@@ -190,6 +232,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Períodos de inatividade ficam **somente locais** (`tracking_inactivity_period`, sem sync)
 
 ---
+
+
 
 ## 8. Buffer de atividade
 
@@ -203,7 +247,11 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ---
 
+
+
 ## 9. Sync (offline-first)
+
+
 
 ### 9.1 Outbox
 
@@ -213,6 +261,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] **Ordem:** para cada ciclo de screenshot, o item `tracking_screenshot` entra na fila **antes** dos `tracking_peripheral_event` do mesmo período (evita 422 no backend)
 - [ ] Empates de `created_at` na fila são desempatados por `rowid` (ordem estável de inserção)
 
+
+
 ### 9.2 Entidades sincronizadas
 
 - [ ] `tracking` → POST no start, PATCH no stop
@@ -221,6 +271,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] `tracking_app` → POST quando o app é fechado
 - [ ] `tracking_site` → POST quando o site é fechado
 - [ ] `tracking_inactivity_period` → **nunca** sincroniza (local only)
+
+
 
 ### 9.3 Retry e recuperação
 
@@ -232,6 +284,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] App offline durante tracking: tudo persiste local e sincroniza ao reconectar (sem duplicar)
 - [ ] IDs gerados no desktop são preservados pelo backend (idempotência)
 
+
+
 ### 9.4 Screenshots — S3 + metadados
 
 - [ ] Upload direto do WebP para S3/Garage com chave `{screenshot_id}.{ext}`
@@ -242,6 +296,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Falha no upload S3 mantém arquivo local e re-tenta depois
 
 ---
+
+
 
 ## 10. Dashboard e histórico (UI)
 
@@ -257,6 +313,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Dados na UI batem com o SQLite local e, após sync, com o painel web
 
 ---
+
+
 
 ## 11. Interface e experiência
 
@@ -276,6 +334,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ---
 
+
+
 ## 12. Tray (bandeja do sistema)
 
 - [ ] Ícone do tray aparece na área de notificação
@@ -293,7 +353,11 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ---
 
+
+
 ## 13. Mini timer widget
+
+
 
 ### 13.1 Conteúdo e ações
 
@@ -302,6 +366,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Botão play/pause: inicia última seleção, pausa, retoma ou abre o app (fases de inatividade)
 - [ ] Duplo clique no tempo abre a janela principal
 - [ ] Ações do widget refletem no estado global e na janela principal (e vice-versa)
+
+
 
 ### 13.2 Arrastar e posição
 
@@ -312,6 +378,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Posição do widget persiste entre sessões
 - [ ] `reset_mini_widget_position` / item do tray restaura a posição padrão
 
+
+
 ### 13.3 Tamanho da janela (🐧 GTK)
 
 - [ ] Janela do mini-timer acompanha o tamanho do pill (`ResizeObserver` + `setSize`)
@@ -320,6 +388,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Transição play ↔ pause redimensiona o pill sem artefatos visuais
 
 ---
+
+
 
 ## 14. Permissões e plataforma
 
@@ -332,22 +402,28 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Permission banner aparece quando falta permissão e some após concessão
 - [ ] Sem permissão de input: modo degradado (heartbeat) sem falso "tracking ativo"
 
+
+
 ### 14.1 Matriz de plataforma
 
-| Cenário | 🐧 Linux | 🪟 Windows | 🍎 macOS |
-|---------|:-------:|:---------:|:--------:|
-| Login + sessão | [ ] | [ ] | [ ] |
-| Tracking completo (start → stop) | [ ] | [ ] | [ ] |
-| Captura de atividade real | [ ] | [ ] | [ ] |
-| Captura de janela ativa | [ ] | [ ] | [ ] |
-| Screenshot multi-monitor | [ ] | [ ] | [ ] |
-| Overlay de inatividade | [ ] | [ ] | [ ] |
-| Tray + menu (toggle / encerrar / sair) | [ ] | [ ] | [ ] |
-| Mini timer (drag, resize, pause) | [ ] | [ ] | [ ] |
-| Modo degradado sem permissões | [ ] | [ ] | [ ] |
-| Sync offline → online | [ ] | [ ] | [ ] |
+
+| Cenário                                | 🐧 Linux | 🪟 Windows | 🍎 macOS |
+| -------------------------------------- | -------- | ---------- | -------- |
+| Login + sessão                         | [ ]      | [ ]        | [ ]      |
+| Tracking completo (start → stop)       | [ ]      | [ ]        | [ ]      |
+| Captura de atividade real              | [ ]      | [ ]        | [ ]      |
+| Captura de janela ativa                | [ ]      | [ ]        | [ ]      |
+| Screenshot multi-monitor               | [ ]      | [ ]        | [ ]      |
+| Overlay de inatividade                 | [ ]      | [ ]        | [ ]      |
+| Tray + menu (toggle / encerrar / sair) | [ ]      | [ ]        | [ ]      |
+| Mini timer (drag, resize, pause)       | [ ]      | [ ]        | [ ]      |
+| Modo degradado sem permissões          | [ ]      | [ ]        | [ ]      |
+| Sync offline → online                  | [ ]      | [ ]        | [ ]      |
+
 
 ---
+
+
 
 ## 15. Dados locais e schema
 
@@ -360,6 +436,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ---
 
+
+
 ## 16. Robustez
 
 - [ ] Kill forçado com tracking ativo → no próximo boot o tracking órfão é finalizado
@@ -371,6 +449,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Suspensão/hibernação do SO durante tracking → retomada coerente
 
 ---
+
+
 
 ## 17. Smoke pós-release (rápido — 10 min)
 
@@ -387,6 +467,8 @@ Para validações rápidas após hotfix, execute no mínimo:
 9. [ ] Verificar sync completo no painel web (tempo, screenshot, atividade)
 10. [ ] Logout
 
+
+
 ### 17.1 Smoke de regressão crítica (boot + auth)
 
 1. [ ] Com token expirado no keyring/SQLite, abrir o app → login sem UI congelada
@@ -395,6 +477,8 @@ Para validações rápidas após hotfix, execute no mínimo:
 
 ---
 
+
+
 ## Referências
 
 - [Visão geral do produto](README.md)
@@ -402,3 +486,4 @@ Para validações rápidas após hotfix, execute no mínimo:
 - [Feature: Tracking](features/02-tracking.md)
 - [Feature: Sync](features/03-sync.md)
 - [Schema do banco local](db.mermaid)
+

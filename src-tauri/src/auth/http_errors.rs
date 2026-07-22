@@ -9,7 +9,6 @@ pub fn is_auth_failure_status(status: StatusCode) -> bool {
     )
 }
 
-/// Extrai mensagem legível do body de uma resposta de erro da API.
 pub fn error_message_from_body(body: &str) -> String {
     let Ok(value) = serde_json::from_str::<Value>(body) else {
         return raw_body_message(body);

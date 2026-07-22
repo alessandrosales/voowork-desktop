@@ -53,7 +53,10 @@ use crate::tracking_inactivity::{
     DEFAULT_INACTIVITY_THRESHOLD_MINUTES, SETTING_INACTIVITY_THRESHOLD_MINUTES,
 };
 use crate::tracking::{SCREENSHOT_BASE_INTERVAL_SECS, SETTING_SCREENSHOT_INTERVAL_SECS};
-use crate::screenshot::{SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY, DEFAULT_JPEG_QUALITY};
+use crate::screenshot::{
+    BlurPolicyConfig, RUNTIME_BLUR_POLICY_FILE, SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY,
+    DEFAULT_JPEG_QUALITY,
+};
 use crate::sync::SYNC_FLUSH_TIMEOUT_SECS;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -89,7 +92,6 @@ pub fn run() {
                 .unwrap_or_else(|_| "voowork-device".into());
             DeviceKeys::ensure(db.conn(), &device_name)?;
 
-            // Default settings
             if db.get_setting("theme")?.is_none() {
                 db.set_setting("theme", "dark")?;
             }
@@ -110,7 +112,9 @@ pub fn run() {
             }
 
             let screenshot_dir = app_data_dir.join("screenshots");
-            let mut screenshot = ScreenshotCapture::new(screenshot_dir)?;
+            let blur_policy_path = app_data_dir.join(RUNTIME_BLUR_POLICY_FILE);
+            let blur_policy = BlurPolicyConfig::load(Some(&blur_policy_path));
+            let mut screenshot = ScreenshotCapture::new(screenshot_dir, blur_policy)?;
             let blur_enabled = db
                 .get_setting(SETTING_BLUR_ENABLED)?
                 .is_some_and(|v| v == "true" || v == "1");
@@ -217,9 +221,6 @@ pub fn run() {
                 payload.url()
             );
 
-            // Only show + focus on the *first* page load (Started), so
-            // subsequent navigations (hot reload, route changes) do NOT
-            // steal focus from other apps on macOS.
             static FIRST_LOAD: AtomicBool = AtomicBool::new(true);
             if payload.event() == PageLoadEvent::Started
                 && FIRST_LOAD.swap(false, Ordering::AcqRel)
@@ -238,7 +239,7 @@ pub fn run() {
                     if let Err(err) = state.tracking_manager.shutdown_for_quit() {
                         log::error!("failed to reset tracking on exit: {err}");
                     }
-                    // Flush in background thread to avoid blocking main thread.
+
                     state.sync_worker.stop();
                     let sync_worker = state.sync_worker.clone();
                     let db = state.db.clone();

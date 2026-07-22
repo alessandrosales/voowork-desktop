@@ -51,7 +51,7 @@ pub struct TrackingManager {
     pub(crate) screenshot: Arc<Mutex<ScreenshotCapture>>,
     pub(crate) active: Arc<Mutex<Option<ActiveTracking>>>,
     pub(crate) tracking_active_flag: Arc<AtomicBool>,
-    /// Monotonic clock snapshot when tracking started — used for skew detection.
+
     started_at_monotonic: Mutex<Option<Instant>>,
     pub(crate) worker_running: Arc<AtomicBool>,
     pub(crate) worker_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
@@ -65,8 +65,7 @@ pub struct TrackingManager {
     pub(crate) activity_buffer: ActivityBuffer,
     session_authenticated: Arc<AtomicBool>,
     buffer_eligible: Arc<AtomicBool>,
-    /// Outermost lock — never acquire it while holding `active`, `db`, or any
-    /// field mutex; the worker thread never acquires it.
+
     state_transition: parking_lot::Mutex<()>,
 }
 
@@ -113,9 +112,7 @@ impl TrackingManager {
         self.session_authenticated
             .store(authenticated, Ordering::SeqCst);
         if authenticated {
-            // Login or boot hydration: preserve any restored buffer state.
-            // If there's a pending alert from a previous session, make it
-            // visible. Do NOT dismiss — the buffer survives hydration.
+
             if self.activity_buffer.has_pending_alert() {
                 self.buffer_eligible.store(true, Ordering::SeqCst);
             } else {
@@ -371,29 +368,15 @@ impl TrackingManager {
         self.finalize_active_tracking_inner(true)
     }
 
-    /// Takes a final screenshot and properly finalizes the active tracking,
-    /// so the last period of work is captured before shutdown.
-    ///
-    /// Called before `prepare_immediate_exit()` on tray quit, and also at the
-    /// start of `shutdown_for_quit()` for the `RunEvent::Exit` path.
-    ///
-    /// Ordering (A8):
-    /// 1. stop_worker() — signal + join (BEFORE final screenshot)
-    /// 2. Final screenshot (now uncontended)
-    /// 3. Close open apps/sites
-    /// 4. Finalize tracking + enqueue PATCH
-    /// 5. Clear active, tracking_active_flag, and focus fields
     pub fn capture_final_screenshot_and_finalize(&self) {
         let Some(tracking) = self.active.lock().clone() else {
             return;
         };
 
-        // 1. Stop worker FIRST — releases screenshot/db locks before capture
         self.stop_worker();
 
         let period_start = tracking.current_period_start.clone();
 
-        // Determine time category based on current inactivity phase
         let time_category = self
             .inactivity_controller
             .lock()
@@ -404,7 +387,6 @@ impl TrackingManager {
             })
             .unwrap_or(crate::db::TIME_CATEGORY_ACTIVE);
 
-        // 2. Capture final screenshot (best-effort — never block quit on failure)
         let _ = capture::capture_screenshot(
             &self.db,
             &self.screenshot,
@@ -413,9 +395,9 @@ impl TrackingManager {
             &tracking,
             &period_start,
             time_category,
+            &self.last_active_window,
         );
 
-        // 3. Close open apps/sites
         let _ = capture::close_open_apps(&self.db, &self.active_app_id);
         let _ = capture::close_open_sites(
             &self.db,
@@ -423,7 +405,6 @@ impl TrackingManager {
             &self.last_site_address,
         );
 
-        // 4. Finalize tracking + enqueue PATCH
         let ended_at = chrono::Utc::now().to_rfc3339();
         if let Err(err) = (|| -> AgentResult<()> {
             let db = self.db.lock();
@@ -442,7 +423,6 @@ impl TrackingManager {
                 }),
             )?;
 
-            // Enqueue any pending apps/sites to sync
             if let Some(app_id) = self.active_app_id.lock().clone() {
                 if let Ok(app) = db.get_tracking_app(&app_id) {
                     crate::sync::SyncOutbox::enqueue(
@@ -464,7 +444,6 @@ impl TrackingManager {
             log::warn!("finalize tracking on quit failed: {err}");
         }
 
-        // 5. Clear in-memory state — makes this idempotent
         *self.active.lock() = None;
         self.tracking_active_flag.store(false, Ordering::SeqCst);
         *self.inactivity_controller.lock() = None;
@@ -475,11 +454,9 @@ impl TrackingManager {
         *self.last_site_address.lock() = None;
     }
 
-    /// Encerramento do app: finaliza tracking e não bloqueia a main thread no worker.
     pub fn shutdown_for_quit(&self) -> AgentResult<()> {
         self.capture_final_screenshot_and_finalize();
 
-        // Clear in-memory state (same as lifecycle::clear_tracking_memory)
         *self.active.lock() = None;
         self.tracking_active_flag.store(false, Ordering::SeqCst);
         *self.inactivity_controller.lock() = None;
@@ -495,7 +472,6 @@ impl TrackingManager {
         Ok(())
     }
 
-    /// Sinaliza parada imediata sem locks de DB (safe no callback da tray).
     pub fn prepare_immediate_exit(&self) {
         self.worker_running.store(false, Ordering::SeqCst);
         self.buffer_eligible.store(false, Ordering::SeqCst);
@@ -503,7 +479,6 @@ impl TrackingManager {
         let _ = self.worker_handle.lock().take();
     }
 
-    /// Inicializa sessão: finaliza trackings órfãos de crash anterior e zera tempos locais.
     pub fn initialize_session(&self) -> AgentResult<u32> {
         let db = self.db.lock();
         let count = crate::sync::finalize::finalize_orphaned_trackings(&db)?;
@@ -547,7 +522,9 @@ impl TrackingManager {
             .clone()
             .ok_or_else(|| AgentError::Session("no active tracking".into()))?;
         let db = self.db.lock();
-        inactivity_controller.classify_tracking_inactivity_period(db.conn(), period_id, category)
+        inactivity_controller.classify_tracking_inactivity_period(db.conn(), period_id, category)?;
+        self.reset_focus_for_inactivity_resume();
+        Ok(())
     }
 
     pub fn skip_tracking_inactivity_classification(&self) -> AgentResult<()> {
@@ -555,6 +532,7 @@ impl TrackingManager {
             let db = self.db.lock();
             inactivity_controller.skip_tracking_inactivity_classification(db.conn())?;
         }
+        self.reset_focus_for_inactivity_resume();
         Ok(())
     }
 
@@ -572,9 +550,6 @@ impl TrackingManager {
         Ok(())
     }
 
-    /// Dismisses the paused inactivity period: discards the idle time
-    /// record, keeps pre-idle work time, takes a screenshot, and returns
-    /// to Active.
     pub fn dismiss_inactivity_period(&self) -> AgentResult<()> {
         let tracking = self.active.lock().clone();
         let Some(tracking) = tracking else {
@@ -582,7 +557,6 @@ impl TrackingManager {
         };
         let period_start = tracking.current_period_start.clone();
 
-        // 1. Persist task time snapshot before resetting controller state
         if let Err(err) = status_report::persist_task_time_snapshot_state(
             &self.db,
             &self.active,
@@ -591,13 +565,11 @@ impl TrackingManager {
             log::warn!("persist task time snapshot before inactivity dismiss failed: {err}");
         }
 
-        // 2. Dismiss the inactivity period in controller + DB
         if let Some(inactivity_controller) = self.inactivity_controller.lock().clone() {
             let db = self.db.lock();
             inactivity_controller.dismiss_inactivity_period(db.conn())?;
         }
 
-        // 3. Take a screenshot with inactivity category to mark end of idle period
         let result = capture::capture_screenshot(
             &self.db,
             &self.screenshot,
@@ -606,9 +578,9 @@ impl TrackingManager {
             &tracking,
             &period_start,
             TIME_CATEGORY_INACTIVITY,
+            &self.last_active_window,
         );
 
-        // 4. Update period start — both Ok and Err paths advance period_start
         match result {
             Ok(outcome) => {
                 if let Some(active_tracking) = self.active.lock().as_mut() {
@@ -626,17 +598,15 @@ impl TrackingManager {
             }
         }
 
-        // 5. Emit event so frontend refreshes
         if let Some(app) = self.app_handle.lock().clone() {
             let _ = app.emit("tracking-inactivity-changed", ());
         }
 
+        self.reset_focus_for_inactivity_resume();
+
         Ok(())
     }
 
-    /// Classifies the paused inactivity period as billable: credits the
-    /// idle time to the task, takes a closing screenshot, and resumes
-    /// active tracking.
     pub fn classify_paused_inactivity_period(&self) -> AgentResult<()> {
         let tracking = self.active.lock().clone();
         let Some(tracking) = tracking else {
@@ -644,14 +614,11 @@ impl TrackingManager {
         };
         let period_start = tracking.current_period_start.clone();
 
-        // 1. Classify from paused in controller (credits idle time,
-        //    transitions to Active)
         if let Some(inactivity_controller) = self.inactivity_controller.lock().clone() {
             let db = self.db.lock();
             inactivity_controller.classify_from_paused_inactivity(db.conn())?;
         }
 
-        // 2. Persist the updated task time (now includes credited idle seconds)
         if let Err(err) = status_report::persist_task_time_snapshot_state(
             &self.db,
             &self.active,
@@ -660,12 +627,10 @@ impl TrackingManager {
             log::warn!("persist task time after classifying paused inactivity failed: {err}");
         }
 
-        // 3. Restart segment timer (persist cleared it via reset_billable_seconds)
         if let Some(controller) = self.inactivity_controller.lock().as_ref() {
             controller.restart_segment_timer();
         }
 
-        // 4. Take a screenshot to mark the end of the idle period
         let result = capture::capture_screenshot(
             &self.db,
             &self.screenshot,
@@ -674,9 +639,9 @@ impl TrackingManager {
             &tracking,
             &period_start,
             crate::db::TIME_CATEGORY_INACTIVITY,
+            &self.last_active_window,
         );
 
-        // 5. Update period start — both Ok and Err paths advance period_start
         match result {
             Ok(outcome) => {
                 if let Some(active_tracking) = self.active.lock().as_mut() {
@@ -694,12 +659,21 @@ impl TrackingManager {
             }
         }
 
-        // 6. Emit event so frontend refreshes
         if let Some(app) = self.app_handle.lock().clone() {
             let _ = app.emit("tracking-inactivity-changed", ());
         }
 
+        self.reset_focus_for_inactivity_resume();
+
         Ok(())
+    }
+
+    fn reset_focus_for_inactivity_resume(&self) {
+        *self.last_active_window.lock() = None;
+        *self.last_site_address.lock() = None;
+        *self.active_app_id.lock() = None;
+        *self.active_site_id.lock() = None;
+        log::info!("focus reset after inactivity resume — next poll will re-capture window");
     }
 
     pub fn tracker_mode(&self) -> TrackerMode {
@@ -728,9 +702,9 @@ mod state_transition_tests {
         let dir = test_db_dir();
         let db = {
             let db = Database::open(dir.clone()).unwrap();
-            // Set up device metadata
+
             DeviceKeys::ensure(db.conn(), "test-device").unwrap();
-            // Set up auth data
+
             db.set_setting(KEY_AUTHENTICATED, "true").unwrap();
             let user = serde_json::json!({
                 "id": "user-1",
@@ -748,7 +722,11 @@ mod state_transition_tests {
         };
         let db = Arc::new(Mutex::new(db));
         let screenshot_dir = dir.join("screenshots");
-        let screenshot = ScreenshotCapture::new(screenshot_dir).unwrap();
+        let screenshot = ScreenshotCapture::new(
+            screenshot_dir,
+            crate::screenshot::BlurPolicyConfig::load(None),
+        )
+        .unwrap();
         let manager = Arc::new(TrackingManager::new(Arc::clone(&db), screenshot));
         (manager, dir)
     }
@@ -757,32 +735,22 @@ mod state_transition_tests {
     fn double_start_fails() {
         let (manager, _dir) = setup_test_manager();
 
-        // First start should succeed
         let result = manager.start_tracking("proj-1".into(), "task-1".into());
         assert!(result.is_ok(), "first start should succeed: {:?}", result.err());
 
-        // Second start should fail (already active)
         let result = manager.start_tracking("proj-1".into(), "task-2".into());
         assert!(result.is_err(), "double start should fail");
 
-        // Stop should succeed
         let result = manager.stop_tracking();
         assert!(result.is_ok(), "stop after valid start should succeed: {:?}", result.err());
 
-        // Start again after stop should succeed
         let result = manager.start_tracking("proj-1".into(), "task-2".into());
         assert!(result.is_ok(), "start after stop should succeed: {:?}", result.err());
     }
 
     #[test]
     fn session_revoked_callback_with_active_tracking_does_not_block_status() {
-        // Cenário DoD (regressão 2026-07-21): sessão revogada COM tracking
-        // ativo. No app real, o callback (status → stop → set_session_authenticated)
-        // roda em spawn_blocking enquanto a main thread continua chamando
-        // `status()` + db (tray refresh, window events, comandos). `status()`
-        // NÃO pode tomar `state_transition` — senão congela durante o
-        // finalize. Se um deadlock/contenção infinita for reintroduzido, este
-        // teste FALHA por timeout em vez de travar o CI.
+
         let (manager, _dir) = setup_test_manager();
         manager
             .start_tracking("proj-1".into(), "task-1".into())
@@ -798,7 +766,6 @@ mod state_transition_tests {
             let _ = done_tx.send(());
         });
 
-        // Simula callers concorrentes (main thread/tray) durante o finalize.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
         loop {
             match done_rx.recv_timeout(std::time::Duration::from_millis(5)) {
@@ -819,30 +786,28 @@ mod state_transition_tests {
 
     #[test]
     fn start_without_auth_fails_without_claiming_buffer() {
-        // N1: Verifica se o buffer NÃO é reivindicado quando a auth falha.
-        // Cria TrackingManager sem dados de autenticação — `read_session_identity`
-        // deve falhar ANTES de buffer_eligible/claim serem chamados.
+
         let dir = PathBuf::from(std::env::temp_dir()).join(format!("voowork-n1-test-{}", uuid::Uuid::new_v4()));
         let db = {
             let db = Database::open(dir.clone()).unwrap();
-            // Configura device metadata MAS NÃO auth
+
             DeviceKeys::ensure(db.conn(), "test-device").unwrap();
             db
         };
         let db = Arc::new(Mutex::new(db));
-        let screenshot = ScreenshotCapture::new(dir.join("screenshots")).unwrap();
+        let screenshot = ScreenshotCapture::new(
+            dir.join("screenshots"),
+            crate::screenshot::BlurPolicyConfig::load(None),
+        )
+        .unwrap();
         let manager = Arc::new(TrackingManager::new(Arc::clone(&db), screenshot));
 
-        // Tentar start tracking sem auth deve falhar
         let result = manager.start_tracking("proj-1".into(), "task-1".into());
         assert!(result.is_err(), "start without auth should fail");
 
-        // Verificar que o buffer NÃO foi reivindicado (ainda é elegível)
-        // buffer_eligible ainda é false (nunca foi setado para true)
         assert!(!manager.buffer_eligible.load(Ordering::SeqCst),
             "buffer_eligible should remain false when auth fails");
 
-        // Verificar que o estado tracking_active_flag não foi setado
         assert!(!manager.tracking_active_flag.load(Ordering::SeqCst),
             "tracking_active_flag should remain false when auth fails");
     }

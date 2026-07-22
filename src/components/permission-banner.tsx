@@ -16,7 +16,6 @@ type PlatformInfo = {
 }
 
 type PermissionBannerProps = {
-  /** When true, also checks Screen Recording / active-window permission */
   checkActiveWindow?: boolean
 }
 
@@ -36,8 +35,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
     let cancelled = false
 
     const checkPermissions = async () => {
-      // Only check input-monitoring permission on platforms that need it
-      // (macOS).  On Linux + Windows the Rust backend always returns true.
       const needsInput = await trackedInvoke<boolean>(
         "check_input_monitoring_permission",
       ).catch(() => true)
@@ -45,8 +42,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
         setInputState(needsInput ? "granted" : "denied")
       }
 
-      // Only check active-window permission on platforms that need it
-      // (macOS).  On Linux + Windows the Rust backend now always returns true.
       if (checkActiveWindow) {
         const windowOk = await trackedInvoke<boolean>(
           "check_active_window_permission",
@@ -58,14 +53,12 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
     }
 
     const init = async () => {
-      // Load platform info first
       try {
         const info = await trackedInvoke<PlatformInfo>("get_platform_info")
         if (!cancelled) {
           setPlatform(info)
         }
       } catch {
-        // if command fails, assume default behaviour (macOS-like)
         if (!cancelled) {
           setPlatform({
             os: "macos",
@@ -83,8 +76,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
 
     void init()
 
-    // Re-check permissions on window focus (e.g. user granted permission
-    // in System Settings and returned to the app).
     let unlistenFocus: (() => void) | undefined
     const setupFocusListener = async () => {
       try {
@@ -95,7 +86,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
           }
         })
       } catch {
-        // Focus events not available outside Tauri (browser dev, etc.)
       }
     }
     void setupFocusListener()
@@ -116,7 +106,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
 
   const isMacOS = platform?.os === "macos"
 
-  // ----- Platform note (Wayland limitation, etc.) -----
   const showPlatformNote =
     platform?.note &&
     !isMacOS &&
@@ -125,7 +114,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
 
   return (
     <>
-      {/* Input Monitoring — only relevant on macOS */}
       {inputState === "denied" && isMacOS ? (
         <div className="mx-4 mb-2 mt-1 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <div className="flex items-start gap-3">
@@ -152,7 +140,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
         </div>
       ) : null}
 
-      {/* Screen Recording — only relevant on macOS */}
       {windowState === "denied" && isMacOS ? (
         <div className="mx-4 mb-2 mt-1 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <div className="flex items-start gap-3">
@@ -179,7 +166,6 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
         </div>
       ) : null}
 
-      {/* Platform-aware informational note (e.g. Wayland limitations) */}
       {showPlatformNote ? (
         <div className="mx-4 mb-2 mt-1 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
           <div className="flex items-start gap-3">

@@ -3,21 +3,22 @@ use image::imageops::FilterType;
 use image::{DynamicImage, RgbaImage};
 use webp::Encoder as WebpEncoder;
 
-use super::constants::{DEFAULT_JPEG_QUALITY, MAX_SCREENSHOT_LONG_EDGE_PX};
+use super::constants::{BlurLevel, DEFAULT_JPEG_QUALITY, MAX_SCREENSHOT_LONG_EDGE_PX};
 
 pub(crate) fn process_raw_rgba(
     rgba_bytes: &[u8],
     width: i32,
     height: i32,
-    blur_enabled: bool,
+    blur_level: BlurLevel,
     quality: u8,
 ) -> AgentResult<(i32, i32, Vec<u8>)> {
     let image = DynamicImage::ImageRgba8(
         RgbaImage::from_raw(width as u32, height as u32, rgba_bytes.to_vec())
             .ok_or_else(|| AgentError::Other("invalid RGBA dimensions".into()))?,
     );
-    let processed = if blur_enabled {
-        image.blur(super::constants::BLUR_SIGMA)
+    let sigma = blur_level.sigma();
+    let processed = if sigma > 0.0 {
+        image.blur(sigma)
     } else {
         image
     };
@@ -76,7 +77,7 @@ mod tests {
     #[test]
     fn produces_valid_webp() {
         let (rgba, w, h) = sample_rgba_bytes(128, 128);
-        let (_, _, webp) = process_raw_rgba(&rgba, w, h, false, 80).unwrap();
+        let (_, _, webp) = process_raw_rgba(&rgba, w, h, BlurLevel::None, 80).unwrap();
         assert!(webp.starts_with(b"RIFF"), "expected WEBP RIFF header");
         assert!(
             webp.windows(4).any(|w| w == b"WEBP"),
@@ -85,17 +86,33 @@ mod tests {
     }
 
     #[test]
-    fn blur_changes_output_when_enabled() {
+    fn blur_none_preserves_output() {
         let (rgba, w, h) = sample_rgba_bytes(128, 128);
-        let (_, _, without_blur) = process_raw_rgba(&rgba, w, h, false, 80).unwrap();
-        let (_, _, with_blur) = process_raw_rgba(&rgba, w, h, true, 80).unwrap();
+        let (_, _, without_blur) = process_raw_rgba(&rgba, w, h, BlurLevel::None, 80).unwrap();
+        let (_, _, with_none) = process_raw_rgba(&rgba, w, h, BlurLevel::None, 80).unwrap();
+        assert_eq!(without_blur, with_none);
+    }
+
+    #[test]
+    fn blur_medium_changes_output() {
+        let (rgba, w, h) = sample_rgba_bytes(128, 128);
+        let (_, _, without_blur) = process_raw_rgba(&rgba, w, h, BlurLevel::None, 80).unwrap();
+        let (_, _, with_blur) = process_raw_rgba(&rgba, w, h, BlurLevel::Medium, 80).unwrap();
+        assert_ne!(without_blur, with_blur);
+    }
+
+    #[test]
+    fn blur_full_changes_output() {
+        let (rgba, w, h) = sample_rgba_bytes(128, 128);
+        let (_, _, without_blur) = process_raw_rgba(&rgba, w, h, BlurLevel::None, 80).unwrap();
+        let (_, _, with_blur) = process_raw_rgba(&rgba, w, h, BlurLevel::Full, 80).unwrap();
         assert_ne!(without_blur, with_blur);
     }
 
     #[test]
     fn downscales_large_captures_before_encoding() {
         let (rgba, w, h) = sample_rgba_bytes(3840, 2160);
-        let (width, height, webp) = process_raw_rgba(&rgba, w, h, false, 80).unwrap();
+        let (width, height, webp) = process_raw_rgba(&rgba, w, h, BlurLevel::None, 80).unwrap();
         assert_eq!(width, 1920);
         assert_eq!(height, 1080);
         assert!(webp.starts_with(b"RIFF"));

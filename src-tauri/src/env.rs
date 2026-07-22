@@ -1,12 +1,5 @@
 use std::path::{Path, PathBuf};
 
-/// Restaura em runtime as variáveis de ambiente que foram injetadas em
-/// tempo de compilação pelo build.rs.
-///
-/// Em release builds, o `.env` não existe dentro do bundle do app.
-/// O build.rs lê o `.env` durante a compilação e injeta os valores via
-/// `cargo:rustc-env`. Esta função os restaura para `std::env::set_var()`,
-/// de modo que todo o código existente (que usa `std::env::var()`) funcione.
 macro_rules! restore_env {
     ($name:expr) => {
         if let Some(val) = option_env!($name) {
@@ -15,10 +8,6 @@ macro_rules! restore_env {
     };
 }
 
-/// Carrega variáveis de ambiente para o app.
-///
-/// - **Dev**: carrega de arquivos `.env` (projeto local)
-/// - **Release**: restaura valores compilados pelo build.rs no binário
 pub fn load() {
     if cfg!(debug_assertions) {
         load_from_files();
@@ -27,7 +16,6 @@ pub fn load() {
     }
 }
 
-/// Dev: carrega .env de arquivos (projeto local)
 fn load_from_files() {
     let root = project_root();
 
@@ -42,11 +30,9 @@ fn load_from_files() {
     }
     let _ = dotenvy::from_path_override(root.join(".env.local"));
 
-    // Fallback
     let _ = dotenvy::dotenv();
 }
 
-/// Release: restaura variáveis compiladas no binário pelo build.rs
 fn load_from_compile_time() {
     restore_env!("API_URL");
     restore_env!("FRONTEND_URL");
@@ -56,11 +42,9 @@ fn load_from_compile_time() {
     restore_env!("S3_SECRET_KEY");
     restore_env!("S3_BUCKET");
     restore_env!("VITE_APP_VERSION");
-    // SCREENSHOT_INTERVAL_SECS não é restaurada em release por design:
-    // o build.rs só a injeta em dev, deixando a setting do SQLite prevalecer.
+
     restore_env!("SCREENSHOT_INTERVAL_SECS");
 
-    // Fallback: tenta carregar vars do sistema
     let _ = dotenvy::dotenv();
 }
 

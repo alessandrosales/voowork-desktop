@@ -5,13 +5,16 @@ use rusqlite::{params, Connection};
 use std::path::PathBuf;
 use uuid::Uuid;
 
+mod blur_policy;
 mod constants;
 mod process;
 mod remote;
 mod storage;
 
+pub use blur_policy::BlurPolicyConfig;
 pub use constants::{
-    DEFAULT_JPEG_QUALITY, SCREENSHOT_FILE_EXTENSION, SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY,
+    BlurLevel, DEFAULT_JPEG_QUALITY, RUNTIME_BLUR_POLICY_FILE, SCREENSHOT_FILE_EXTENSION,
+    SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY,
 };
 pub use process::normalize_jpeg_quality;
 pub use remote::resolve_screenshot_image;
@@ -20,12 +23,10 @@ pub use storage::upload_capture;
 use process::process_raw_rgba;
 use std::path::Path;
 
-/// Captura todos os monitores conectados e combina em uma única imagem
-/// composta (stitched), usando as coordenadas reais de cada monitor (`x()`, `y()`)
-/// para posicioná-los corretamente no canvas virtual.
 pub struct ScreenshotCapture {
     output_dir: PathBuf,
-    blur_enabled: bool,
+    blur_override_full: bool,
+    blur_policy: BlurPolicyConfig,
     jpeg_quality: u8,
 }
 
@@ -48,20 +49,31 @@ pub struct TrackingScreenshotRecord {
     pub height: i32,
     pub captured_at: String,
     pub blur_applied: bool,
+    pub blur_level: BlurLevel,
 }
 
 impl ScreenshotCapture {
-    pub fn new(output_dir: PathBuf) -> AgentResult<Self> {
+    pub fn new(output_dir: PathBuf, blur_policy: BlurPolicyConfig) -> AgentResult<Self> {
         std::fs::create_dir_all(&output_dir)?;
         Ok(Self {
             output_dir,
-            blur_enabled: false,
+            blur_override_full: false,
+            blur_policy,
             jpeg_quality: DEFAULT_JPEG_QUALITY,
         })
     }
 
     pub fn set_blur(&mut self, enabled: bool) {
-        self.blur_enabled = enabled;
+        self.blur_override_full = enabled;
+    }
+
+    pub fn resolve_blur_level(
+        &self,
+        sample: Option<&crate::tracking_focus::ActiveWindowSample>,
+        time_category: &str,
+    ) -> BlurLevel {
+        self.blur_policy
+            .resolve_blur_level(self.blur_override_full, sample, time_category)
     }
 
     pub fn set_jpeg_quality(&mut self, quality: u8) {
@@ -79,6 +91,7 @@ impl ScreenshotCapture {
         width: i32,
         height: i32,
         image_bytes: &[u8],
+        blur_level: BlurLevel,
     ) -> AgentResult<TrackingScreenshotRecord> {
         let id = Uuid::new_v4().to_string();
         let original_id = id.clone();
@@ -87,16 +100,12 @@ impl ScreenshotCapture {
         let file_path = self.output_dir.join(&file_name);
 
         let (stored_width, stored_height, stored_bytes) =
-            process_raw_rgba(image_bytes, width, height, self.blur_enabled, self.jpeg_quality)?;
+            process_raw_rgba(image_bytes, width, height, blur_level, self.jpeg_quality)?;
         let width = if stored_width > 0 { stored_width } else { width };
         let height = if stored_height > 0 { stored_height } else { height };
 
         let sha256_hash = DeviceKeys::hash_bytes(&stored_bytes);
 
-        // Write DB record FIRST, then file. This way if the process crashes
-        // between the two operations, the orphan record has no matching file
-        // (harmless) rather than the reverse (an orphan file with no DB
-        // record that would never be cleaned up).
         let now = captured_at.clone();
         conn.execute(
             "INSERT INTO tracking_screenshots (
@@ -116,9 +125,6 @@ impl ScreenshotCapture {
             ],
         )?;
 
-        // File write AFTER DB insert — if it fails, the DB record is a
-        // harmless orphan (path points to a non-existent file) and the
-        // sync worker will handle the error gracefully.
         std::fs::write(&file_path, &stored_bytes)?;
 
         Ok(TrackingScreenshotRecord {
@@ -130,7 +136,8 @@ impl ScreenshotCapture {
             width,
             height,
             captured_at,
-            blur_applied: self.blur_enabled,
+            blur_applied: blur_level.is_applied(),
+            blur_level,
         })
     }
 }
@@ -144,10 +151,6 @@ fn capture_all_monitors_png() -> AgentResult<(i32, i32, Vec<u8>)> {
             return Err(AgentError::Other("no monitors found".into()));
         }
 
-        // Collect monitor positions (xcap 0.4 returns Result from x()/y()/width()/height())
-        // These are in POINT coordinates (logical units, not pixels).
-        // On Retina/HiDPI displays, 1 point = scale_factor pixels.
-        // Example: a 3024×1964 px Retina display reports 1512×982 logical points.
         let mut positions: Vec<(i32, i32, u32, u32)> = Vec::with_capacity(monitors.len());
         let mut scale_factors: Vec<f32> = Vec::with_capacity(monitors.len());
         for m in &monitors {
@@ -160,7 +163,6 @@ fn capture_all_monitors_png() -> AgentResult<(i32, i32, Vec<u8>)> {
             scale_factors.push(sf);
         }
 
-        // Bounding box that covers all monitors in the virtual desktop (POINTS)
         let min_x = positions.iter().map(|(x, _, _, _)| *x).min().unwrap_or(0);
         let min_y = positions.iter().map(|(_, y, _, _)| *y).min().unwrap_or(0);
         let max_x = positions
@@ -185,13 +187,6 @@ fn capture_all_monitors_png() -> AgentResult<(i32, i32, Vec<u8>)> {
                 .capture_image()
                 .map_err(|e| AgentError::Other(e.to_string()))?;
 
-            // IMPORTANT: capture_image() returns the display's NATIVE PIXEL
-            // resolution (e.g. 3024×1964 on a 2x Retina display).  The canvas
-            // and offsets are in POINT coordinates (e.g. 1512×982).
-            //
-            // Without downscaling, a Retina image would be 2× larger than the
-            // canvas region it occupies, causing it to overflow and be cropped
-            // when overlaid.
             let scale = scale_factors[i];
             let img = if scale > 1.0 && scale.is_finite() {
                 let pixel_w = img.width();
@@ -199,8 +194,6 @@ fn capture_all_monitors_png() -> AgentResult<(i32, i32, Vec<u8>)> {
                 let point_w = (pixel_w as f32 / scale).round() as u32;
                 let point_h = (pixel_h as f32 / scale).round() as u32;
 
-                // Only resize if the image is actually larger than point-space
-                // (defensive — if pixel_w / scale ≈ pixel_w, nothing to do).
                 if pixel_w != point_w || pixel_h != point_h {
                     image::imageops::resize(
                         &img,

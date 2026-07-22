@@ -8,8 +8,6 @@ use super::constants::{
     PROJECT_CACHE_TTL_SECS, SETTING_PROJECT_CACHE_ORG_ID, SETTING_PROJECT_CACHE_SYNCED_AT,
 };
 
-/// Keys persisted in `settings` for the user's project/task selection.
-/// Cleared on org change so the UI doesn't show stale UUIDs as selected.
 const SETTING_SELECTED_PROJECT_ID: &str = "selected_project_id";
 const SETTING_SELECTED_TASK_ID: &str = "selected_task_id";
 
@@ -48,8 +46,7 @@ pub fn invalidate_if_org_changed(db: &Database, organization_id: &str) -> AgentR
     db.clear_projects()?;
     db.set_setting(SETTING_PROJECT_CACHE_SYNCED_AT, "")?;
     db.set_setting(SETTING_PROJECT_CACHE_ORG_ID, "")?;
-    // Clear stale project/task selection so the UI doesn't display old
-    // UUIDs in the Select dropdown when the org's project set changes.
+
     db.set_setting(SETTING_SELECTED_PROJECT_ID, "")?;
     db.set_setting(SETTING_SELECTED_TASK_ID, "")?;
     Ok(true)
@@ -85,11 +82,6 @@ pub fn ensure_can_start_tracking(db: &Database, project_id: &str) -> AgentResult
     Ok(())
 }
 
-/// Validates that `task_id` belongs to `project_id` in the local cache.
-///
-/// If the project has zero cached tasks (cache not yet loaded), validation
-/// passes by default — we can't validate what we don't have, and the
-/// backend will enforce referential integrity on sync.
 pub fn ensure_task_belongs_to_project(
     db: &Database,
     project_id: &str,
@@ -99,7 +91,6 @@ pub fn ensure_task_belongs_to_project(
         return Ok(());
     }
 
-    // Check if the project has any tasks cached at all
     let task_count: i64 = db
         .conn()
         .query_row(
@@ -109,13 +100,10 @@ pub fn ensure_task_belongs_to_project(
         )
         .map_err(AgentError::from)?;
 
-    // If no tasks are cached for this project, we're offline-first: allow
-    // the tracking to proceed (backend will validate on sync).
     if task_count == 0 {
         return Ok(());
     }
 
-    // Check if the specific task exists under this project
     match db.task_name(project_id, task_id)? {
         Some(_) => Ok(()),
         None => Err(AgentError::Session(format!(
@@ -140,7 +128,7 @@ mod task_validation_tests {
         let dir = PathBuf::from(std::env::temp_dir())
             .join(format!("voowork-m7-test-{}", uuid::Uuid::new_v4()));
         let db = Database::open(dir).unwrap();
-        // Mark as authenticated so requires_populated_project_cache passes
+
         db.set_setting(KEY_AUTHENTICATED, "true").unwrap();
         db
     }
@@ -185,7 +173,6 @@ mod task_validation_tests {
         insert_project(&db, "proj-2", "Project 2");
         insert_task(&db, "proj-2", "task-2", "Task 2");
 
-        // task-2 belongs to proj-2, not proj-1
         let result = ensure_task_belongs_to_project(&db, "proj-1", "task-2");
         assert!(result.is_err(), "foreign task should be rejected");
     }
@@ -196,7 +183,6 @@ mod task_validation_tests {
         insert_project(&db, "proj-1", "Project 1");
         insert_task(&db, "proj-1", "task-1", "Task 1");
 
-        // task-999 doesn't exist
         let result = ensure_task_belongs_to_project(&db, "proj-1", "task-999");
         assert!(result.is_err(), "unknown task should be rejected");
     }
@@ -205,9 +191,7 @@ mod task_validation_tests {
     fn ensure_task_belongs_to_project_allows_empty_cache() {
         let db = test_db();
         insert_project(&db, "proj-1", "Project 1");
-        // No tasks inserted for proj-1
 
-        // Empty task cache: allow (offline-first pragmatic)
         let result = ensure_task_belongs_to_project(&db, "proj-1", "any-task");
         assert!(result.is_ok(), "empty task cache should allow any task");
     }

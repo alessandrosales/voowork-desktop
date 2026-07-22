@@ -11,9 +11,7 @@ use super::worker::{spawn_tracking_worker, TrackingWorkerContext};
 use super::TrackingManager;
 
 impl TrackingManager {
-    /// Finaliza a tracking ativa — captura screenshot final, fecha apps/sites,
-    /// enfileira PATCH com endedAt. Callers externos devem adquirir
-    /// `state_transition` antes se concorrência for relevante.
+
     pub(super) fn finalize_active_tracking_inner(
         &self,
         clear_inactivity_controller: bool,
@@ -25,12 +23,8 @@ impl TrackingManager {
             .clone()
             .ok_or_else(|| AgentError::Session("no active tracking".into()))?;
 
-        // Stop worker FIRST to release any locks it holds (screenshot, db).
         self.stop_worker();
 
-        // Capture final screenshot + flush activity period with real original_id.
-        // The screenshot category (active vs inactivity) is determined by the
-        // current inactivity phase. Screenshot capture must succeed (fail-loud).
         let period_start = tracking.current_period_start.clone();
         let time_category = self
             .inactivity_controller
@@ -50,6 +44,7 @@ impl TrackingManager {
             &tracking,
             &period_start,
             time_category,
+            &self.last_active_window,
         )?;
 
         let _ = close_open_apps(&self.db, &self.active_app_id);
@@ -57,12 +52,7 @@ impl TrackingManager {
 
         let ended_at = chrono::Utc::now().to_rfc3339();
         {
-            // Usa o mesmo contador (controller de inatividade) que
-            // `persist_task_time_snapshot_state`, evitando double-count:
-            // no fluxo de troca de task o persist já gravou `base + session`
-            // e resetou o controller, então aqui `billable_seconds() == 0` e
-            // `elapsed == base`. Passar `None` cairia no fallback por
-            // screenshots, somando o tempo ativo (e o ocioso) uma segunda vez.
+
             let controller = self.inactivity_controller.lock().clone();
             let db = self.db.lock();
             let elapsed = super::status_report::snapshot_task_elapsed(
@@ -116,7 +106,7 @@ impl TrackingManager {
     pub(super) fn stop_worker(&self) {
         self.worker_running.store(false, Ordering::SeqCst);
         if let Some(handle) = self.worker_handle.lock().take() {
-            // Synchronous join with timeout — never block quit forever.
+
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
                 let _ = handle.join();

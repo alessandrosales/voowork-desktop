@@ -7,7 +7,6 @@ pub const SETTING_SCREENSHOT_INTERVAL_SECS: &str = "screenshot_interval_secs";
 
 use rusqlite::OptionalExtension;
 
-/// Override de desenvolvimento via `.env` — tem prioridade sobre SQLite.
 pub fn screenshot_interval_from_env() -> Option<u64> {
     std::env::var("SCREENSHOT_INTERVAL_SECS")
         .ok()

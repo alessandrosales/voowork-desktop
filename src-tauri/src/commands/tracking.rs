@@ -268,13 +268,10 @@ pub async fn dismiss_manual_work_check(state: tauri::State<'_, AppState>) -> Age
     .map_err(|err| AgentError::Other(format!("dismiss manual work check worker failed: {err}")))?
 }
 
-/// Verifica se o app tem permissão de Monitoramento de Entrada no macOS.
-/// Usado pelo tracker de atividade baseado em polling (CoreGraphics).
 #[tauri::command]
 pub async fn check_input_monitoring_permission(state: tauri::State<'_, AppState>) -> AgentResult<bool> {
     let app_state = state.inner().clone();
-    // Nunca rejeita: falha de join vira `false` (fail-closed), preservando o
-    // contrato anterior do comando (sempre resolvia com boolean).
+
     Ok(tauri::async_runtime::spawn_blocking(move || {
         app_state.tracking_manager.tracker_has_permission()
     })
@@ -282,11 +279,6 @@ pub async fn check_input_monitoring_permission(state: tauri::State<'_, AppState>
     .unwrap_or(false))
 }
 
-/// Verifica se o app consegue capturar a janela ativa (necessário para
-/// detectar meetings e trackear apps).
-///
-/// - Linux / Windows: sempre `true`.
-/// - macOS: `true` apenas se o usuário concedeu permissão de Screen Recording.
 #[tauri::command]
 pub async fn check_active_window_permission() -> bool {
     tauri::async_runtime::spawn_blocking(crate::tracking_focus::check_active_window_permission)

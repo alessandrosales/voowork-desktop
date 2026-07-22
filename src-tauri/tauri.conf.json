@@ -50,6 +50,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": {
+      "resources/blur_policy.json": "blur_policy.json"
+    },
     "icon": [
       "icons/icon.png",
       "icons/32x32.png",

@@ -48,7 +48,6 @@ export function useMiniTimer() {
     }
   }, [])
 
-  // Adaptive polling: 1s when tracking active, 5s when idle
   const refreshMs = tracking.active ? ACTIVE_POLL_MS : IDLE_POLL_MS
 
   useEffect(() => {
@@ -60,7 +59,6 @@ export function useMiniTimer() {
       refresh().catch(logRefreshError)
     }, refreshMs)
 
-    // Initial fetch: deferred to avoid set-state-during-render
     queueMicrotask(() => refresh().catch(logRefreshError))
 
     let cancelled = false
@@ -90,7 +88,6 @@ export function useMiniTimer() {
       await trackedInvoke("pause_tracking")
       await refresh()
     } catch (err) {
-      // Pause falhou: desfaz o freeze otimista para o relógio não travar (A11).
       cancelPauseFreeze()
       console.error("mini-timer pause failed", err)
     } finally {

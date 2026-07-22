@@ -8,10 +8,6 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-// ---------------------------------------------------------------------------
-// ActivityTracker
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackerMode {
     Hardware,
@@ -33,7 +29,7 @@ pub struct ActivityTracker {
     last_input_at: Arc<Mutex<Instant>>,
     last_input_wall_at: Arc<Mutex<String>>,
     handle: Option<JoinHandle<()>>,
-    /// true se a permissão de Input Monitoring foi verificada (só macOS).
+
     permission_granted: Arc<AtomicBool>,
     last_mouse_pos: Arc<Mutex<Option<(f64, f64)>>>,
 }
@@ -54,11 +50,9 @@ impl ActivityTracker {
     }
 
     pub fn set_app_handle(&self, _handle: tauri::AppHandle) {
-        // Sem uso por enquanto (eventos são via polling, não CGEventTap)
+
     }
 
-    /// Retorna `true` se a permissão de Input Monitoring foi verificada.
-    /// No macOS 14+, usa `CGPreflightListenEventAccess`.
     pub fn is_permission_granted(&self) -> bool {
         self.permission_granted.load(Ordering::SeqCst)
     }
@@ -85,7 +79,6 @@ impl ActivityTracker {
             return;
         }
 
-        // Verifica permissão no macOS (apenas informativo)
         let granted = platform::check_permission();
         self.permission_granted.store(granted, Ordering::SeqCst);
         if !granted {
@@ -114,7 +107,6 @@ impl ActivityTracker {
                 thread::sleep(Duration::from_millis(HARDWARE_LISTENER_POLL_MS));
                 let now = Instant::now();
 
-                // Poll posição do mouse (macOS)
                 if let Some(pos) = platform::poll_mouse_position() {
                     let mut bucket_guard = bucket.lock();
                     let mut last_pos_guard = last_mouse_pos.lock();
@@ -136,17 +128,11 @@ impl ActivityTracker {
 
                     *last_pos_guard = Some(pos);
 
-                    // Análise anti-automação
                     let analysis = sample_buffer.analyze();
                     bucket_guard.confidence = analysis.confidence;
                     bucket_guard.automation_flags = analysis.flags;
                 }
 
-                // A12(a): no macOS, seconds_since_last_input usa
-                // kCGAnyInputEventType (teclado + mouse), inflando
-                // keyboard_events. Ideal seria kCGEventKeyboardEventType
-                // para métrica separada, mas a API atual não distingue.
-                // Pendente: implementar para macOS quando disponível.
                 let secs = platform::seconds_since_last_input();
 
                 if secs.is_finite() && secs < (HARDWARE_LISTENER_POLL_MS as f64 / 1000.0) * 2.0 {
@@ -160,16 +146,7 @@ impl ActivityTracker {
                     bucket_guard.confidence = analysis.confidence;
                     bucket_guard.automation_flags = analysis.flags;
                 } else if !secs.is_finite() || secs > 1_000_000_000.0 {
-                    // A API do SO não consegue determinar o tempo desde
-                    // o último input (ex: macOS sem permissão de Input
-                    // Monitoring retorna f64::MAX/kCGNever). Neste caso
-                    // não podemos detectar teclado — apenas mouse.
-                    //
-                    // Usamos um heartbeat curto (threshold de inatividade)
-                    // para dar ao usuário que só digita um buffer antes
-                    // de entrar em inatividade, sem fingir input para
-                    // sempre. Após o heartbeat, a inatividade dispara
-                    // normalmente pela falta de movimento do mouse.
+
                     let elapsed = last_input_at.lock().elapsed();
                     let heartbeat_secs = Duration::from_secs(
                         DEFAULT_INACTIVITY_THRESHOLD_MINUTES * 60,
@@ -179,7 +156,7 @@ impl ActivityTracker {
                     }
                 }
 
-                let _ = now; // usado implicitamente
+                let _ = now;
             }
         });
 

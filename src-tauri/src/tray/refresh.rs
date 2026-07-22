@@ -17,8 +17,6 @@ pub fn request_shutdown() {
     TRAY_REFRESH_RUNNING.store(false, Ordering::SeqCst);
 }
 
-/// Agenda refresh da tray sem bloquear o caller (ex.: `set_setting` no IPC).
-/// Coalesce chamadas rápidas em sequência (debounce ~32ms).
 pub fn schedule_tray_refresh(app: AppHandle) {
     if !TRAY_REFRESH_RUNNING.load(Ordering::SeqCst) {
         return;

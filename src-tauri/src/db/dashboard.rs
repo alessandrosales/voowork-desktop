@@ -5,12 +5,9 @@ use rusqlite::params;
 
 impl Database {
     pub fn dashboard_summary(&self) -> AgentResult<DashboardSummary> {
-        // Usar hora local para que "hoje" corresponda ao fuso do usuário.
-        // Em UTC, "hoje" vira às 21h em GMT-3 (M11).
+
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
-        // Soma wall-clock dos trackings completados hoje, menos os
-        // períodos de inatividade (para alinhar com o timer na UI).
         let hours_today_seconds: u64 = self
             .conn
             .query_row(
@@ -40,10 +37,6 @@ impl Database {
             |row| row.get(0),
         )?;
 
-        // O score de confiança da atividade (anti-automação) não é
-        // persistido no SQLite — só existe em memória no ActivityTracker.
-        // Idealmente seria amostrado periodicamente no DB. Por enquanto
-        // usamos 1.0 (sem penalidade) como fallback seguro.
         let avg_activity_confidence: f64 = 1.0;
 
         let (sync_pending, _, sync_confirmed) = self.sync_queue_stats()?;

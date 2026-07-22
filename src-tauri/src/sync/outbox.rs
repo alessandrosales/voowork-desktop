@@ -42,9 +42,6 @@ impl SyncOutbox {
         Ok(())
     }
 
-    /// Move o item para dead-letter (`status = 'dead'`): não é mais buscado
-    /// por `fetch_pending_batch`, encerrando o retry. Usado para erros
-    /// permanentes (4xx) e para itens que estouraram o limite de tentativas.
     pub fn mark_dead(conn: &Connection, id: &str, error: &str) -> AgentResult<()> {
         let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
@@ -76,14 +73,6 @@ pub struct PendingSyncItem {
     pub attempts: i64,
 }
 
-/// Recupera itens presos em `sending` após um crash/kill no meio de um envio.
-///
-/// Sem isso, um item marcado `sending` (attempts já incrementado) nunca mais
-/// é buscado por `fetch_pending_batch` — fica órfão para sempre. Devolvê-lo
-/// para `pending` no boot permite o reprocessamento; a idempotência por UUID
-/// no backend protege contra duplo envio caso o envio original tenha chegado.
-///
-/// Deve ser chamado no boot, antes de o worker de sync iniciar.
 pub fn requeue_stuck_sending_items(conn: &Connection) -> AgentResult<usize> {
     let now = chrono::Utc::now().to_rfc3339();
     let affected = conn.execute(
@@ -148,12 +137,6 @@ pub fn mark_tracking_screenshot_synced(
         )?;
     }
 
-    // Purge o arquivo local independentemente de remote_path — se a API não
-    // retornou o path (ex: resposta sem campo `path` ou duplicata 422), o
-    // upload já foi confirmado e o arquivo local não é mais necessário.
-    //
-    // Apenas evitamos purge se local_path == remote_path (nunca acontece
-    // porque remote_path é S3 while local_path é disco).
     if let Some(local_path) = local_path {
         let is_same = remote_path.is_some_and(|r| r == local_path);
         if !is_same {
@@ -183,8 +166,6 @@ mod tests {
         let db = test_db();
         let conn = db.conn();
 
-        // created_at com precisão de segundos empata enqueues feitos no mesmo
-        // flush; o tiebreaker deve ser a ordem de inserção (rowid).
         let ts = "2026-01-01T00:00:00Z";
         for (id, entity_type) in [
             ("first", "tracking_screenshot"),
@@ -206,9 +187,7 @@ mod tests {
 
     #[test]
     fn fetch_pending_batch_delivers_screenshot_before_peripheral_events() {
-        // Invariante de dependência do capture_screenshot: enfileirado o
-        // screenshot antes dos PEs do período, o fetch deve entregá-lo primeiro
-        // — o backend valida que a captura referenciada pelo PE já existe.
+
         let db = test_db();
         let conn = db.conn();
 

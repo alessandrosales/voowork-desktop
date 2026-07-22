@@ -1,5 +1,5 @@
 pub const MIGRATIONS: &[&str] = &[
-    // Infraestrutura local do agente (fora do DER, necessária para operação offline).
+
     r#"
     CREATE TABLE IF NOT EXISTS device_metadata (
         id TEXT PRIMARY KEY NOT NULL,
@@ -34,7 +34,6 @@ pub const MIGRATIONS: &[&str] = &[
 
     CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status, next_retry_at);
     "#,
-    // Domínio alinhado a voowork-backend/docs/db.mermaid
     r#"
     CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY NOT NULL,
@@ -135,7 +134,6 @@ pub const MIGRATIONS: &[&str] = &[
     DROP TABLE IF EXISTS sessions;
     DROP TABLE IF EXISTS project_cache;
     "#,
-    // Tabelas locais de inatividade e agregação de tempo (criadas anteriormente em db/mod.rs).
     r#"
     CREATE TABLE IF NOT EXISTS tracking_inactivity_periods (
         id TEXT PRIMARY KEY NOT NULL,

@@ -33,7 +33,7 @@ pub async fn login(
         let db_guard = db.lock();
         persist_session(&db_guard, &session)?;
         projects::invalidate_project_cache_if_org_changed(&db_guard, &session.organization.id)?;
-        // Sempre limpar a seleção ao logar — o usuário escolhe projeto/task manualmente.
+
         db_guard.set_setting("selected_project_id", "")?;
         db_guard.set_setting("selected_task_id", "")?;
     }
@@ -86,17 +86,6 @@ pub fn perform_logout(state: &AppState) -> AgentResult<()> {
     Ok(())
 }
 
-/// Cleanup executado quando a API invalida a sessão (401 no
-/// `validate_auth_session` ou no sync worker).
-///
-/// ORDEM IMPORTA (regressão 2026-07-21): o guard do SQLite precisa ser
-/// descartado ANTES de `set_session_authenticated(false)` — esse método faz
-/// `activity_buffer.dismiss()` → `clear_persisted()` → `db.lock()`, e
-/// `parking_lot::Mutex` não é reentrante. Com o guard vivo na mesma thread,
-/// o segundo lock era um self-deadlock que matava o processo: o mutex `db`
-/// nunca era liberado e a main thread congelava no primeiro `db.lock()`
-/// (window event → `should_show_mini_widget`, `get_auth_state`, tray
-/// refresh) → GNOME exibia "forçar saída" no boot com sessão expirada.
 pub(crate) fn clear_invalidated_session(
     db: &Arc<Mutex<Database>>,
     tracking_manager: &TrackingManager,
@@ -133,10 +122,7 @@ pub async fn validate_auth_session(
     };
 
     let Some(session) = session else {
-        // No access token available (neither keyring nor SQLite fallback).
-        // Stale identity data alone does not constitute an authenticated session —
-        // without a token, sync, tracking uploads, and all API calls will fail.
-        // Force the frontend to show the login screen so the user can re-authenticate.
+
         log::info!("validate_auth_session: no access token found — session is not authenticated");
         state.tracking_manager.set_session_authenticated(false);
         return Ok(AuthState::signed_out());
@@ -149,8 +135,7 @@ pub async fn validate_auth_session(
 
     match client::fetch_me_profile(&api_base_url, &session.access_token).await {
         Ok((user, mut org, _projects_list)) => {
-            // Preservar o nome da organização do cache local quando a API
-            // /auth/me não o incluir (MeResponse não tem organization.name).
+
             if org.name.is_empty() && !session.organization.name.is_empty() {
                 org.name = session.organization.name.clone();
             }
@@ -198,17 +183,15 @@ mod tests {
     fn test_state() -> (Arc<Mutex<Database>>, TrackingManager) {
         let dir = std::env::temp_dir().join(format!("voowork-auth-test-{}", uuid::Uuid::new_v4()));
         let db = Arc::new(Mutex::new(Database::open(dir.clone()).unwrap()));
-        let screenshot = ScreenshotCapture::new(dir.join("screenshots")).unwrap();
+        let screenshot = ScreenshotCapture::new(
+            dir.join("screenshots"),
+            crate::screenshot::BlurPolicyConfig::load(None),
+        )
+        .unwrap();
         let manager = TrackingManager::new(Arc::clone(&db), screenshot);
         (db, manager)
     }
 
-    /// Regressão 2026-07-21 (freeze no boot com sessão expirada): o cleanup
-    /// do 401 segurava o guard do db ao chamar `set_session_authenticated(false)`,
-    /// que reentra no mesmo `parking_lot::Mutex` via activity buffer —
-    /// self-deadlock; o mutex nunca era liberado e a main thread congelava
-    /// ("forçar saída" do GNOME). Roda em thread separada com timeout para
-    /// FALHAR (em vez de travar o CI) se a ordem for violada de novo.
     #[test]
     fn clear_invalidated_session_does_not_deadlock_on_db_mutex() {
         let (db, manager) = test_state();

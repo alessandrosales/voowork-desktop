@@ -49,18 +49,15 @@ mod flush_tests {
         let db = Arc::new(Mutex::new(db));
         insert_tracking(db.lock().conn(), "t1");
 
-        // Create some peripheral events in the tracked so flush finds them
         {
             let db_guard = db.lock();
             db_guard.flush_tracking_peripheral_events_for_period(
                 "t1", "no-screenshot", "2000-01-01T00:00:00Z", "2000-01-01T00:01:00Z",
-                5,  // mouse_events
-                3,  // keyboard_events
+                5,
+                3,
             ).unwrap();
         }
 
-        // Now simulate a flush_activity_period call (this will overwrite the above)
-        // First drain + clear the existing events by calling flush_activity_period
         let tracking = ActiveTracking {
             tracking_id: "t1".into(),
             project_id: "proj".into(),
@@ -83,7 +80,6 @@ mod flush_tests {
 
         flush_activity_period(&db, &tracking, &period_start, &period_end, &bucket, None).unwrap();
 
-        // Assert sync_queue has peripheral event rows
         let db_guard = db.lock();
         let count: i64 = db_guard.conn()
             .query_row(
@@ -216,17 +212,11 @@ pub(crate) fn screenshot_time_category(inactivity_phase: TrackingInactivityPhase
     }
 }
 
-/// Outcome of a screenshot capture attempt: the screenshot record (if
-/// pixels were successfully captured) and the wall-clock end of the period.
 pub(crate) struct CaptureOutcome {
     pub screenshot: Option<TrackingScreenshotRecord>,
     pub period_end: String,
 }
 
-/// Shared flush logic: drains the bucket, updates totals, persists
-/// peripheral events to SQLite, and enqueues sync items for the period.
-/// Reused by both the success path (with a real `screenshot_original_id`)
-/// and the error/drain path (with `"no-screenshot"`).
 pub(crate) fn flush_activity_period(
     db: &Arc<Mutex<Database>>,
     tracking: &ActiveTracking,
@@ -273,12 +263,6 @@ pub(crate) fn flush_activity_period(
     Ok(())
 }
 
-/// Captures a screenshot of the current display, persists it, and flushes
-/// the current activity period. Returns a `CaptureOutcome` — the screenshot
-/// record is `Some` on success, `None` if capture failed (non-fatal).
-///
-/// The caller must use `outcome.period_end` to advance the current period
-/// start, and check `outcome.screenshot` to update `last_screenshot_at`.
 pub(crate) fn capture_screenshot(
     db: &Arc<Mutex<Database>>,
     screenshot: &Arc<Mutex<ScreenshotCapture>>,
@@ -287,6 +271,7 @@ pub(crate) fn capture_screenshot(
     tracking: &ActiveTracking,
     period_start: &str,
     time_category: &str,
+    last_active_window: &Arc<Mutex<Option<ActiveWindowSample>>>,
 ) -> AgentResult<CaptureOutcome> {
     let bucket = tracker.lock().drain_bucket();
     let raw_score = compute_activity_score(bucket.mouse_events, bucket.keyboard_events);
@@ -299,11 +284,12 @@ pub(crate) fn capture_screenshot(
         totals_guard.last_activity_score = activity_score;
     }
 
-    // Attempt pixel capture — errors are non-fatal; flush activity anyway.
     let capture_result = {
         let screenshot_guard = screenshot.lock();
         screenshot_guard.capture_pixels()
     };
+
+    let active_window = last_active_window.lock().clone();
 
     match capture_result {
         Ok((width, height, image_bytes)) => {
@@ -311,6 +297,11 @@ pub(crate) fn capture_screenshot(
                 tracking_id: &tracking.tracking_id,
                 period_start,
                 time_category,
+            };
+
+            let blur_level = {
+                let screenshot_guard = screenshot.lock();
+                screenshot_guard.resolve_blur_level(active_window.as_ref(), time_category)
             };
 
             let record = {
@@ -322,6 +313,7 @@ pub(crate) fn capture_screenshot(
                     width,
                     height,
                     &image_bytes,
+                    blur_level,
                 )?
             };
 
@@ -336,10 +328,6 @@ pub(crate) fn capture_screenshot(
                 }
             }
 
-            // Invariante do outbox: os peripheral events do período referenciam
-            // `record.original_id` (screenshotOriginalId), então o screenshot
-            // precisa entrar na fila ANTES deles — o backend valida a existência
-            // da captura e rejeita o PE com 422 se ela ainda não tiver subido.
             SyncOutbox::enqueue(
                 db.lock().conn(),
                 ENTITY_TRACKING_SCREENSHOT,
@@ -354,6 +342,7 @@ pub(crate) fn capture_screenshot(
                     "width": record.width,
                     "height": record.height,
                     "blurApplied": record.blur_applied,
+                    "blurLevel": record.blur_level,
                 }),
             )?;
 
@@ -376,26 +365,24 @@ pub(crate) fn capture_screenshot(
     }
 }
 
-
-
 pub(crate) fn close_open_sites(
     db: &Arc<Mutex<Database>>,
     active_site_id: &Arc<Mutex<Option<String>>>,
     last_site_address: &Arc<Mutex<Option<String>>>,
 ) -> AgentResult<()> {
-    close_open_sites_inner(db, active_site_id, last_site_address)
+    close_open_sites_at(db, active_site_id, last_site_address, &chrono::Utc::now().to_rfc3339())
 }
 
-fn close_open_sites_inner(
+pub(crate) fn close_open_sites_at(
     db: &Arc<Mutex<Database>>,
     active_site_id: &Arc<Mutex<Option<String>>>,
     last_site_address: &Arc<Mutex<Option<String>>>,
+    ended_at: &str,
 ) -> AgentResult<()> {
-    let now = chrono::Utc::now().to_rfc3339();
     let db_guard = db.lock();
     if let Some(site_id) = active_site_id.lock().take() {
         if let Ok(site) = db_guard.get_tracking_site(&site_id) {
-            close_active_site(db_guard.conn(), &site_id, &now)?;
+            close_active_site(db_guard.conn(), &site_id, ended_at)?;
             SyncOutbox::enqueue(
                 db_guard.conn(),
                 ENTITY_TRACKING_SITE,
@@ -405,11 +392,11 @@ fn close_open_sites_inner(
                     "trackingId": site.tracking_id,
                     "address": site.address,
                     "startedAt": site.started_at,
-                    "endedAt": now,
+                    "endedAt": ended_at,
                 }),
             )?;
         } else {
-            close_active_site(db_guard.conn(), &site_id, &now)?;
+            close_active_site(db_guard.conn(), &site_id, ended_at)?;
         }
     }
     *last_site_address.lock() = None;
@@ -420,18 +407,18 @@ pub(crate) fn close_open_apps(
     db: &Arc<Mutex<Database>>,
     active_app_id: &Arc<Mutex<Option<String>>>,
 ) -> AgentResult<()> {
-    close_open_apps_inner(db, active_app_id)
+    close_open_apps_at(db, active_app_id, &chrono::Utc::now().to_rfc3339())
 }
 
-fn close_open_apps_inner(
+pub(crate) fn close_open_apps_at(
     db: &Arc<Mutex<Database>>,
     active_app_id: &Arc<Mutex<Option<String>>>,
+    ended_at: &str,
 ) -> AgentResult<()> {
-    let now = chrono::Utc::now().to_rfc3339();
     let db_guard = db.lock();
     if let Some(app_id) = active_app_id.lock().take() {
         if let Ok(app) = db_guard.get_tracking_app(&app_id) {
-            close_active_app(db_guard.conn(), &app_id, &now)?;
+            close_active_app(db_guard.conn(), &app_id, ended_at)?;
             SyncOutbox::enqueue(
                 db_guard.conn(),
                 ENTITY_TRACKING_APP,
@@ -441,11 +428,11 @@ fn close_open_apps_inner(
                     "trackingId": app.tracking_id,
                     "name": app.name,
                     "startedAt": app.started_at,
-                    "endedAt": now,
+                    "endedAt": ended_at,
                 }),
             )?;
         } else {
-            close_active_app(db_guard.conn(), &app_id, &now)?;
+            close_active_app(db_guard.conn(), &app_id, ended_at)?;
         }
     }
     Ok(())

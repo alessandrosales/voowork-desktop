@@ -73,7 +73,6 @@ export function WorkspaceView({
     })
   }
 
-  // Auto-expand all matching projects during search
   useEffect(() => {
     if (query) {
       queueMicrotask(() => setExpandedProjects(new Set(filteredProjects.map((p) => p.id))))
@@ -128,7 +127,6 @@ export function WorkspaceView({
 
           return (
             <div key={project.id}>
-              {/* Project row */}
               <button
                 type="button"
                 onClick={() => toggleProject(project.id)}
@@ -161,7 +159,6 @@ export function WorkspaceView({
                 </span>
               </button>
 
-              {/* Tasks */}
               {isExpanded && (
                 <div className="ml-5 pl-4">
                   {project.tasks.length === 0 ? (
@@ -218,7 +215,6 @@ export function WorkspaceView({
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header — apenas navegação */}
       <header className="flex items-center px-3 py-2">
         <button
           type="button"
@@ -230,12 +226,9 @@ export function WorkspaceView({
         </button>
       </header>
 
-      {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {/* Título da página */}
         <h1 className="text-lg font-semibold mb-5">{t("workspace.title")}</h1>
 
-        {/* Search */}
         <div className="relative mb-5">
           <SearchIcon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
           <Input
@@ -259,7 +252,6 @@ export function WorkspaceView({
         {renderBody()}
       </div>
 
-      {/* Footer with current selection and action */}
       {resolvedProjectId && resolvedTaskId !== NO_TASK_ID ? (
         <footer className="flex items-center justify-between border-t px-6 py-4">
           <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">

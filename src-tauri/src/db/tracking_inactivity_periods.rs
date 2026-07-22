@@ -31,8 +31,6 @@ impl Database {
             .map_err(crate::error::AgentError::from)
     }
 
-    /// Lista períodos de inatividade abertos (status = 'paused') para um tracking.
-    /// Usado na recuperação de crash para fechar períodos idle órfãos.
     pub fn list_open_inactivity_periods(
         &self,
         tracking_id: &str,
@@ -63,9 +61,6 @@ impl Database {
             .map_err(crate::error::AgentError::from)
     }
 
-    /// Marca um período de inatividade como `abandoned` (crash recovery).
-    /// Calcula `duration_seconds` como wall-clock entre `inactivity_started_at`
-    /// e o `resumed_at` estimado (recebido como argumento).
     pub fn abandon_inactivity_period(
         &self,
         period_id: &str,

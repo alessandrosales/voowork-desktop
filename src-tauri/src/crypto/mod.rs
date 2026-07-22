@@ -3,9 +3,6 @@ use rusqlite::{params, Connection};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-/// Device identity stored in local SQLite.
-/// Provides SHA-256 hashing and device metadata queries.
-/// No Ed25519 signing — signature column kept in schema for forward compat.
 pub struct DeviceKeys;
 
 impl DeviceKeys {

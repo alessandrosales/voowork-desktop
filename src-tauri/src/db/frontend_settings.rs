@@ -11,8 +11,6 @@ use crate::tray::{
 };
 use crate::windows::SETTING_MINI_WIDGET_ENABLED;
 
-/// Keys the React frontend may read/write via `get_setting` / `set_setting`.
-/// Internal Rust code uses `Database::get_setting` / `set_setting` directly.
 const FRONTEND_SETTING_KEYS: &[&str] = &[
     "theme",
     LOCALE_SETTING_KEY,

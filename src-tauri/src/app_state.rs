@@ -28,9 +28,6 @@ impl AppState {
         let api_base_url = crate::auth::configured_api_base_url();
         let sync_worker = Arc::new(SyncWorker::new(api_base_url.clone()));
 
-        // Build the session-revoked callback: stop tracking first (local), then
-        // flag as unauthenticated. Order: stop first (outbox enqueue is local,
-        // no token needed), then flag. Second concurrent stop errors harmlessly.
         let tm = Arc::clone(&tracking_manager);
         let cb: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
             if tm.status().active {

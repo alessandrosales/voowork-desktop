@@ -16,8 +16,6 @@ pub fn open_external_url(app: AppHandle, url: String) -> AgentResult<()> {
     open_allowed_url(&app, &url)
 }
 
-/// Abre os Ajustes do macOS na tela de Monitoramento de Entrada.
-/// Pode melhorar a detecção de atividade do tracker baseado em polling no macOS.
 #[tauri::command]
 pub fn open_system_settings_input_monitoring() -> AgentResult<()> {
     #[cfg(target_os = "macos")]
@@ -40,8 +38,6 @@ pub fn open_system_settings_input_monitoring() -> AgentResult<()> {
     Ok(())
 }
 
-/// Abre os Ajustes do macOS na tela de Gravação de Tela (Screen Recording).
-/// Necessário para capturar a janela ativa e detectar reuniões no macOS.
 #[tauri::command]
 pub fn open_system_settings_screen_recording() -> AgentResult<()> {
     #[cfg(target_os = "macos")]

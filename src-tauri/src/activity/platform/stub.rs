@@ -1,9 +1,4 @@
-// ---------------------------------------------------------------------------
-// Stub: fallback for unsupported platforms (FreeBSD, etc.)
-//
-// Returns conservative values: no mouse position, no recent input,
-// permission always granted (nothing to check).
-// ---------------------------------------------------------------------------
+
 
 pub fn poll_mouse_position() -> Option<(f64, f64)> {
     None

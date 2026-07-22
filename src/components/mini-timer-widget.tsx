@@ -73,8 +73,6 @@ export function MiniTimerWidget() {
 
     void (async () => {
       try {
-        // Unlock constraints, resize to pill, then lock so the user cannot
-        // drag-resize the frameless window (GTK needs resizable=true for setSize).
         await appWindow.setMinSize(null)
         await appWindow.setMaxSize(null)
         await appWindow.setSize(size)

@@ -82,9 +82,6 @@ impl ActivityBuffer {
             .is_some_and(|flag| flag.load(Ordering::SeqCst))
     }
 
-    /// Returns the raw `alert_pending` flag, bypassing the `eligible` gate.
-    /// Used during boot hydration to detect restored buffer state before the
-    /// eligibility flag is set.
     pub fn has_pending_alert(&self) -> bool {
         *self.alert_pending.lock()
     }
@@ -264,7 +261,7 @@ mod persistence_tests {
 
     #[test]
     fn hydration_preserves_restored_buffer() {
-        // Simulate boot hydration: buffer was persisted with 180s + alert
+
         let db = test_db();
         {
             let buffer = ActivityBuffer::new(Arc::clone(&db));
@@ -272,13 +269,11 @@ mod persistence_tests {
             *buffer.alert_pending.lock() = true;
             buffer.persist_state();
         }
-        // Create a fresh buffer that restores from DB
+
         let buffer = ActivityBuffer::new(Arc::clone(&db));
 
-        // Before eligibility is set, has_pending_alert is visible
         assert!(buffer.has_pending_alert(), "restored buffer should have pending alert");
 
-        // Simulate set_session_authenticated(true) logic: set eligible when pending
         let buffer_eligible = Arc::new(AtomicBool::new(false));
         *buffer.eligible.lock() = Some(Arc::clone(&buffer_eligible));
         if buffer.has_pending_alert() {
@@ -288,7 +283,6 @@ mod persistence_tests {
         assert!(snap.alert_pending, "snapshot should show alert after eligibility");
         assert_eq!(snap.seconds, 180, "snapshot should show 180s");
 
-        // Simulate set_session_authenticated(false): dismiss + clear eligibility
         buffer_eligible.store(false, Ordering::SeqCst);
         buffer.dismiss();
         let snap = buffer.snapshot();

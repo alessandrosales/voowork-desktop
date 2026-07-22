@@ -9,12 +9,8 @@ use std::time::Duration;
 use super::storage::download_capture;
 use super::{cache_dir_for_db, cache_file_path};
 
-/// Número máximo de arquivos no cache de screenshots antes de fazer
-/// evicção dos mais antigos.
 const CACHE_MAX_FILES: usize = 200;
 
-/// Verifica o diretório de cache e remove os arquivos mais antigos se
-/// o número total exceder `CACHE_MAX_FILES`.
 fn evict_cache_if_needed(db_path: &Path) {
     let cache_dir = cache_dir_for_db(db_path);
     if !cache_dir.is_dir() {
@@ -33,14 +29,12 @@ fn evict_cache_if_needed(db_path: &Path) {
         return;
     }
 
-    // Ordenar por data de modificação (mais antigos primeiro)
     entries.sort_by_key(|a| {
         a.metadata()
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
     });
 
-    // Remover o excesso (mais antigos)
     let to_remove = entries.len() - CACHE_MAX_FILES;
     for entry in entries.into_iter().take(to_remove) {
         if let Err(err) = fs::remove_file(entry.path()) {

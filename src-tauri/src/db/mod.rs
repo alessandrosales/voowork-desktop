@@ -56,9 +56,6 @@ impl Database {
             let current = schema::MIGRATIONS.len() as i64;
             self.conn.pragma_update(None, "user_version", current)?;
             log::info!("database migrated to version {current}");
-        } else {
-            // Future incremental migrations go here:
-            // if version < 5 { ... self.conn.pragma_update(None, "user_version", 5)?; }
         }
         Ok(())
     }

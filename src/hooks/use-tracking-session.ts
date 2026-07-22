@@ -95,7 +95,6 @@ export const EMPTY_TRACKING: TrackingStatus = {
   inactivity: EMPTY_INACTIVITY,
 }
 
-/** Timer ativo: poll rápido para fases de inatividade e pausa manual. */
 const ACTIVE_TRACKING_REFRESH_MS = 1_000
 const IDLE_REFRESH_MS = 5_000
 
@@ -162,11 +161,9 @@ export function useTrackingSession() {
     }
 
     setProjectsLoading(true)
-    // Tenta sincronizar primeiro, mas não falha se a API estiver offline
     try {
       await trackedInvoke("sync_projects")
     } catch {
-      // sync failure é não-fatal — usa cache local
     }
 
     try {
@@ -297,8 +294,6 @@ export function useTrackingSession() {
         tracking.taskId && tracking.taskId !== "__none__" ? tracking.taskId : null
       )
     } catch (err) {
-      // Pause falhou: o tracking segue correndo, então desfazemos o freeze
-      // otimista para o relógio não travar num valor obsoleto (A11).
       cancelPauseFreeze()
       setError(err instanceof Error ? err.message : String(err))
       throw err

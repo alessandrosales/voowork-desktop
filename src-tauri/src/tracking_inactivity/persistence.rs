@@ -59,12 +59,6 @@ pub fn insert_paused_inactivity_period(
     Ok(period_id)
 }
 
-/// Finaliza o período de inatividade ao retomar a atividade.
-///
-/// Retorna a **duração deste período** (wall-clock entre o início da
-/// inatividade e agora), que é gravada no próprio registro como
-/// `discarded_seconds`. O acumulado da sessão é responsabilidade do
-/// controller (soma as durações de cada período) — ver `state.rs`.
 pub fn finalize_inactivity_period_on_resume(
     conn: &Connection,
     period_id: &str,
@@ -92,11 +86,6 @@ pub fn finalize_inactivity_period_on_resume(
     Ok(period_seconds)
 }
 
-/// Classifica um período. Usa o `discarded_seconds` **do próprio registro**
-/// (a duração daquele período) — nunca o acumulado da sessão — para calcular
-/// quanto tempo é creditado de volta (`reclassified_seconds`).
-///
-/// Retorna `(reclassificado?, segundos_do_período)`.
 pub fn classify_tracking_inactivity_period_record(
     conn: &Connection,
     period_id: &str,

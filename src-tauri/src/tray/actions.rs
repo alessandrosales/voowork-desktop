@@ -38,10 +38,6 @@ pub fn handle_toggle_tracking(app: &AppHandle) {
         return;
     }
 
-    // Snapshot rápido: `status()` não toma `state_transition` — seguro na
-    // main thread. Já start/pause/resume tomam `state_transition` e podem
-    // demorar segundos (finalize com worker join + xcap + DB), então rodam
-    // fora da main thread para não congelar a UI (regressão 2026-07-21).
     let tracking = state.tracking_manager.status();
     if tracking.active && needs_inactivity_ui(&tracking.inactivity.phase) {
         show_main_window(app);
@@ -76,30 +72,23 @@ pub fn handle_tray_quit(app: &AppHandle) {
         let sync_worker = Arc::clone(&state.sync_worker);
         let db = Arc::clone(&state.db);
         let app_handle = app.clone();
-        // Tudo fora da main thread: o finalize (worker join + xcap + DB) pode
-        // levar segundos e congelaria a UI durante o quit ("forçar saída").
-        // Ordem preservada (A8): finalize → prepare exit → stop sync → flush.
+
         std::thread::spawn(move || {
-            // 1. Capture final screenshot + finalize tracking BEFORE killing the
-            //    process. This ensures the last work period is not lost.
+
             tracking_manager.capture_final_screenshot_and_finalize();
 
-            // 2. Then signal immediate exit (drops worker handle, flags).
             tracking_manager.prepare_immediate_exit();
 
-            // 3. Stop sync worker's background polling so it doesn't race with flush.
             sync_worker.stop();
 
-            // 4. Flush pending sync items to backend, then exit.
             sync_worker.flush_blocking(db, app_handle, SYNC_FLUSH_TIMEOUT_SECS);
-            // Brief delay for SQLite WAL checkpoint before _exit.
+
             std::thread::sleep(std::time::Duration::from_millis(300));
             force_process_exit(0);
         });
         return;
     }
 
-    // Fallback: AppState not available (should not happen, but be safe)
     log::warn!("tray quit: AppState not available, exiting without sync flush");
     let _ = app;
     std::thread::spawn(|| {
@@ -112,9 +101,7 @@ pub fn handle_tray_stop(app: &AppHandle) {
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
-    // Fora da main thread: `stop_tracking()` segura `state_transition` durante
-    // todo o finalize (worker join + xcap + DB) — na main thread isso
-    // congelava a UI por segundos (regressão 2026-07-21).
+
     let tracking_manager = Arc::clone(&state.tracking_manager);
     let app_handle = app.clone();
     std::thread::spawn(move || {
@@ -150,11 +137,6 @@ pub fn handle_tray_logout(app: &AppHandle) {
         return;
     };
 
-    // Fora da main thread: stop segura `state_transition` (finalize longo) e
-    // `perform_logout` toca o keyring (até ~2s) — ambos congelariam a UI se
-    // rodassem no handler do tray (main thread). As operações de janela via
-    // AppHandle são despachadas ao event loop (mesmo padrão do comando
-    // `logout` async, que já as executa fora da main thread).
     let app_state = state.inner().clone();
     let app_handle = app.clone();
     std::thread::spawn(move || {

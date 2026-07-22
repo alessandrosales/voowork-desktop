@@ -7,7 +7,7 @@ use rusqlite::params;
 const SYNC_QUEUE_RETENTION_DAYS: i64 = 7;
 
 impl Database {
-    /// Remove itens já confirmados ou mortos com mais de `SYNC_QUEUE_RETENTION_DAYS` dias.
+
     pub fn purge_confirmed_sync_items(&self) -> AgentResult<usize> {
         let cutoff = (Utc::now() - chrono::Duration::days(SYNC_QUEUE_RETENTION_DAYS))
             .to_rfc3339();

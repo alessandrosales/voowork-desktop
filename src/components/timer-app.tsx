@@ -76,8 +76,6 @@ export function TimerApp() {
     [],
   )
 
-  // Debounce persistSelection: coalesce rapid selection changes
-  // (e.g. keyboard arrow mashing) into a single save.
   const pendingSelectionRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const debouncedPersistSelection = useCallback(
     (nextProjectId: string, nextTaskId: string) => {
@@ -92,7 +90,6 @@ export function TimerApp() {
     [persistSelection],
   )
 
-  // Cleanup pending save on unmount
   useEffect(() => {
     return () => {
       if (pendingSelectionRef.current) {
@@ -151,7 +148,6 @@ export function TimerApp() {
     }
     return taskId
   }, [taskId, selectedProject])
-  // Clear stale persisted task selection when task no longer exists in project
   useEffect(() => {
     if (
       taskId !== NO_TASK_ID &&
@@ -202,9 +198,6 @@ export function TimerApp() {
     idlePhase,
   ])
 
-  // Pré-carrega o tempo acumulado da task selecionada sempre que o selector
-  // muda, mesmo enquanto ativamente trackeando. Quando o usuário pausar ou
-  // trocar de task, o taskElapsedSeconds já estará correto.
   useEffect(() => {
     if (resolvedTaskId === NO_TASK_ID) {
       return
@@ -247,7 +240,6 @@ export function TimerApp() {
     setView("timer")
   }
 
-  // Carrega projetos quando abre workspace + stale-while-revalidate a cada 5 min.
   useEffect(() => {
     if (view !== "workspace") {
       return
@@ -259,7 +251,6 @@ export function TimerApp() {
     return () => window.clearInterval(interval)
   }, [view, loadProjects])
 
-  // ─── Overlays (shared across views) ──────────────────────
   const inactivityOverlay =
     active &&
     (idlePhase === "manual_work_check" ||
@@ -305,7 +296,6 @@ export function TimerApp() {
       />
     ) : null
 
-  // ─── Settings view ────────────────────────────────────────
   if (view === "settings") {
     return (
       <>
@@ -316,7 +306,6 @@ export function TimerApp() {
     )
   }
 
-  // ─── Workspace view ───────────────────────────────────────
   if (view === "workspace") {
     return (
       <>
@@ -335,7 +324,6 @@ export function TimerApp() {
     )
   }
 
-  // ─── Timer view ───────────────────────────────────────────
   return (
     <div className="voowork-shell flex h-full min-h-0 flex-col">
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6">
@@ -421,7 +409,6 @@ export function TimerApp() {
             </div>
           </div>
 
-          {/* Workspace card */}
           <div className="mt-6 w-full max-w-xs space-y-2">
             <p className="text-muted-foreground/60 text-center text-[11px] font-medium uppercase tracking-widest">
               {hasSelection

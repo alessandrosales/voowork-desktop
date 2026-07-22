@@ -20,9 +20,7 @@ use tokio::time::sleep;
 pub struct SyncWorker {
     running: Arc<AtomicBool>,
     api_base_url: String,
-    /// Callback invoked when the sync worker detects a 401 (session revoked).
-    /// Stored as `Option` inside a `Mutex` so it can be set after construction
-    /// and accessed by both `start` and `flush_blocking`.
+
     on_session_revoked: parking_lot::Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
 }
 
@@ -35,7 +33,6 @@ impl SyncWorker {
         }
     }
 
-    /// Set the callback to invoke when a 401 is received during sync.
     pub fn set_on_session_revoked(&self, cb: Arc<dyn Fn() + Send + Sync>) {
         *self.on_session_revoked.lock() = Some(cb);
     }
@@ -98,8 +95,6 @@ impl SyncWorker {
         self.running.store(false, Ordering::SeqCst);
     }
 
-    /// Processa todos os itens pendentes na sync_queue de forma síncrona,
-    /// útil durante shutdown para garantir que nenhum dado seja perdido.
     pub fn flush_blocking(
         self: &Arc<Self>,
         db: Arc<Mutex<Database>>,
@@ -288,7 +283,7 @@ fn apply_sync_result(
             log::info!("sync stopped: {message}");
             let _ = invalidate_session(&db_guard);
             let _ = app.emit(EVENT_AUTH_SESSION_EXPIRED, ());
-            // Dispatch the session-revoked callback (stop tracking, flag auth false)
+
             if let Some(cb) = on_session_revoked.clone() {
                 tauri::async_runtime::spawn_blocking(move || {
                     cb();

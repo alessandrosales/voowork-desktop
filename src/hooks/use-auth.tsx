@@ -37,9 +37,7 @@ const EMPTY_AUTH: AuthState = {
 
 type AuthContextValue = {
   auth: AuthState
-  /** True only while validating the stored session on app start. */
   initializing: boolean
-  /** True while login or logout is in progress. */
   loading: boolean
   error: string | null
   login: (email: string, password: string) => Promise<AuthState>
@@ -48,10 +46,6 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
-// Safety net acima do timeout HTTP do Rust (30s) para nunca travar a tela de
-// boot. NÃO usamos um timeout de corrida menor: o Rust já decide (mantém a
-// sessão em falha de rede/timeout, só desloga em 401/403). Um timeout menor
-// aqui derrubava sessões válidas em redes lentas (A10).
 const AUTH_BOOTSTRAP_SAFETY_TIMEOUT_MS = 45_000
 
 type RawAuthState = AuthState & {
@@ -72,7 +66,6 @@ function requestAuthValidation(): Promise<AuthState> {
   )
 }
 
-/** Safety net: force initializing to false after a generous timeout. */
 function useInitializingSafetyTimeout(setInitializing: (v: boolean) => void) {
   useEffect(() => {
     const timer = window.setTimeout(
@@ -89,7 +82,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Safety net: prevent getting stuck on loading screen
   useInitializingSafetyTimeout(setInitializing)
 
   useEffect(() => {
@@ -140,10 +132,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         return
       }
 
-      // Set up event listeners BEFORE validating, so we never miss
-      // the auth-session-expired event emitted by the Rust command.
-      // We kick off listener setup and await it in parallel with
-      // the local auth read to minimise the total wait.
       const listenerPromise = setupListeners()
 
       try {
@@ -151,8 +139,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
           await trackedInvoke<RawAuthState>("get_auth_state"),
         )
 
-        // Make sure listeners are definitely wired up before the
-        // potentially-slow remote validation call.
         await listenerPromise
 
         if (!localState.isAuthenticated) {
@@ -237,7 +223,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {

@@ -1,7 +1,6 @@
 use super::constants::ACTIVITY_SCORE_THRESHOLD;
 use std::collections::VecDeque;
 
-/// Maps raw mouse/keyboard event counts to a 0–100 activity score for the interval.
 pub fn compute_activity_score(mouse: u64, keyboard: u64) -> u8 {
     let combined = mouse.saturating_add(keyboard);
     let score = combined
@@ -10,7 +9,6 @@ pub fn compute_activity_score(mouse: u64, keyboard: u64) -> u8 {
     score.min(100) as u8
 }
 
-/// Applies anti-automation confidence as a multiplier on the raw score.
 pub fn apply_activity_confidence(score: u8, confidence: f64) -> u8 {
     let adjusted = f64::from(score) * confidence.clamp(0.0, 1.0);
     adjusted.round().clamp(0.0, 100.0) as u8

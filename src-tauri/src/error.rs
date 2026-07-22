@@ -20,8 +20,6 @@ pub enum AgentError {
     #[error("{0}")]
     Auth(String),
 
-    /// Erro permanente de sync (4xx não-auth): o item nunca vai ser aceito
-    /// como está, então deve ir para dead-letter em vez de retentar ∞ (A3).
     #[error("{0}")]
     SyncTerminal(String),
 

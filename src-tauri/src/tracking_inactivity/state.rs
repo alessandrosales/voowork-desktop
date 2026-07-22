@@ -15,7 +15,6 @@ use super::persistence::{
     finalize_inactivity_period_on_resume, insert_paused_inactivity_period,
 };
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrackingInactivityPhase {
     Active,
@@ -83,10 +82,9 @@ pub struct TrackingInactivityController {
     meeting_exempt: Mutex<bool>,
     manual_input_streak_start: Mutex<Option<Instant>>,
     last_manual_input_at: Mutex<Instant>,
-    /// Wall-clock anchor from the previous tick — used to detect suspend/resume
-    /// by comparing wall-clock delta against monotonic delta.
+
     last_tick_wall_at: Mutex<DateTime<Utc>>,
-    /// Monotonic anchor from the previous tick.
+
     last_tick_instant: Mutex<Instant>,
 }
 
@@ -122,10 +120,6 @@ impl TrackingInactivityController {
         }
     }
 
-    /// Called when a meeting (communication app) is detected. If `exempt` is
-    /// true, finalizes any pending inactivity period as billable (`offline_work`)
-    /// before cancelling the inactivity flow. This ensures meeting time that
-    /// overlaps with an idle period is credited rather than lost.
     pub fn set_meeting_exempt(&self, exempt: bool, conn: &Connection) -> AgentResult<()> {
         *self.meeting_exempt.lock() = exempt;
         if exempt {
@@ -133,8 +127,6 @@ impl TrackingInactivityController {
             *self.last_input_at.lock() = now;
             *self.last_input_wall_at.lock() = chrono::Utc::now().to_rfc3339();
 
-            // Finalize any pending inactivity period as billable before
-            // clearing the inactivity state.
             self.finalize_pending_period_as_billable(conn)?;
 
             self.cancel_inactivity_flow();
@@ -146,16 +138,11 @@ impl TrackingInactivityController {
         Ok(())
     }
 
-    /// If the controller is in a paused-inactivity phase with a pending
-    /// period, finalizes it and classifies it as billable (`offline_work`).
-    /// Used by `set_meeting_exempt` to credit meeting time that overlaps
-    /// with an idle period.
     fn finalize_pending_period_as_billable(&self, conn: &Connection) -> AgentResult<()> {
         let phase = *self.phase.lock();
         match phase {
             TrackingInactivityPhase::PausedInactivity => {
-                // Period not yet finalized — finalize via detect_input first
-                // to move to ResumePrompt, then classify as offline_work.
+
                 if let Some(period_id) = self.pending_period_id.lock().clone() {
                     let idle_started = self
                         .inactivity_started_at
@@ -177,7 +164,7 @@ impl TrackingInactivityController {
                 *self.pending_period_id.lock() = None;
             }
             TrackingInactivityPhase::ResumePrompt => {
-                // Period already finalized — just classify as offline_work
+
                 if let Some(period_id) = self.pending_period_id.lock().clone() {
                     let (reclassify, duration) =
                         classify_tracking_inactivity_period_record(conn, &period_id, "offline_work")?;
@@ -190,7 +177,7 @@ impl TrackingInactivityController {
                 *self.pending_period_id.lock() = None;
             }
             _ => {
-                // Other phases: nothing to do
+
             }
         }
         Ok(())
@@ -202,13 +189,12 @@ impl TrackingInactivityController {
 
         let phase = *self.phase.lock();
 
-        // Skip suspend detection for manual-pause phases
         if phase == TrackingInactivityPhase::ManualPaused
             || phase == TrackingInactivityPhase::ManualWorkCheck
         {
             self.detect_input(conn)?;
             self.tick_manual_pause()?;
-            // Still update tick anchors even in manual pause
+
             *self.last_tick_wall_at.lock() = now_wall;
             *self.last_tick_instant.lock() = now_instant;
             return Ok(());
@@ -217,16 +203,12 @@ impl TrackingInactivityController {
         self.detect_input(conn)?;
 
         if *self.meeting_exempt.lock() {
-            // Update anchors and skip all inactivity logic when in a meeting
+
             *self.last_tick_wall_at.lock() = now_wall;
             *self.last_tick_instant.lock() = now_instant;
             return Ok(());
         }
 
-        // --- Suspend gap detection (wall-clock anchor) ---
-        // If the wall-clock delta exceeds the monotonic delta by more than the
-        // threshold, the system was suspended. Enter inactivity pause directly
-        // with the last input time as the inactivity start.
         {
             let last_wall = *self.last_tick_wall_at.lock();
             let last_mono = *self.last_tick_instant.lock();
@@ -261,7 +243,6 @@ impl TrackingInactivityController {
             }
         }
 
-        // Update anchors
         *self.last_tick_wall_at.lock() = now_wall;
         *self.last_tick_instant.lock() = now_instant;
 
@@ -360,11 +341,6 @@ impl TrackingInactivityController {
         Ok(())
     }
 
-    /// Dismisses a paused inactivity period and resets the session.
-    ///
-    /// - Discards the inactivity period record in DB
-    /// - Resets active_seconds to 0 (fresh start)
-    /// - Transitions back to Active
     pub fn dismiss_inactivity_period(&self, conn: &Connection) -> AgentResult<()> {
         if *self.phase.lock() != TrackingInactivityPhase::PausedInactivity {
             return Ok(());
@@ -389,20 +365,11 @@ impl TrackingInactivityController {
         Ok(())
     }
 
-    /// Classifies a paused inactivity period as billable and credits
-    /// the idle time to active_seconds.
-    ///
-    /// Mirrors the flow of `classify_tracking_inactivity_period` but
-    /// operates from the `PausedInactivity` phase instead of
-    /// `ResumePrompt`. Finalizes the period (calculates idle duration),
-    /// marks it as classified, adds the duration to active_seconds,
-    /// and transitions back to Active.
     pub fn classify_from_paused_inactivity(&self, conn: &Connection) -> AgentResult<()> {
         if *self.phase.lock() != TrackingInactivityPhase::PausedInactivity {
             return Ok(());
         }
 
-        // Finalize the period — same logic as detect_input's PausedInactivity arm
         let total_discarded = if let Some(period_id) = self.pending_period_id.lock().clone() {
             let idle_started = self
                 .inactivity_started_at
@@ -413,7 +380,6 @@ impl TrackingInactivityController {
                 finalize_inactivity_period_on_resume(conn, &period_id, &idle_started)?;
             *self.inactivity_discarded_seconds.lock() += period_seconds;
 
-            // Classify as billable (offline work category)
             let (reclassify, duration) =
                 classify_tracking_inactivity_period_record(conn, &period_id, "offline_work")?;
 
@@ -636,8 +602,7 @@ impl TrackingInactivityController {
                         .unwrap_or_default();
                     let period_seconds =
                         finalize_inactivity_period_on_resume(conn, &period_id, &idle_started)?;
-                    // Acumula a duração DESTE período. Com 2+ períodos numa
-                    // sessão, o acumulado é a SOMA — não o máximo (bug C4).
+
                     *self.inactivity_discarded_seconds.lock() += period_seconds;
                 }
                 *self.phase.lock() = TrackingInactivityPhase::ResumePrompt;
@@ -647,10 +612,6 @@ impl TrackingInactivityController {
         Ok(())
     }
 
-    /// Subtrai `amount` do acumulado de inatividade descartada da sessão.
-    ///
-    /// Um único guard evita o deadlock de reentrância do `parking_lot::Mutex`
-    /// que ocorreria ao travar o mesmo mutex nos dois lados de uma atribuição.
     fn subtract_discarded_seconds(&self, amount: u64) {
         let mut discarded = self.inactivity_discarded_seconds.lock();
         *discarded = discarded.saturating_sub(amount);
@@ -748,10 +709,10 @@ impl TrackingInactivityController {
         *self.segment_start.lock() = None;
     }
 
-    /// Restarts the billable segment timer after an external caller
-    /// (e.g. persist_task_time_snapshot_state) cleared it via
-    /// reset_billable_seconds(). Must only be called when the
-    /// controller is in an active/billable phase.
+    pub fn inactivity_started_at(&self) -> Option<String> {
+        self.inactivity_started_at.lock().clone()
+    }
+
     pub fn restart_segment_timer(&self) {
         *self.segment_start.lock() = Some(Instant::now());
     }
@@ -829,9 +790,7 @@ mod manual_pause_tests {
 
 #[cfg(test)]
 mod discarded_aggregation_tests {
-    //! Regressão do bug C4: o acumulado de inatividade da sessão deve ser a
-    //! SOMA das durações de cada período (não o máximo), e a classificação
-    //! deve creditar apenas a duração do período classificado.
+
     use super::*;
     use crate::db::Database;
     use std::path::PathBuf;
@@ -859,8 +818,6 @@ mod discarded_aggregation_tests {
         TrackingInactivityController::new(120, last_input, last_wall)
     }
 
-    /// Simula um período de inatividade que iniciou `seconds_ago` atrás e é
-    /// finalizado agora (PausedInactivity -> ResumePrompt via detect_input).
     fn run_idle_period(
         ctrl: &TrackingInactivityController,
         conn: &Connection,
@@ -876,7 +833,7 @@ mod discarded_aggregation_tests {
         *ctrl.phase.lock() = TrackingInactivityPhase::PausedInactivity;
         *ctrl.pending_period_id.lock() = Some(period_id);
         *ctrl.inactivity_started_at.lock() = Some(started_at);
-        // Sinaliza input novo (Instant monotonic, sempre > último polled).
+
         *ctrl.last_input_at.lock() = Instant::now();
         ctrl.detect_input(conn).unwrap();
     }
@@ -899,7 +856,7 @@ mod discarded_aggregation_tests {
 
         run_idle_period(&ctrl, conn, "t1", 150);
         let after_second = *ctrl.inactivity_discarded_seconds.lock();
-        // Soma (~350), não o máximo. A versão com o bug ficaria em ~200.
+
         assert!(
             (349..=353).contains(&after_second),
             "soma dos períodos ~350s, obtido {after_second}"
@@ -924,7 +881,7 @@ mod discarded_aggregation_tests {
         let discarded = *ctrl.inactivity_discarded_seconds.lock();
         let reclassified = *ctrl.inactivity_reclassified_seconds.lock();
         let active = *ctrl.active_seconds.lock();
-        // Só o período 2 (~150s) é creditado; o período 1 (~200s) segue descartado.
+
         assert!(
             (149..=152).contains(&reclassified),
             "reclassificado ~150s, obtido {reclassified}"
@@ -946,7 +903,6 @@ mod discarded_aggregation_tests {
         insert_tracking(conn, "t1");
         let ctrl = controller();
 
-        // Enter PausedInactivity via run_idle_period
         let started_at =
             (chrono::Utc::now() - chrono::Duration::seconds(180)).to_rfc3339();
         let paused_at = chrono::Utc::now().to_rfc3339();
@@ -957,23 +913,19 @@ mod discarded_aggregation_tests {
         *ctrl.pending_period_id.lock() = Some(period_id.clone());
         *ctrl.inactivity_started_at.lock() = Some(started_at);
 
-        // Call set_meeting_exempt(true, conn) — should finalize as billable
         ctrl.set_meeting_exempt(true, conn).unwrap();
 
-        // Assert pending_period_id is cleared
         assert!(
             ctrl.pending_period_id.lock().is_none(),
             "pending_period_id should be cleared"
         );
 
-        // Assert phase is Active (cancel_inactivity_flow was called)
         assert_eq!(
             ctrl.snapshot().phase,
             TrackingInactivityPhase::Active,
             "phase should be Active after meeting exempt"
         );
 
-        // Assert DB record is classified (not 'paused')
         let status: String = conn
             .query_row(
                 "SELECT status FROM tracking_inactivity_periods WHERE id = ?1",
@@ -986,7 +938,6 @@ mod discarded_aggregation_tests {
             "inactivity period should be classified, not 'paused'"
         );
 
-        // Assert category is offline_work
         let category: Option<String> = conn
             .query_row(
                 "SELECT category FROM tracking_inactivity_periods WHERE id = ?1",
@@ -1008,19 +959,15 @@ mod discarded_aggregation_tests {
         insert_tracking(conn, "t1");
         let ctrl = controller();
 
-        // Set the tick anchors to simulate a suspend: last_tick_wall_at
-        // is backdated by 2 hours, but last_tick_instant is recent.
         let two_hours_ago = chrono::Utc::now() - chrono::Duration::hours(2);
         *ctrl.last_tick_wall_at.lock() = two_hours_ago;
         *ctrl.last_tick_instant.lock() = Instant::now() - Duration::from_secs(5);
-        // Ensure last_input_at is recent (user was active before suspend)
+
         *ctrl.last_input_at.lock() = Instant::now() - Duration::from_secs(3);
 
-        // Phase should be Active before tick
         *ctrl.phase.lock() = TrackingInactivityPhase::Active;
         *ctrl.meeting_exempt.lock() = false;
 
-        // Tick should detect the wall-clock jump and enter PausedInactivity
         ctrl.tick(conn, "t1").unwrap();
 
         let snapshot = ctrl.snapshot();
@@ -1034,7 +981,6 @@ mod discarded_aggregation_tests {
             "should have created a pending inactivity period"
         );
 
-        // Verify the period row exists in DB
         let period_id = snapshot.pending_period_id.unwrap();
         let status: String = conn
             .query_row(

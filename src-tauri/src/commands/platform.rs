@@ -1,13 +1,5 @@
 use crate::models::PlatformInfo;
 
-/// Returns structured platform information so the frontend can adapt
-/// permission banners and behaviour per OS.
-///
-/// - **macOS**: needs Input Monitoring + Screen Recording permissions
-/// - **Linux X11**: no special permissions needed
-/// - **Linux Wayland**: active window tracking is limited; screenshots may
-///   trigger a PipeWire portal permission dialog
-/// - **Windows**: no special permissions needed
 #[tauri::command]
 pub fn get_platform_info() -> PlatformInfo {
     let os = std::env::consts::OS.to_string();

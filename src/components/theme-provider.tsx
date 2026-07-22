@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import * as React from "react"
 import { emit, listen } from "@tauri-apps/api/event"
 
@@ -61,7 +60,6 @@ export function ThemeProvider({
         }
       }
 
-      // Listen for theme changes from other windows (e.g., mini-timer)
       unlisten = await listen<Theme>("theme-changed", (event) => {
         if (!cancelled && (event.payload === "dark" || event.payload === "light")) {
           setThemeState(event.payload)

@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import path from "path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
@@ -7,7 +6,6 @@ import { defineConfig, loadEnv } from "vite"
 const backendEnvDir = path.resolve(__dirname, "../voowork-backend")
 const desktopEnvDir = __dirname
 
-// https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const backendEnv = loadEnv(mode, backendEnvDir, "")
   const desktopEnv = loadEnv(mode, desktopEnvDir, "")

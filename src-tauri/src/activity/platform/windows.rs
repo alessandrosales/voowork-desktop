@@ -1,13 +1,4 @@
-// ---------------------------------------------------------------------------
-// Windows: polling-based activity detection via Win32 API
-//
-// Uses:
-//   - GetCursorPos() (user32) — current mouse position
-//   - GetLastInputInfo() (user32) — tick of last input event
-//   - GetTickCount() (kernel32) — current tick for idle calculation
-//
-// No special permissions required.
-// ---------------------------------------------------------------------------
+
 
 use std::mem::MaybeUninit;
 
@@ -34,7 +25,6 @@ extern "system" {
     fn GetTickCount() -> u32;
 }
 
-/// Returns the current cursor position via GetCursorPos.
 pub fn poll_mouse_position() -> Option<(f64, f64)> {
     unsafe {
         let mut pt = MaybeUninit::<POINT>::uninit();
@@ -47,8 +37,6 @@ pub fn poll_mouse_position() -> Option<(f64, f64)> {
     }
 }
 
-/// Returns seconds since the last input event (mouse or keyboard).
-/// Uses GetLastInputInfo + GetTickCount with wraparound-safe arithmetic.
 pub fn seconds_since_last_input() -> f64 {
     unsafe {
         let mut info = MaybeUninit::<LASTINPUTINFO>::uninit();
@@ -56,7 +44,7 @@ pub fn seconds_since_last_input() -> f64 {
         if GetLastInputInfo(info.as_mut_ptr()) != 0 {
             let tick = (*info.as_ptr()).dw_time;
             let current = GetTickCount();
-            // wrapping_sub handles tick count wraparound (49.7 day cycle)
+
             let elapsed = current.wrapping_sub(tick);
             elapsed as f64 / 1000.0
         } else {
@@ -65,7 +53,6 @@ pub fn seconds_since_last_input() -> f64 {
     }
 }
 
-/// Windows does not require special permissions for GetCursorPos/GetLastInputInfo.
 pub fn check_permission() -> bool {
     true
 }

@@ -158,9 +158,6 @@ impl Database {
         Ok(Some((ended - started).num_seconds().max(0) as u64))
     }
 
-    /// Estima o `ended_at` real de um tracking usando o timestamp mais recente
-    /// entre screenshots e peripheral_events. Se não houver dados, retorna `None`
-    /// (neste caso, o chamador deve usar `started_at` como fallback seguro).
     pub fn estimate_tracking_ended_at(&self, tracking_id: &str) -> AgentResult<Option<String>> {
         let result: Option<String> = self
             .conn
@@ -177,7 +174,6 @@ impl Database {
         Ok(result)
     }
 
-    /// Retorna o `started_at` de um tracking (fallback para `estimate_tracking_ended_at`).
     pub fn get_tracking_started_at(&self, tracking_id: &str) -> AgentResult<String> {
         self.conn
             .query_row(

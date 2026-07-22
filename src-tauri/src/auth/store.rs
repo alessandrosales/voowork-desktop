@@ -5,7 +5,6 @@ use crate::error::{AgentError, AgentResult};
 
 use super::token_store;
 
-/// Chaves SQLite em `settings` para persistência da sessão.
 pub const KEY_AUTHENTICATED: &str = "auth_authenticated";
 pub const KEY_ACCESS_TOKEN: &str = "auth_access_token";
 pub const KEY_USER: &str = "auth_user_json";
@@ -14,18 +13,6 @@ pub const KEY_ORGANIZATION: &str = "auth_org_json";
 pub const DEFAULT_API_URL_DEV: &str = "http://localhost:3000";
 pub const DEFAULT_API_URL_PROD: &str = "https://api.voowork.com";
 pub const HTTP_TIMEOUT_SECS: u64 = 30;
-
-// ── Token storage design (M18) ──────────────────────────────────────────
-// The JWT access token is stored in two places:
-//   1. OS credential store (keyring) — preferred, encrypted at rest.
-//   2. SQLite `settings` table — permanent fallback in plaintext.
-//
-// This is intentional: the SQLite copy ensures sync and auth survive
-// keyring unavailability (dbus failure, headless environments, WSL).
-// The threat model assumes single-user workstation — file-system access
-// implies full compromise regardless of token encryption.
-// See docs/features/01-authentication.md for details.
-// ────────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,11 +79,6 @@ impl AuthSession {
     }
 }
 
-/// Retorna a URL base da API Rails.
-///
-/// O valor vem do `.env` (raiz do projeto), injetado em tempo de compilação
-/// pelo `build.rs` e restaurado em runtime pelo `env.rs::load()`.
-/// Fallback para o default de dev ou produção se nada estiver definido.
 pub fn configured_api_base_url() -> String {
     let result = std::env::var("API_URL")
         .or_else(|_| std::env::var("VITE_API_URL"))
@@ -124,10 +106,7 @@ pub fn resolve_api_url(configured_url: &str) -> AgentResult<String> {
 }
 
 pub fn persist_session(db: &Database, session: &AuthSession) -> AgentResult<()> {
-    // Always store the token in OS keyring when available (more secure).
-    // The SQLite copy is kept as a permanent fallback so that sync and auth
-    // continue working even if the keyring becomes temporarily unavailable
-    // (e.g. dbus timeout, headless environment, keyring daemon restart).
+
     if let Err(err) = token_store::store_access_token(&session.access_token) {
         log::warn!(
             "failed to store access token in credential store: {err}; \
@@ -201,7 +180,6 @@ pub fn clear_session(db: &Database) -> AgentResult<()> {
     Ok(())
 }
 
-/// Alias for clear_session — usada pelo sync worker quando a API revoga o token.
 pub fn invalidate_session(db: &Database) -> AgentResult<()> {
     clear_session(db)
 }
@@ -223,9 +201,6 @@ pub fn read_organization_id(db: &Database) -> AgentResult<Option<String>> {
         .filter(|id| !id.is_empty()))
 }
 
-/// Reads JWT from OS credential store, falling back to the SQLite backup.
-/// The SQLite copy is intentionally kept as a fallback (not cleared after
-/// keyring read) so that sync/auth survive keyring unavailability.
 fn load_access_token(db: &Database) -> AgentResult<Option<String>> {
     if let Some(token) = token_store::read_access_token()? {
         return Ok(Some(token));
@@ -235,7 +210,6 @@ fn load_access_token(db: &Database) -> AgentResult<Option<String>> {
         return Ok(None);
     };
 
-    // Best-effort migration to keyring for next time; never clear SQLite fallback.
     if let Err(err) = token_store::store_access_token(&legacy) {
         log::warn!("failed to seed access token in OS credential store: {err}");
     }

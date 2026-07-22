@@ -185,9 +185,6 @@ pub fn show_main_window(app: &AppHandle) {
     }
 }
 
-/// Like `show_mini_timer()` but does NOT call `set_focus()` — used when the
-/// user switches away from the app (minimized / Cmd+Tab) so the mini-widget
-/// appears without stealing focus from the other app.
 pub fn show_mini_timer_quiet(app: &AppHandle) -> tauri::Result<()> {
     let Some(mini) = app.get_webview_window(MINI_WINDOW_LABEL) else {
         return Ok(());
@@ -196,7 +193,6 @@ pub fn show_mini_timer_quiet(app: &AppHandle) -> tauri::Result<()> {
     restore_mini_position(app, &mini)?;
     mini.set_always_on_top(true)?;
     let _ = mini.show();
-    // Intentionally skip set_focus() to avoid stealing focus on macOS
 
     Ok(())
 }
