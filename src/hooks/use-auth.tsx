@@ -1,7 +1,5 @@
 import {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
@@ -9,42 +7,17 @@ import {
 } from "react"
 import { listen } from "@tauri-apps/api/event"
 
+import {
+  AuthContext,
+  type AuthState,
+} from "@/hooks/auth-context"
 import { trackedInvoke, waitForTauriReady } from "@/lib/tauri"
-
-export type AuthUser = {
-  id: string
-  name: string
-  email: string
-  profile: string
-}
-
-export type AuthOrganization = {
-  id: string
-  name: string
-}
-
-export type AuthState = {
-  isAuthenticated: boolean
-  user: AuthUser | null
-  organization: AuthOrganization | null
-}
 
 const EMPTY_AUTH: AuthState = {
   isAuthenticated: false,
   user: null,
   organization: null,
 }
-
-type AuthContextValue = {
-  auth: AuthState
-  initializing: boolean
-  loading: boolean
-  error: string | null
-  login: (email: string, password: string) => Promise<AuthState>
-  logout: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null)
 
 const AUTH_BOOTSTRAP_SAFETY_TIMEOUT_MS = 45_000
 
@@ -221,12 +194,4 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider")
-  }
-  return context
 }

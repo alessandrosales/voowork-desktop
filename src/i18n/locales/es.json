@@ -31,7 +31,8 @@
     "noProjects": "No hay proyectos asignados. Pide acceso a tu gestor o sincroniza después de iniciar sesión.",
     "openWebPanel": "Abrir panel web",
     "stop": "Detener",
-    "confirmStop": "¿Detener la sesión activa? El temporizador se finalizará."
+    "confirmStop": "¿Detener la sesión activa? El temporizador se finalizará.",
+    "remoteActiveBadge": "Activo en {{device}}"
   },
   "workspace": {
     "title": "Espacio de trabajo",
@@ -100,12 +101,9 @@
   "settings": {
     "title": "Configuración",
     "sectionGeneral": "General",
-    "sectionScreenshots": "Captura de Pantalla",
     "sectionInactivity": "Inactividad",
     "sectionWidget": "Mini Widget",
     "appVersion": "Versión de la app",
-    "screenshotBlur": "Desenfocar capturas de pantalla",
-    "screenshotBlurDesc": "Aplica desenfoque a las capturas para proteger información sensible.",
     "inactivityProfile": "Perfil de inactividad",
     "inactivityProfileDesc": "Define el tiempo de inactividad antes de pausar el temporizador.",
     "profileStandard": "Estándar (2 min)",

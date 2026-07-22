@@ -31,7 +31,8 @@
     "noProjects": "No assigned projects. Ask your manager for access or sync after signing in.",
     "openWebPanel": "Open web dashboard",
     "stop": "Stop",
-    "confirmStop": "Stop the active session? The timer will be finalized."
+    "confirmStop": "Stop the active session? The timer will be finalized.",
+    "remoteActiveBadge": "Active on {{device}}"
   },
   "workspace": {
     "title": "Workspace",
@@ -100,12 +101,9 @@
   "settings": {
     "title": "Settings",
     "sectionGeneral": "General",
-    "sectionScreenshots": "Screenshots",
     "sectionInactivity": "Inactivity",
     "sectionWidget": "Mini Widget",
     "appVersion": "App version",
-    "screenshotBlur": "Blur screenshots",
-    "screenshotBlurDesc": "Applies blur to screenshots to protect sensitive information.",
     "inactivityProfile": "Inactivity profile",
     "inactivityProfileDesc": "Sets how long before the timer pauses due to inactivity.",
     "profileStandard": "Standard (2 min)",

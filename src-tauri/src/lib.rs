@@ -15,6 +15,7 @@ mod navigation;
 mod screenshot;
 mod projects;
 mod sync;
+mod trackings;
 mod tracking;
 mod tray;
 mod windows;
@@ -53,10 +54,7 @@ use crate::tracking_inactivity::{
     DEFAULT_INACTIVITY_THRESHOLD_MINUTES, SETTING_INACTIVITY_THRESHOLD_MINUTES,
 };
 use crate::tracking::{SCREENSHOT_BASE_INTERVAL_SECS, SETTING_SCREENSHOT_INTERVAL_SECS};
-use crate::screenshot::{
-    BlurPolicyConfig, RUNTIME_BLUR_POLICY_FILE, SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY,
-    DEFAULT_JPEG_QUALITY,
-};
+use crate::screenshot::{DEFAULT_JPEG_QUALITY, SETTING_JPEG_QUALITY};
 use crate::sync::SYNC_FLUSH_TIMEOUT_SECS;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -112,13 +110,7 @@ pub fn run() {
             }
 
             let screenshot_dir = app_data_dir.join("screenshots");
-            let blur_policy_path = app_data_dir.join(RUNTIME_BLUR_POLICY_FILE);
-            let blur_policy = BlurPolicyConfig::load(Some(&blur_policy_path));
-            let mut screenshot = ScreenshotCapture::new(screenshot_dir, blur_policy)?;
-            let blur_enabled = db
-                .get_setting(SETTING_BLUR_ENABLED)?
-                .is_some_and(|v| v == "true" || v == "1");
-            screenshot.set_blur(blur_enabled);
+            let mut screenshot = ScreenshotCapture::new(screenshot_dir)?;
             let jpeg_quality = db
                 .get_setting(SETTING_JPEG_QUALITY)?
                 .and_then(|value| value.parse::<u8>().ok())
@@ -129,9 +121,14 @@ pub fn run() {
             log::info!("Voowork API: {api_base_url}");
 
             let state = AppState::new(db, screenshot, app.handle().clone());
-            if let Ok(count) = state.tracking_manager.initialize_session() {
-                if count > 0 {
-                    log::warn!("discarded {count} orphaned tracking(s) from previous run");
+            match state.tracking_manager.initialize_session() {
+                Ok(count) => {
+                    if count > 0 {
+                        log::warn!("discarded {count} orphaned tracking(s) from previous run");
+                    }
+                }
+                Err(err) => {
+                    log::error!("failed to initialize tracking session (orphan finalize): {err}");
                 }
             }
             state.tracking_manager.set_app_handle(app.handle().clone());

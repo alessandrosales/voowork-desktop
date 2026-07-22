@@ -23,12 +23,6 @@ struct ProjectResponse {
 }
 
 #[derive(Debug, Deserialize)]
-struct MeProjectsResponse {
-    #[serde(default)]
-    projects: Vec<ProjectResponse>,
-}
-
-#[derive(Debug, Deserialize)]
 struct TaskResponse {
     id: String,
     name: String,
@@ -58,35 +52,8 @@ impl ProjectsClient {
         })
     }
 
-    pub async fn fetch_assigned_projects(&self) -> AgentResult<Vec<ApiProject>> {
-        let url = format!("{}/api/v1/auth/me", self.base_url);
-        let response = self
-            .client
-            .get(&url)
-            .bearer_auth(&self.access_token)
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(auth_error_from_response(status, &body));
-        }
-
-        let payload: MeProjectsResponse = response.json().await?;
-
-        Ok(payload
-            .projects
-            .into_iter()
-            .filter(|project| !project.id.is_empty())
-            .map(|project| ApiProject {
-                id: project.id,
-                name: project.name,
-            })
-            .collect())
-    }
-
-    pub async fn fetch_all_projects(&self) -> AgentResult<Vec<ApiProject>> {
+    /// Projects visible to the authenticated user (scoped server-side by profile/membership).
+    pub async fn fetch_visible_projects(&self) -> AgentResult<Vec<ApiProject>> {
         let url = format!("{}/api/v1/projects", self.base_url);
         let response = self
             .client

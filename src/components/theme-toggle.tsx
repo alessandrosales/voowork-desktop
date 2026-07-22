@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next"
 
-import { useTheme } from "@/components/theme-provider"
+import { useTheme } from "@/hooks/use-theme"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { MoonIcon, SunIcon } from "lucide-react"

@@ -9,7 +9,6 @@ pub const SETTING_SELECTED_TASK_ID: &str = "selected_task_id";
 pub struct TrayState {
     pub status: MenuItem<Wry>,
     pub toggle: MenuItem<Wry>,
-    pub stop: MenuItem<Wry>,
     pub show: MenuItem<Wry>,
     pub reset_widget_position: MenuItem<Wry>,
     pub logout: MenuItem<Wry>,

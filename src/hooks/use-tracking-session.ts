@@ -42,6 +42,9 @@ export type TrackingStatus = {
   screenshotCount: number
   lastScreenshotAt: string | null
   inactivity: TrackingInactivityStatus
+  remoteActiveDevice: string | null
+  remoteActiveTrackingId: string | null
+  syncPending: number
 }
 
 export type ProjectOption = {
@@ -93,6 +96,9 @@ export const EMPTY_TRACKING: TrackingStatus = {
   screenshotCount: 0,
   lastScreenshotAt: null,
   inactivity: EMPTY_INACTIVITY,
+  remoteActiveDevice: null,
+  remoteActiveTrackingId: null,
+  syncPending: 0,
 }
 
 const ACTIVE_TRACKING_REFRESH_MS = 1_000
@@ -164,6 +170,7 @@ export function useTrackingSession() {
     try {
       await trackedInvoke("sync_projects")
     } catch {
+      // Project sync is best-effort; list_projects still runs below.
     }
 
     try {

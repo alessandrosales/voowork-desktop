@@ -4,6 +4,7 @@ use crate::error::AgentResult;
 use crate::models::TrackingStatus;
 use crate::projects::ensure_can_start_tracking;
 use crate::sync::SYNC_FLUSH_TIMEOUT_SECS;
+use crate::tracking::prepare_before_start;
 use crate::windows::{hide_mini_timer, show_main_window};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
@@ -51,7 +52,7 @@ pub fn handle_toggle_tracking(app: &AppHandle) {
         let result = if tracking.active {
             toggle_active_session(&app_state, &tracking)
         } else {
-            start_last_session(&app_state)
+            start_last_session(&app_state, &app_handle)
         };
 
         if let Err(err) = result {
@@ -77,6 +78,15 @@ pub fn handle_tray_quit(app: &AppHandle) {
 
             tracking_manager.capture_final_screenshot_and_finalize();
 
+            {
+                let db_guard = db.lock();
+                let _ = db_guard.set_setting(SETTING_SELECTED_PROJECT_ID, "");
+                let _ = db_guard.set_setting(SETTING_SELECTED_TASK_ID, "");
+                if let Err(err) = db_guard.clear_task_time_totals() {
+                    log::warn!("failed to clear task time totals on quit: {err}");
+                }
+            }
+
             tracking_manager.prepare_immediate_exit();
 
             sync_worker.stop();
@@ -97,24 +107,6 @@ pub fn handle_tray_quit(app: &AppHandle) {
     });
 }
 
-pub fn handle_tray_stop(app: &AppHandle) {
-    let Some(state) = app.try_state::<AppState>() else {
-        return;
-    };
-
-    let tracking_manager = Arc::clone(&state.tracking_manager);
-    let app_handle = app.clone();
-    std::thread::spawn(move || {
-        if !tracking_manager.status().active {
-            return;
-        }
-        if let Err(err) = tracking_manager.stop_tracking() {
-            log::error!("tray stop tracking failed: {err}");
-        }
-        let _ = refresh_tray_ui(&app_handle);
-    });
-}
-
 pub fn handle_tray_menu_event(app: &AppHandle, event_id: &str) {
     match event_id {
         "show" => show_main_window(app),
@@ -124,7 +116,6 @@ pub fn handle_tray_menu_event(app: &AppHandle, event_id: &str) {
             }
         }
         "toggle_tracking" => handle_toggle_tracking(app),
-        "stop" => handle_tray_stop(app),
         "logout" => handle_tray_logout(app),
         "quit" => handle_tray_quit(app),
         other => log::debug!("unhandled tray menu event: {other}"),
@@ -174,7 +165,7 @@ fn toggle_active_session(state: &AppState, tracking: &TrackingStatus) -> AgentRe
     }
 }
 
-fn start_last_session(state: &AppState) -> AgentResult<()> {
+fn start_last_session(state: &AppState, app: &AppHandle) -> AgentResult<()> {
     let (project_id, task_id) = {
         let db = state.db.lock();
         selected_selection(&db)?
@@ -191,6 +182,8 @@ fn start_last_session(state: &AppState) -> AgentResult<()> {
         ensure_can_start_tracking(&db, &project_id)?;
         crate::projects::ensure_task_belongs_to_project(&db, &project_id, &task_id)?;
     }
+
+    tauri::async_runtime::block_on(prepare_before_start(app, state))?;
 
     state
         .tracking_manager

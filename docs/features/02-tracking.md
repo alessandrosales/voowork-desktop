@@ -5,10 +5,13 @@ Orquestração do timer, captura de atividade e screenshots.
 ## Ciclo de vida
 
 1. Usuário seleciona projeto + tarefa e inicia (`start_tracking`).
-2. Rust gera `tracking_id` (UUID v4), grava no SQLite e enfileira na `sync_queue`.
-3. `SyncWorker` envia `POST /api/v1/trackings` com o mesmo UUID.
-4. Durante a sessão: apps, sites, peripheral events e screenshots são enfileirados.
-5. Ao parar: `PATCH /api/v1/trackings/:id` com `status: inactive` e `ended_at`.
+2. **Antes de inserir:** `finalize_orphaned_trackings` fecha qualquer `active` órfão no SQLite (memória vazia após crash).
+3. Rust gera `tracking_id` (UUID v4), grava no SQLite e enfileira na `sync_queue`.
+4. `SyncWorker` envia `POST /api/v1/trackings` com o mesmo UUID.
+5. Durante a sessão: apps, sites, peripheral events e screenshots são enfileirados.
+6. Ao parar: `PATCH /api/v1/trackings/:id` com `status: inactive` e `ended_at`.
+
+> **Alinhamento com API/webapp:** ver [alignment/tracking-data-alignment.md](../alignment/tracking-data-alignment.md).
 
 ## Commands Tauri
 
@@ -89,7 +92,9 @@ Ao fechar o app (quit/tray):
 2. Worker é parado com join síncrono (timeout configurável)
 3. Apps/sites abertos são fechados
 4. Tracking é finalizado via PATCH na API
-5. Trackings órfãos (crash anterior) são finalizados no boot com `ended_at` estimado
+5. Trackings órfãos (crash/kill anterior) são finalizados no próximo boot com `ended_at` estimado
+6. `start_tracking` também finaliza órfãos no SQLite antes de abrir nova sessão (evita dois `active` com memória vazia)
+7. Memória (`ActiveTracking`) só é limpa após finalize no SQLite/outbox ter sucesso
 
 ## Código
 

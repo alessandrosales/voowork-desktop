@@ -7,9 +7,26 @@ use crate::tracking_inactivity::TrackingInactivityPhase;
 use super::{ActiveTracking, TrackingManager};
 
 impl TrackingManager {
+    fn remote_and_sync_fields(&self) -> (Option<String>, Option<String>, i64) {
+        let remote = self.remote_active.lock().clone();
+        let sync_pending = {
+            let db = self.db.lock();
+            db.sync_queue_stats()
+                .map(|(pending, _, _)| pending)
+                .unwrap_or(0)
+        };
+        (
+            remote.device,
+            remote.tracking_id,
+            sync_pending,
+        )
+    }
+
     pub fn status(&self) -> TrackingStatus {
         let active = self.active.lock().clone();
         let totals = self.totals.lock().clone();
+        let (remote_active_device, remote_active_tracking_id, sync_pending) =
+            self.remote_and_sync_fields();
         let inactivity_snapshot = self
             .inactivity_controller
             .lock()
@@ -80,6 +97,9 @@ impl TrackingManager {
                 screenshot_count,
                 last_screenshot_at,
                 inactivity: inactivity_status,
+                remote_active_device,
+                remote_active_tracking_id,
+                sync_pending,
             };
         }
 
@@ -105,6 +125,9 @@ impl TrackingManager {
             screenshot_count: 0,
             last_screenshot_at: None,
             inactivity: TrackingInactivityStatus::default(),
+            remote_active_device,
+            remote_active_tracking_id,
+            sync_pending,
         }
     }
 

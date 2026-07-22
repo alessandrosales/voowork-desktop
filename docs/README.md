@@ -48,6 +48,7 @@ React UI  ──invoke()──►  Rust Core  ──reqwest──►  API Rails 
 | Autenticação | Login JWT, sessão local, validação no boot | [features/01-authentication.md](features/01-authentication.md) |
 | Tracking | Timer, atividade, screenshots, foco, inatividade | [features/02-tracking.md](features/02-tracking.md) |
 | Sync | Outbox offline-first, upload S3, retry | [features/03-sync.md](features/03-sync.md) |
+| **Alinhamento de dados** | Desktop ↔ API ↔ relatórios webapp | [alignment/tracking-data-alignment.md](alignment/tracking-data-alignment.md) |
 
 ---
 

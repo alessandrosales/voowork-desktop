@@ -47,12 +47,9 @@
       "csp": "default-src 'self' tauri: ipc: http://ipc.localhost; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: http://asset.localhost https://asset.localhost; font-src 'self' data:; connect-src 'self' tauri: ipc: http://ipc.localhost https://api.voowork.com http://localhost:3000 http://127.0.0.1:3000 http://localhost:1420 ws://localhost:1420 ws://127.0.0.1:1420"
     }
   },
-  "bundle": {
+    "bundle": {
     "active": true,
     "targets": "all",
-    "resources": {
-      "resources/blur_policy.json": "blur_policy.json"
-    },
     "icon": [
       "icons/icon.png",
       "icons/32x32.png",

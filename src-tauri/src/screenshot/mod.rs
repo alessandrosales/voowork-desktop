@@ -5,16 +5,13 @@ use rusqlite::{params, Connection};
 use std::path::PathBuf;
 use uuid::Uuid;
 
-mod blur_policy;
 mod constants;
 mod process;
 mod remote;
 mod storage;
 
-pub use blur_policy::BlurPolicyConfig;
 pub use constants::{
-    BlurLevel, DEFAULT_JPEG_QUALITY, RUNTIME_BLUR_POLICY_FILE, SCREENSHOT_FILE_EXTENSION,
-    SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY,
+    DEFAULT_JPEG_QUALITY, SCREENSHOT_FILE_EXTENSION, SETTING_JPEG_QUALITY,
 };
 pub use process::normalize_jpeg_quality;
 pub use remote::resolve_screenshot_image;
@@ -25,8 +22,6 @@ use std::path::Path;
 
 pub struct ScreenshotCapture {
     output_dir: PathBuf,
-    blur_override_full: bool,
-    blur_policy: BlurPolicyConfig,
     jpeg_quality: u8,
 }
 
@@ -48,32 +43,15 @@ pub struct TrackingScreenshotRecord {
     pub width: i32,
     pub height: i32,
     pub captured_at: String,
-    pub blur_applied: bool,
-    pub blur_level: BlurLevel,
 }
 
 impl ScreenshotCapture {
-    pub fn new(output_dir: PathBuf, blur_policy: BlurPolicyConfig) -> AgentResult<Self> {
+    pub fn new(output_dir: PathBuf) -> AgentResult<Self> {
         std::fs::create_dir_all(&output_dir)?;
         Ok(Self {
             output_dir,
-            blur_override_full: false,
-            blur_policy,
             jpeg_quality: DEFAULT_JPEG_QUALITY,
         })
-    }
-
-    pub fn set_blur(&mut self, enabled: bool) {
-        self.blur_override_full = enabled;
-    }
-
-    pub fn resolve_blur_level(
-        &self,
-        sample: Option<&crate::tracking_focus::ActiveWindowSample>,
-        time_category: &str,
-    ) -> BlurLevel {
-        self.blur_policy
-            .resolve_blur_level(self.blur_override_full, sample, time_category)
     }
 
     pub fn set_jpeg_quality(&mut self, quality: u8) {
@@ -91,7 +69,6 @@ impl ScreenshotCapture {
         width: i32,
         height: i32,
         image_bytes: &[u8],
-        blur_level: BlurLevel,
     ) -> AgentResult<TrackingScreenshotRecord> {
         let id = Uuid::new_v4().to_string();
         let original_id = id.clone();
@@ -100,7 +77,7 @@ impl ScreenshotCapture {
         let file_path = self.output_dir.join(&file_name);
 
         let (stored_width, stored_height, stored_bytes) =
-            process_raw_rgba(image_bytes, width, height, blur_level, self.jpeg_quality)?;
+            process_raw_rgba(image_bytes, width, height, self.jpeg_quality)?;
         let width = if stored_width > 0 { stored_width } else { width };
         let height = if stored_height > 0 { stored_height } else { height };
 
@@ -136,8 +113,6 @@ impl ScreenshotCapture {
             width,
             height,
             captured_at,
-            blur_applied: blur_level.is_applied(),
-            blur_level,
         })
     }
 }

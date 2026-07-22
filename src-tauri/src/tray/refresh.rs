@@ -132,7 +132,6 @@ pub fn refresh_tray_ui_sync(app: &AppHandle) -> tauri::Result<()> {
     tray_state.status.set_text(&status_text)?;
     tray_state.toggle.set_text(toggle.text)?;
     tray_state.toggle.set_enabled(toggle.enabled)?;
-    tray_state.stop.set_enabled(tracking.active)?;
     tray.set_tooltip(Some(tooltip))?;
 
     Ok(())
