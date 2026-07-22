@@ -163,6 +163,19 @@ impl ActivityTracker {
         self.handle = Some(handle);
     }
 
+    /// Peek at the current activity level without draining the bucket.
+    /// Used by finalize logic to determine whether the user was actively
+    /// interacting at quit/stop time, regardless of the inactivity phase.
+    pub fn current_activity_level(&self) -> &'static str {
+        use super::automation::{apply_activity_confidence, compute_activity_score};
+        use super::constants::activity_level_from_score;
+
+        let bucket = self.bucket.lock();
+        let raw_score = compute_activity_score(bucket.mouse_events, bucket.keyboard_events);
+        let activity_score = apply_activity_confidence(raw_score, bucket.confidence);
+        activity_level_from_score(activity_score)
+    }
+
     pub fn drain_bucket(&self) -> ActivityBucket {
         let mut guard = self.bucket.lock();
         let drained = guard.clone();

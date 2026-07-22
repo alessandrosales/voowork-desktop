@@ -214,6 +214,43 @@ pub(crate) fn screenshot_time_category(inactivity_phase: TrackingInactivityPhase
     }
 }
 
+/// Determine time_category for a **finalization** screenshot (quit/stop).
+///
+/// Unlike `screenshot_time_category` (used during live tracking), this
+/// considers actual user activity level alongside the inactivity phase.
+/// The phase alone can be stale at quit time — e.g. `PausedInactivity`
+/// or `ResumePrompt` from a previous idle burst, even though the user
+/// just moved the mouse to click Quit.
+///
+/// Rule:
+/// - `Active` / `Warning` / `Countdown` → always `active`
+/// - `ManualPaused` / `ManualWorkCheck` → user explicitly paused; respect
+///   intent UNLESS there is medium/high activity (user demonstrably working)
+/// - `PausedInactivity` / `ResumePrompt` → system-detected idle; check
+///   actual activity level to distinguish "genuinely away" from "back but
+///   didn't dismiss the prompt"
+pub(crate) fn finalize_screenshot_time_category(
+    inactivity_phase: TrackingInactivityPhase,
+    activity_level: &str,
+) -> &'static str {
+    // Billable phases → always active
+    if matches!(
+        inactivity_phase,
+        TrackingInactivityPhase::Active
+            | TrackingInactivityPhase::Warning
+            | TrackingInactivityPhase::Countdown
+    ) {
+        return TIME_CATEGORY_ACTIVE;
+    }
+
+    // For inactivity phases: check actual activity level
+    if activity_level == "none" || activity_level == "low" {
+        TIME_CATEGORY_INACTIVITY
+    } else {
+        TIME_CATEGORY_ACTIVE
+    }
+}
+
 pub(crate) struct CaptureOutcome {
     pub screenshot: Option<TrackingScreenshotRecord>,
     pub period_end: String,
@@ -352,6 +389,8 @@ pub(crate) fn capture_screenshot(
                     "height": record.height,
                     "isDuplicate": record.is_duplicate,
                     "activityLevel": record.activity_level,
+                    "timeCategory": time_category,
+                    "periodStartedAt": period_start,
                 }),
             )?;
 

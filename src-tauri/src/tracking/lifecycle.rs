@@ -26,13 +26,15 @@ impl TrackingManager {
         self.stop_worker();
 
         let period_start = tracking.current_period_start.clone();
+        // Peek actual activity level before capture drains the bucket
+        let activity_level = self.tracker.lock().current_activity_level();
         let time_category = self
             .inactivity_controller
             .lock()
             .as_ref()
             .map(|ctrl| {
                 let phase = ctrl.snapshot().phase;
-                super::capture::screenshot_time_category(phase)
+                super::capture::finalize_screenshot_time_category(phase, activity_level)
             })
             .unwrap_or(crate::db::TIME_CATEGORY_ACTIVE);
 
