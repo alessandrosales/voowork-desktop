@@ -145,8 +145,14 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                             Err(err) => log::warn!("inactivity snapshot screenshot failed: {err}"),
                         }
 
-                        let _ = close_open_apps_at(&db, &active_app_id, started_at);
-                        let _ = close_open_sites_at(&db, &active_site_id, &last_site_address, started_at);
+                        // Use current time, NOT inactivity_started_at, for closing apps.
+                        // The focus poll may have opened a new tracking_app record
+                        // during the countdown (e.g. window title change), whose
+                        // started_at would be AFTER inactivity_started_at — causing
+                        // ended_at < started_at in the database.
+                        let paused_now = chrono::Utc::now().to_rfc3339();
+                        let _ = close_open_apps_at(&db, &active_app_id, &paused_now);
+                        let _ = close_open_sites_at(&db, &active_site_id, &last_site_address, &paused_now);
                     }
                 }
             }
