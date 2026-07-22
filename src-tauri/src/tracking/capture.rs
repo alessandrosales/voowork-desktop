@@ -352,6 +352,8 @@ pub(crate) fn capture_screenshot(
                     "height": record.height,
                     "isDuplicate": record.is_duplicate,
                     "activityLevel": record.activity_level,
+                    "timeCategory": time_category,
+                    "periodStartedAt": period_start,
                 }),
             )?;
 

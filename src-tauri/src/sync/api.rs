@@ -122,6 +122,8 @@ async fn send_tracking_screenshot(
 
     let is_duplicate = payload.get("isDuplicate").and_then(|v| v.as_bool()).unwrap_or(false);
     let activity_level = str_field(payload, "activityLevel").unwrap_or("medium");
+    let time_category = str_field(payload, "timeCategory");
+    let period_started_at = str_field(payload, "periodStartedAt");
 
     let body = json!({
         "tracking_screenshot": {
@@ -131,6 +133,8 @@ async fn send_tracking_screenshot(
             "path": storage_path,
             "is_duplicate": is_duplicate,
             "activity_level": activity_level,
+            "time_category": time_category,
+            "period_started_at": period_started_at,
         }
     });
 
