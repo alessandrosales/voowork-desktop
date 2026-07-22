@@ -336,8 +336,10 @@ pub(crate) fn capture_screenshot(
                 }
             }
 
-            flush_activity_period(db, tracking, period_start, &period_end, &bucket, Some(&record.original_id))?;
-
+            // Invariante do outbox: os peripheral events do período referenciam
+            // `record.original_id` (screenshotOriginalId), então o screenshot
+            // precisa entrar na fila ANTES deles — o backend valida a existência
+            // da captura e rejeita o PE com 422 se ela ainda não tiver subido.
             SyncOutbox::enqueue(
                 db.lock().conn(),
                 ENTITY_TRACKING_SCREENSHOT,
@@ -354,6 +356,8 @@ pub(crate) fn capture_screenshot(
                     "blurApplied": record.blur_applied,
                 }),
             )?;
+
+            flush_activity_period(db, tracking, period_start, &period_end, &bucket, Some(&record.original_id))?;
 
             Ok(CaptureOutcome {
                 screenshot: Some(record),

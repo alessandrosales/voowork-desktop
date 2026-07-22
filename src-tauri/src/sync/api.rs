@@ -163,13 +163,16 @@ async fn send_tracking_peripheral_event(
         }
     });
 
-    post_json(
-        client,
-        &format!("{base_url}/api/v1/trackings/{tracking_id}/peripheral_events"),
-        access_token,
-        body,
-    )
-    .await
+    let response = client
+        .post(format!(
+            "{base_url}/api/v1/trackings/{tracking_id}/peripheral_events"
+        ))
+        .bearer_auth(access_token)
+        .json(&body)
+        .send()
+        .await?;
+
+    parse_peripheral_event_response(response).await
 }
 
 async fn send_tracking_app(
@@ -330,6 +333,111 @@ async fn parse_response(response: reqwest::Response) -> AgentResult<()> {
     Err(AgentError::Other(format!("sync failed {status}: {body}")))
 }
 
+/// Parsing da resposta de peripheral events. Igual a `parse_response`, exceto
+/// por um caso: 422 por `screenshot_original_id` não encontrada é um erro
+/// TRANSITÓRIO de ordenação da fila (o PE foi enviado antes do screenshot que
+/// ele referencia terminar de sincronizar — possível em filas enfileiradas por
+/// versões antigas). Nesse caso retornamos erro retentável (`Other`) para o
+/// worker aplicar backoff (`mark_failed`) e tentar de novo depois que o
+/// screenshot subir, em vez de dead-letter imediato com perda do evento.
+async fn parse_peripheral_event_response(response: reqwest::Response) -> AgentResult<()> {
+    let status = response.status();
+    if status.is_success() {
+        return Ok(());
+    }
+
+    let body = response.text().await.unwrap_or_default();
+    if is_auth_failure_status(status) {
+        return Err(AgentError::Auth(error_message_from_body(&body)));
+    }
+
+    if status == StatusCode::UNPROCESSABLE_ENTITY && is_missing_screenshot_error(&body) {
+        return Err(AgentError::Other(format!(
+            "peripheral event aguardando screenshot sincronizar (retentável): {body}"
+        )));
+    }
+
+    if status.is_client_error() {
+        return Err(AgentError::SyncTerminal(format!("sync rejected {status}: {body}")));
+    }
+
+    Err(AgentError::Other(format!("sync failed {status}: {body}")))
+}
+
+/// Detecta no corpo do 422 o erro de `screenshot_original_id` apontando para
+/// uma captura que ainda não existe no backend. Tolerante a JSON inválido,
+/// seguindo o padrão de `is_duplicate_screenshot_error`.
+fn is_missing_screenshot_error(body: &str) -> bool {
+    let Ok(json) = serde_json::from_str::<Value>(body) else {
+        return body.contains("screenshot_original_id")
+            && (body.contains("não encontrada")
+                || body.contains("nao encontrada")
+                || body.contains("not found"));
+    };
+
+    json.get("errors")
+        .and_then(|errors| errors.get("screenshot_original_id"))
+        .and_then(|messages| messages.as_array())
+        .is_some_and(|messages| {
+            messages.iter().filter_map(|value| value.as_str()).any(|message| {
+                message.contains("não encontrada")
+                    || message.contains("nao encontrada")
+                    || message.contains("not found")
+            })
+        })
+}
+
 fn str_field<'a>(payload: &'a Value, key: &str) -> Option<&'a str> {
     payload.get(key).and_then(|value| value.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_screenshot_error_matches_rails_pt_br_message() {
+        // Mensagem real observada em produção (log de dead-letter).
+        let body = r#"{"errors":{"screenshot_original_id":["captura de tela não encontrada neste rastreamento"]}}"#;
+        assert!(is_missing_screenshot_error(body));
+    }
+
+    #[test]
+    fn missing_screenshot_error_matches_english_message() {
+        let body = r#"{"errors":{"screenshot_original_id":["screenshot not found in this tracking"]}}"#;
+        assert!(is_missing_screenshot_error(body));
+    }
+
+    #[test]
+    fn missing_screenshot_error_ignores_other_fields() {
+        let body = r#"{"errors":{"tracking_id":["não encontrado"]}}"#;
+        assert!(!is_missing_screenshot_error(body));
+    }
+
+    #[test]
+    fn missing_screenshot_error_ignores_other_validation_on_same_field() {
+        // Outros erros de validação no mesmo campo continuam terminais.
+        let body = r#"{"errors":{"screenshot_original_id":["é obrigatório"]}}"#;
+        assert!(!is_missing_screenshot_error(body));
+    }
+
+    #[test]
+    fn missing_screenshot_error_tolerates_invalid_json() {
+        let body = "unprocessable entity: screenshot_original_id não encontrada";
+        assert!(is_missing_screenshot_error(body));
+    }
+
+    #[test]
+    fn missing_screenshot_error_rejects_invalid_json_without_match() {
+        assert!(!is_missing_screenshot_error("not json at all"));
+        assert!(!is_missing_screenshot_error(""));
+        // "not found" sozinho, sem a chave do campo, não basta.
+        assert!(!is_missing_screenshot_error("resource not found"));
+    }
+
+    #[test]
+    fn missing_screenshot_error_rejects_unrelated_json() {
+        let body = r#"{"errors":{"count":["must be greater than zero"]}}"#;
+        assert!(!is_missing_screenshot_error(body));
+    }
 }

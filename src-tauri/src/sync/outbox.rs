@@ -99,7 +99,7 @@ pub fn fetch_pending_batch(conn: &Connection, limit: usize) -> AgentResult<Vec<P
         "SELECT id, entity_type, entity_id, payload_json, attempts
          FROM sync_queue
          WHERE status IN ('pending', 'failed') AND (next_retry_at IS NULL OR next_retry_at <= ?1)
-         ORDER BY created_at ASC
+         ORDER BY created_at ASC, rowid ASC
          LIMIT ?2",
     )?;
 
@@ -164,4 +164,67 @@ pub fn mark_tracking_screenshot_synced(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+    use std::path::PathBuf;
+
+    fn test_db() -> Database {
+        let dir = PathBuf::from(std::env::temp_dir())
+            .join(format!("voowork-outbox-test-{}", Uuid::new_v4()));
+        Database::open(dir).unwrap()
+    }
+
+    #[test]
+    fn fetch_pending_batch_breaks_created_at_ties_by_rowid() {
+        let db = test_db();
+        let conn = db.conn();
+
+        // created_at com precisão de segundos empata enqueues feitos no mesmo
+        // flush; o tiebreaker deve ser a ordem de inserção (rowid).
+        let ts = "2026-01-01T00:00:00Z";
+        for (id, entity_type) in [
+            ("first", "tracking_screenshot"),
+            ("second", "tracking_peripheral_event"),
+            ("third", "tracking_peripheral_event"),
+        ] {
+            conn.execute(
+                "INSERT INTO sync_queue (id, entity_type, entity_id, payload_json, status, created_at, next_retry_at)
+                 VALUES (?1, ?2, ?1, '{}', 'pending', ?3, ?3)",
+                params![id, entity_type, ts],
+            )
+            .unwrap();
+        }
+
+        let batch = fetch_pending_batch(conn, 10).unwrap();
+        let ids: Vec<&str> = batch.iter().map(|item| item.id.as_str()).collect();
+        assert_eq!(ids, vec!["first", "second", "third"]);
+    }
+
+    #[test]
+    fn fetch_pending_batch_delivers_screenshot_before_peripheral_events() {
+        // Invariante de dependência do capture_screenshot: enfileirado o
+        // screenshot antes dos PEs do período, o fetch deve entregá-lo primeiro
+        // — o backend valida que a captura referenciada pelo PE já existe.
+        let db = test_db();
+        let conn = db.conn();
+
+        SyncOutbox::enqueue(conn, "tracking_screenshot", "shot-1", serde_json::json!({})).unwrap();
+        SyncOutbox::enqueue(conn, "tracking_peripheral_event", "pe-1", serde_json::json!({})).unwrap();
+        SyncOutbox::enqueue(conn, "tracking_peripheral_event", "pe-2", serde_json::json!({})).unwrap();
+
+        let batch = fetch_pending_batch(conn, 10).unwrap();
+        let types: Vec<&str> = batch.iter().map(|item| item.entity_type.as_str()).collect();
+        assert_eq!(
+            types,
+            vec![
+                "tracking_screenshot",
+                "tracking_peripheral_event",
+                "tracking_peripheral_event"
+            ]
+        );
+    }
 }
