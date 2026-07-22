@@ -6,6 +6,7 @@ use crate::models::{
     TrackingInactivityConfig, TrackingStatus,
 };
 use crate::tray::refresh_tray_ui;
+use crate::tracking::prepare_before_start;
 
 use crate::tracking_inactivity::{
     load_inactivity_threshold_minutes, COUNTDOWN_SECS, SETTING_INACTIVITY_PROFILE,
@@ -32,6 +33,8 @@ pub async fn start_tracking(
             "task is required".into(),
         ));
     }
+
+    prepare_before_start(&app, state.inner()).await?;
 
     let app_state = state.inner().clone();
     let project_id = request.project_id;
@@ -74,6 +77,8 @@ pub async fn restart_tracking(
             "task is required".into(),
         ));
     }
+
+    prepare_before_start(&app, state.inner()).await?;
 
     let app_state = state.inner().clone();
     let project_id = request.project_id;

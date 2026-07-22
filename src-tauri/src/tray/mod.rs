@@ -49,14 +49,12 @@ pub fn setup_tray(app: &tauri::App, locale: &str) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
-    let stop = MenuItem::with_id(app_handle, "stop", labels.stop, false, None::<&str>)?;
     let logout = MenuItem::with_id(app_handle, "logout", labels.logout, true, None::<&str>)?;
     let quit = MenuItem::with_id(app_handle, "quit", labels.quit, true, None::<&str>)?;
 
     let tray_state = TrayState {
         status,
         toggle,
-        stop,
         show,
         reset_widget_position,
         logout,
@@ -101,7 +99,6 @@ pub fn refresh_tray_menu(app: &tauri::AppHandle, locale: &str) -> tauri::Result<
     tray_state.logout.set_text(labels.logout)?;
     tray_state.quit.set_text(labels.quit)?;
     tray_state.toggle.set_text(labels.toggle_start)?;
-    tray_state.stop.set_text(labels.stop)?;
 
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let menu = build_tray_menu(app, &labels, &tray_state)?;
@@ -124,7 +121,6 @@ fn build_tray_menu(
         &[
             &tray_state.status,
             &tray_state.toggle,
-            &tray_state.stop,
             &separator_top,
             &tray_state.show,
             &tray_state.reset_widget_position,

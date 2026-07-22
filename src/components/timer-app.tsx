@@ -139,7 +139,7 @@ export function TimerApp() {
     [projects, resolvedProjectId]
   )
   const resolvedTaskId = useMemo(() => {
-    if (taskId === NO_TASK_ID) return NO_TASK_ID
+    if (!resolvedProjectId || taskId === NO_TASK_ID) return NO_TASK_ID
     if (
       selectedProject?.tasks &&
       !selectedProject.tasks.some((t) => t.id === taskId)
@@ -147,7 +147,7 @@ export function TimerApp() {
       return NO_TASK_ID
     }
     return taskId
-  }, [taskId, selectedProject])
+  }, [taskId, selectedProject, resolvedProjectId])
   useEffect(() => {
     if (
       taskId !== NO_TASK_ID &&
@@ -182,6 +182,9 @@ export function TimerApp() {
 
   const showLiveSessionTimer = selectionMatchesSession && !manuallyPaused
 
+  const hasSelection =
+    Boolean(resolvedProjectId) && resolvedTaskId !== NO_TASK_ID
+
   useEffect(() => {
     if (showLiveSessionTimer) {
       return
@@ -205,14 +208,28 @@ export function TimerApp() {
     refreshTaskElapsed(resolvedTaskId).catch(() => undefined)
   }, [resolvedTaskId, refreshTaskElapsed])
 
-  const displaySeconds = showLiveSessionTimer
-    ? displayElapsedSeconds
-    : selectionMatchesSession && manuallyPaused
-      ? tracking.elapsedSeconds
-      : taskElapsedSeconds
+  const displaySeconds = !hasSelection
+    ? 0
+    : showLiveSessionTimer
+      ? displayElapsedSeconds
+      : selectionMatchesSession && manuallyPaused
+        ? tracking.elapsedSeconds
+        : taskElapsedSeconds
   const time = formatElapsed(displaySeconds)
-  const hasSelection =
-    Boolean(resolvedProjectId) && resolvedTaskId !== NO_TASK_ID
+
+  const showRemoteActiveBadge =
+    !active &&
+    Boolean(tracking.remoteActiveTrackingId) &&
+    Boolean(tracking.remoteActiveDevice)
+  const showSyncPendingBadge = tracking.syncPending > 0
+
+  useEffect(() => {
+    if (!auth.isAuthenticated) {
+      return
+    }
+    loadProjects().catch(() => undefined)
+  }, [auth.isAuthenticated, loadProjects])
+
   const canStart = !active && hasSelection
   const handleLogout = async () => {
     if (active) {
@@ -332,6 +349,28 @@ export function TimerApp() {
             <VooworkLogo size="compact" />
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
+            {showRemoteActiveBadge ? (
+              <span
+                className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300"
+                title={t("timer.remoteActiveBadge", {
+                  device: tracking.remoteActiveDevice ?? "",
+                })}
+              >
+                {t("timer.remoteActiveBadge", {
+                  device: tracking.remoteActiveDevice ?? "",
+                })}
+              </span>
+            ) : null}
+            {showSyncPendingBadge ? (
+              <span
+                className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-300"
+                title={t("timer.syncPendingBadge", {
+                  count: tracking.syncPending,
+                })}
+              >
+                {t("timer.syncPendingBadge", { count: tracking.syncPending })}
+              </span>
+            ) : null}
             {active ? (
               <span
                 className={cn(

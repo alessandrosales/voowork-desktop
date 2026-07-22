@@ -32,8 +32,11 @@ mod constants;
 mod inactivity_ui;
 mod lifecycle;
 mod notifications;
+mod reconcile;
 mod status_report;
 mod worker;
+
+pub use reconcile::{prepare_before_start, reconcile_after_auth, RemoteActiveSnapshot};
 
 #[derive(Debug, Clone)]
 pub struct ActiveTracking {
@@ -65,6 +68,7 @@ pub struct TrackingManager {
     pub(crate) activity_buffer: ActivityBuffer,
     session_authenticated: Arc<AtomicBool>,
     buffer_eligible: Arc<AtomicBool>,
+    pub(crate) remote_active: Arc<Mutex<RemoteActiveSnapshot>>,
 
     state_transition: parking_lot::Mutex<()>,
 }
@@ -103,6 +107,7 @@ impl TrackingManager {
             activity_buffer: ActivityBuffer::new(db_for_buffer),
             session_authenticated: Arc::new(AtomicBool::new(false)),
             buffer_eligible: Arc::new(AtomicBool::new(false)),
+            remote_active: Arc::new(Mutex::new(RemoteActiveSnapshot::default())),
             state_transition: parking_lot::Mutex::new(()),
             started_at_monotonic: Mutex::new(None),
         }
@@ -158,6 +163,14 @@ impl TrackingManager {
         }
         if task_id.trim().is_empty() {
             return Err(AgentError::Session("task is required".into()));
+        }
+
+        {
+            let db = self.db.lock();
+            let orphans = crate::sync::finalize::finalize_orphaned_trackings(&db)?;
+            if orphans > 0 {
+                log::warn!("finalized {orphans} orphaned tracking(s) in SQLite before start");
+            }
         }
 
         let (account_id, user_id, device_name) = {
@@ -395,7 +408,6 @@ impl TrackingManager {
             &tracking,
             &period_start,
             time_category,
-            &self.last_active_window,
         );
 
         let _ = capture::close_open_apps(&self.db, &self.active_app_id);
@@ -406,7 +418,7 @@ impl TrackingManager {
         );
 
         let ended_at = chrono::Utc::now().to_rfc3339();
-        if let Err(err) = (|| -> AgentResult<()> {
+        let finalized = (|| -> AgentResult<()> {
             let db = self.db.lock();
             let elapsed = status_report::snapshot_task_elapsed(&db, &tracking, None)?;
             db.set_task_active_seconds(&tracking.task_id, elapsed)?;
@@ -440,8 +452,11 @@ impl TrackingManager {
                 }
             }
             Ok(())
-        })() {
+        })();
+
+        if let Err(err) = &finalized {
             log::warn!("finalize tracking on quit failed: {err}");
+            return;
         }
 
         *self.active.lock() = None;
@@ -494,10 +509,6 @@ impl TrackingManager {
         }
         db.clear_task_time_totals()?;
         Ok(count)
-    }
-
-    pub fn set_screenshot_blur(&self, enabled: bool) {
-        self.screenshot.lock().set_blur(enabled);
     }
 
     pub fn set_screenshot_jpeg_quality(&self, quality: u8) {
@@ -578,7 +589,6 @@ impl TrackingManager {
             &tracking,
             &period_start,
             TIME_CATEGORY_INACTIVITY,
-            &self.last_active_window,
         );
 
         match result {
@@ -639,7 +649,6 @@ impl TrackingManager {
             &tracking,
             &period_start,
             crate::db::TIME_CATEGORY_INACTIVITY,
-            &self.last_active_window,
         );
 
         match result {
@@ -722,13 +731,47 @@ mod state_transition_tests {
         };
         let db = Arc::new(Mutex::new(db));
         let screenshot_dir = dir.join("screenshots");
-        let screenshot = ScreenshotCapture::new(
-            screenshot_dir,
-            crate::screenshot::BlurPolicyConfig::load(None),
-        )
-        .unwrap();
+        let screenshot = ScreenshotCapture::new(screenshot_dir).unwrap();
         let manager = Arc::new(TrackingManager::new(Arc::clone(&db), screenshot));
         (manager, dir)
+    }
+
+    #[test]
+    fn start_finalizes_sqlite_orphan_when_memory_is_empty() {
+        let (manager, _dir) = setup_test_manager();
+        let orphan_id = "orphan-tracking-id";
+
+        {
+            let db = manager.db.lock();
+            db.insert_tracking(
+                orphan_id,
+                "org-1",
+                "proj-1",
+                "task-orphan",
+                "user-1",
+                Some("test-device"),
+                "2026-07-22T10:00:00Z",
+            )
+            .expect("seed orphan tracking");
+        }
+
+        let result = manager.start_tracking("proj-1".into(), "task-1".into());
+        assert!(
+            result.is_ok(),
+            "start should succeed after finalizing sqlite orphan: {:?}",
+            result.err()
+        );
+
+        let db = manager.db.lock();
+        let status: String = db
+            .conn()
+            .query_row(
+                "SELECT status FROM trackings WHERE id = ?1",
+                rusqlite::params![orphan_id],
+                |row| row.get(0),
+            )
+            .expect("orphan status");
+        assert_eq!(status, "inactive");
     }
 
     #[test]
@@ -795,11 +838,7 @@ mod state_transition_tests {
             db
         };
         let db = Arc::new(Mutex::new(db));
-        let screenshot = ScreenshotCapture::new(
-            dir.join("screenshots"),
-            crate::screenshot::BlurPolicyConfig::load(None),
-        )
-        .unwrap();
+        let screenshot = ScreenshotCapture::new(dir.join("screenshots")).unwrap();
         let manager = Arc::new(TrackingManager::new(Arc::clone(&db), screenshot));
 
         let result = manager.start_tracking("proj-1".into(), "task-1".into());

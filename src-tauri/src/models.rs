@@ -24,6 +24,9 @@ pub struct TrackingStatus {
     pub screenshot_count: u64,
     pub last_screenshot_at: Option<String>,
     pub inactivity: TrackingInactivityStatus,
+    pub remote_active_device: Option<String>,
+    pub remote_active_tracking_id: Option<String>,
+    pub sync_pending: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

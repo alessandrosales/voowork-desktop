@@ -43,9 +43,9 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [x] Cache de projetos é sincronizado automaticamente após o login
 - [x] Login com senha incorreta exibe **apenas** a mensagem da API (ex.: "E-mail ou senha inválidos"), sem prefixos técnicos
 - [x] Login com e-mail inexistente exibe mensagem de erro amigável
-- [ ] Login com API fora do ar exibe erro de conexão sem quebrar a UI
-- [ ] Campos vazios / formato de e-mail inválido são validados antes do submit
-- [ ] Estado de loading no botão durante a autenticação (sem duplo submit)
+- [x] Login com API fora do ar exibe erro de conexão sem quebrar a UI
+- [x] Campos vazios / formato de e-mail inválido são validados antes do submit
+- [x] Estado de loading no botão durante a autenticação (sem duplo submit)
 
 
 
@@ -303,6 +303,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 - [ ] `get_dashboard_summary` retorna totais corretos do dia/período
 - [ ] `get_activity_chart` retorna dados do gráfico de atividade coerentes com os trackings
+- [ ] Relatórios webapp (`project_time`, timeline) batem com API após deduplicação — ver [alignment/tracking-data-alignment.md](alignment/tracking-data-alignment.md) §5
+- [ ] Bloco `is_live: true` na timeline corresponde ao único tracking `active` do usuário no PG
 - [ ] `list_trackings` lista sessões com filtros/paginação funcionando
 - [ ] `list_tracking_screenshots` lista screenshots da sessão
 - [ ] `get_tracking_screenshot_image` exibe a imagem corretamente
@@ -485,5 +487,6 @@ Para validações rápidas após hotfix, execute no mínimo:
 - [Feature: Autenticação](features/01-authentication.md)
 - [Feature: Tracking](features/02-tracking.md)
 - [Feature: Sync](features/03-sync.md)
+- [Alinhamento tracking ↔ API ↔ webapp](alignment/tracking-data-alignment.md)
 - [Schema do banco local](db.mermaid)
 

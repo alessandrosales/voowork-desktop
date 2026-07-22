@@ -159,18 +159,19 @@ impl Database {
     }
 
     pub fn estimate_tracking_ended_at(&self, tracking_id: &str) -> AgentResult<Option<String>> {
-        let result: Option<String> = self
-            .conn
-            .query_row(
-                "SELECT MAX(ts) FROM (
+        let result = self.conn.query_row(
+            "SELECT MAX(ts) FROM (
                     SELECT MAX(captured_at) as ts FROM tracking_screenshots WHERE tracking_id = ?1
                     UNION ALL
                     SELECT MAX(ended_at) as ts FROM tracking_peripheral_events WHERE tracking_id = ?1
+                    UNION ALL
+                    SELECT MAX(COALESCE(ended_at, started_at)) as ts FROM tracking_apps WHERE tracking_id = ?1
+                    UNION ALL
+                    SELECT MAX(COALESCE(ended_at, started_at)) as ts FROM tracking_sites WHERE tracking_id = ?1
                 )",
-                params![tracking_id],
-                |row| row.get(0),
-            )
-            .optional()?;
+            params![tracking_id],
+            |row| row.get::<_, Option<String>>(0),
+        )?;
         Ok(result)
     }
 

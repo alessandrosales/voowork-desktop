@@ -31,7 +31,9 @@
     "noProjects": "No hay proyectos asignados. Pide acceso a tu gestor o sincroniza después de iniciar sesión.",
     "openWebPanel": "Abrir panel web",
     "stop": "Detener",
-    "confirmStop": "¿Detener la sesión activa? El temporizador se finalizará."
+    "confirmStop": "¿Detener la sesión activa? El temporizador se finalizará.",
+    "remoteActiveBadge": "Activo en {{device}}",
+    "syncPendingBadge": "Sync pendiente ({{count}})"
   },
   "workspace": {
     "title": "Espacio de trabajo",

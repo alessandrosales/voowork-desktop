@@ -31,7 +31,9 @@
     "noProjects": "No assigned projects. Ask your manager for access or sync after signing in.",
     "openWebPanel": "Open web dashboard",
     "stop": "Stop",
-    "confirmStop": "Stop the active session? The timer will be finalized."
+    "confirmStop": "Stop the active session? The timer will be finalized.",
+    "remoteActiveBadge": "Active on {{device}}",
+    "syncPendingBadge": "Sync pending ({{count}})"
   },
   "workspace": {
     "title": "Workspace",

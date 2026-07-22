@@ -8,7 +8,7 @@ use crate::db::Database;
 use crate::error::{AgentError, AgentResult};
 use crate::projects;
 use crate::sync::EVENT_AUTH_SESSION_EXPIRED;
-use crate::tracking::TrackingManager;
+use crate::tracking::{reconcile_after_auth, TrackingManager};
 use crate::tray::{refresh_tray_ui, EVENT_AUTH_LOGGED_OUT};
 use crate::windows::hide_mini_timer;
 
@@ -38,11 +38,22 @@ pub async fn login(
         db_guard.set_setting("selected_task_id", "")?;
     }
 
-    if let Err(err) = projects::sync_project_cache(&api_base_url, &session.access_token, &session.user.profile, Arc::clone(&db)).await {
+    if let Err(err) = projects::sync_project_cache(&api_base_url, &session.access_token, Arc::clone(&db)).await {
         log::warn!("project cache sync failed after login: {err}");
     }
 
     state.tracking_manager.set_session_authenticated(true);
+    if let Err(err) = reconcile_after_auth(
+        &state.tracking_manager,
+        &api_base_url,
+        &session.access_token,
+        &session.user.id,
+    )
+    .await
+    {
+        log::warn!("tracking reconcile after login failed: {err}");
+    }
+
     let auth_state = session.to_auth_state();
     let _ = refresh_tray_ui(&app);
     Ok(auth_state)
@@ -148,10 +159,20 @@ pub async fn validate_auth_session(
                 let db_guard = db.lock();
                 persist_session(&db_guard, &updated)?;
             }
-            if let Err(err) = projects::refresh_project_cache_if_stale(&api_base_url, &updated.user.profile, Arc::clone(&db)).await {
+            if let Err(err) = projects::refresh_project_cache_if_stale(&api_base_url, Arc::clone(&db)).await {
                 log::warn!("project cache refresh after auth validate failed: {err}");
             }
             state.tracking_manager.set_session_authenticated(true);
+            if let Err(err) = reconcile_after_auth(
+                &state.tracking_manager,
+                &api_base_url,
+                &updated.access_token,
+                &updated.user.id,
+            )
+            .await
+            {
+                log::warn!("tracking reconcile after auth validate failed: {err}");
+            }
             Ok(updated.to_auth_state())
         }
         Err(AgentError::Auth(msg)) => {

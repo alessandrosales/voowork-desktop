@@ -15,6 +15,7 @@ mod navigation;
 mod screenshot;
 mod projects;
 mod sync;
+mod trackings;
 mod tracking;
 mod tray;
 mod windows;
@@ -120,9 +121,14 @@ pub fn run() {
             log::info!("Voowork API: {api_base_url}");
 
             let state = AppState::new(db, screenshot, app.handle().clone());
-            if let Ok(count) = state.tracking_manager.initialize_session() {
-                if count > 0 {
-                    log::warn!("discarded {count} orphaned tracking(s) from previous run");
+            match state.tracking_manager.initialize_session() {
+                Ok(count) => {
+                    if count > 0 {
+                        log::warn!("discarded {count} orphaned tracking(s) from previous run");
+                    }
+                }
+                Err(err) => {
+                    log::error!("failed to initialize tracking session (orphan finalize): {err}");
                 }
             }
             state.tracking_manager.set_app_handle(app.handle().clone());
