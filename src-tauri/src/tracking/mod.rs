@@ -775,6 +775,49 @@ mod state_transition_tests {
     }
 
     #[test]
+    fn session_revoked_callback_with_active_tracking_does_not_block_status() {
+        // Cenário DoD (regressão 2026-07-21): sessão revogada COM tracking
+        // ativo. No app real, o callback (status → stop → set_session_authenticated)
+        // roda em spawn_blocking enquanto a main thread continua chamando
+        // `status()` + db (tray refresh, window events, comandos). `status()`
+        // NÃO pode tomar `state_transition` — senão congela durante o
+        // finalize. Se um deadlock/contenção infinita for reintroduzido, este
+        // teste FALHA por timeout em vez de travar o CI.
+        let (manager, _dir) = setup_test_manager();
+        manager
+            .start_tracking("proj-1".into(), "task-1".into())
+            .expect("start should succeed");
+
+        let tm = Arc::clone(&manager);
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            if tm.status().active {
+                tm.stop_tracking().expect("stop should succeed");
+            }
+            tm.set_session_authenticated(false);
+            let _ = done_tx.send(());
+        });
+
+        // Simula callers concorrentes (main thread/tray) durante o finalize.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            match done_rx.recv_timeout(std::time::Duration::from_millis(5)) {
+                Ok(()) => break,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => assert!(
+                    std::time::Instant::now() < deadline,
+                    "session-revoked callback deadlocked or blocked status callers"
+                ),
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    panic!("session-revoked callback thread died unexpectedly")
+                }
+            }
+            let _ = manager.status();
+        }
+        worker.join().expect("session-revoked callback thread panicked");
+        assert!(!manager.status().active);
+    }
+
+    #[test]
     fn start_without_auth_fails_without_claiming_buffer() {
         // N1: Verifica se o buffer NÃO é reivindicado quando a auth falha.
         // Cria TrackingManager sem dados de autenticação — `read_session_identity`

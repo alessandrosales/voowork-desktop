@@ -96,17 +96,27 @@ pub async fn restart_tracking(
 }
 
 #[tauri::command]
-pub fn dismiss_activity_buffer(state: tauri::State<'_, AppState>) -> AgentResult<()> {
-    state.tracking_manager.dismiss_activity_buffer();
+pub async fn dismiss_activity_buffer(state: tauri::State<'_, AppState>) -> AgentResult<()> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        app_state.tracking_manager.dismiss_activity_buffer();
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("dismiss activity buffer worker failed: {err}")))?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn get_task_elapsed_seconds(
+pub async fn get_task_elapsed_seconds(
     state: tauri::State<'_, AppState>,
     task_id: String,
 ) -> AgentResult<u64> {
-    state.tracking_manager.task_elapsed_seconds(&task_id)
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        app_state.tracking_manager.task_elapsed_seconds(&task_id)
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("task elapsed worker failed: {err}")))?
 }
 
 #[tauri::command]
@@ -157,47 +167,65 @@ pub async fn get_tracking_status(state: tauri::State<'_, AppState>) -> AgentResu
 }
 
 #[tauri::command]
-pub fn get_app_status(state: tauri::State<'_, AppState>) -> AgentResult<AppStatus> {
-    let tracking = state.tracking_manager.status();
-    let (sync_pending, sync_failed, sync_confirmed) = {
-        let db = state.db.lock();
-        db.sync_queue_stats()?
-    };
-    let device_registered = {
-        let db = state.db.lock();
-        db.device_is_registered()?
-    };
+pub async fn get_app_status(state: tauri::State<'_, AppState>) -> AgentResult<AppStatus> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let tracking = app_state.tracking_manager.status();
+        let (sync_pending, sync_failed, sync_confirmed) = {
+            let db = app_state.db.lock();
+            db.sync_queue_stats()?
+        };
+        let device_registered = {
+            let db = app_state.db.lock();
+            db.device_is_registered()?
+        };
 
-    let tracker_mode = tracker_mode_label(state.tracking_manager.tracker_mode()).to_string();
+        let tracker_mode = tracker_mode_label(app_state.tracking_manager.tracker_mode()).to_string();
 
-    Ok(AppStatus {
-        tracking,
-        sync_pending,
-        sync_failed,
-        sync_confirmed,
-        device_registered,
-        tracker_mode: tracker_mode.to_string(),
+        Ok(AppStatus {
+            tracking,
+            sync_pending,
+            sync_failed,
+            sync_confirmed,
+            device_registered,
+            tracker_mode: tracker_mode.to_string(),
+        })
     })
+    .await
+    .map_err(|err| AgentError::Other(format!("app status worker failed: {err}")))?
 }
 
 #[tauri::command]
-pub fn confirm_still_working(state: tauri::State<'_, AppState>) -> AgentResult<()> {
-    state.tracking_manager.confirm_still_working()
+pub async fn confirm_still_working(state: tauri::State<'_, AppState>) -> AgentResult<()> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || app_state.tracking_manager.confirm_still_working())
+        .await
+        .map_err(|err| AgentError::Other(format!("confirm still working worker failed: {err}")))?
 }
 
 #[tauri::command]
-pub fn classify_tracking_inactivity_period(
+pub async fn classify_tracking_inactivity_period(
     state: tauri::State<'_, AppState>,
     request: ClassifyTrackingInactivityRequest,
 ) -> AgentResult<()> {
-    state
-        .tracking_manager
-        .classify_tracking_inactivity_period(&request.period_id, &request.category)
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        app_state
+            .tracking_manager
+            .classify_tracking_inactivity_period(&request.period_id, &request.category)
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("classify tracking inactivity worker failed: {err}")))?
 }
 
 #[tauri::command]
-pub fn skip_tracking_inactivity_classification(state: tauri::State<'_, AppState>) -> AgentResult<()> {
-    state.tracking_manager.skip_tracking_inactivity_classification()
+pub async fn skip_tracking_inactivity_classification(state: tauri::State<'_, AppState>) -> AgentResult<()> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        app_state.tracking_manager.skip_tracking_inactivity_classification()
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("skip inactivity classification worker failed: {err}")))?
 }
 
 #[tauri::command]
@@ -223,20 +251,35 @@ pub async fn classify_paused_inactivity_period(state: tauri::State<'_, AppState>
 }
 
 #[tauri::command]
-pub fn confirm_manual_work(state: tauri::State<'_, AppState>) -> AgentResult<()> {
-    state.tracking_manager.confirm_manual_work()
+pub async fn confirm_manual_work(state: tauri::State<'_, AppState>) -> AgentResult<()> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || app_state.tracking_manager.confirm_manual_work())
+        .await
+        .map_err(|err| AgentError::Other(format!("confirm manual work worker failed: {err}")))?
 }
 
 #[tauri::command]
-pub fn dismiss_manual_work_check(state: tauri::State<'_, AppState>) -> AgentResult<()> {
-    state.tracking_manager.dismiss_manual_work_check()
+pub async fn dismiss_manual_work_check(state: tauri::State<'_, AppState>) -> AgentResult<()> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        app_state.tracking_manager.dismiss_manual_work_check()
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("dismiss manual work check worker failed: {err}")))?
 }
 
 /// Verifica se o app tem permissão de Monitoramento de Entrada no macOS.
 /// Usado pelo tracker de atividade baseado em polling (CoreGraphics).
 #[tauri::command]
-pub fn check_input_monitoring_permission(state: tauri::State<'_, AppState>) -> bool {
-    state.tracking_manager.tracker_has_permission()
+pub async fn check_input_monitoring_permission(state: tauri::State<'_, AppState>) -> AgentResult<bool> {
+    let app_state = state.inner().clone();
+    // Nunca rejeita: falha de join vira `false` (fail-closed), preservando o
+    // contrato anterior do comando (sempre resolvia com boolean).
+    Ok(tauri::async_runtime::spawn_blocking(move || {
+        app_state.tracking_manager.tracker_has_permission()
+    })
+    .await
+    .unwrap_or(false))
 }
 
 /// Verifica se o app consegue capturar a janela ativa (necessário para
@@ -245,20 +288,27 @@ pub fn check_input_monitoring_permission(state: tauri::State<'_, AppState>) -> b
 /// - Linux / Windows: sempre `true`.
 /// - macOS: `true` apenas se o usuário concedeu permissão de Screen Recording.
 #[tauri::command]
-pub fn check_active_window_permission() -> bool {
-    crate::tracking_focus::check_active_window_permission()
+pub async fn check_active_window_permission() -> bool {
+    tauri::async_runtime::spawn_blocking(crate::tracking_focus::check_active_window_permission)
+        .await
+        .unwrap_or(false)
 }
 
 #[tauri::command]
-pub fn get_tracking_inactivity_config(state: tauri::State<'_, AppState>) -> AgentResult<TrackingInactivityConfig> {
-    let db = state.db.lock();
-    let threshold_minutes = load_inactivity_threshold_minutes(db.conn());
-    let profile = db
-        .get_setting(SETTING_INACTIVITY_PROFILE)?
-        .unwrap_or_else(|| "standard".into());
-    Ok(TrackingInactivityConfig {
-        threshold_minutes,
-        profile,
-        countdown_secs: COUNTDOWN_SECS,
+pub async fn get_tracking_inactivity_config(state: tauri::State<'_, AppState>) -> AgentResult<TrackingInactivityConfig> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = app_state.db.lock();
+        let threshold_minutes = load_inactivity_threshold_minutes(db.conn());
+        let profile = db
+            .get_setting(SETTING_INACTIVITY_PROFILE)?
+            .unwrap_or_else(|| "standard".into());
+        Ok(TrackingInactivityConfig {
+            threshold_minutes,
+            profile,
+            countdown_secs: COUNTDOWN_SECS,
+        })
     })
+    .await
+    .map_err(|err| AgentError::Other(format!("inactivity config worker failed: {err}")))?
 }

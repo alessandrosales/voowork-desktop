@@ -23,10 +23,15 @@ pub(crate) const VALID_INACTIVITY_PROFILES: &[&str] = &[
 ];
 
 #[tauri::command]
-pub fn get_setting(state: tauri::State<'_, AppState>, key: String) -> AgentResult<Option<String>> {
+pub async fn get_setting(state: tauri::State<'_, AppState>, key: String) -> AgentResult<Option<String>> {
     ensure_frontend_setting_key(&key)?;
-    let db = state.db.lock();
-    db.get_setting(&key)
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = app_state.db.lock();
+        db.get_setting(&key)
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("get setting worker failed: {err}")))?
 }
 
 #[tauri::command]
