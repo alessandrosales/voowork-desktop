@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
+use parking_lot::Mutex;
 use tauri::Emitter;
 
 use crate::app_state::AppState;
+use crate::db::Database;
 use crate::error::{AgentError, AgentResult};
 use crate::projects;
 use crate::sync::EVENT_AUTH_SESSION_EXPIRED;
+use crate::tracking::TrackingManager;
 use crate::tray::{refresh_tray_ui, EVENT_AUTH_LOGGED_OUT};
 use crate::windows::hide_mini_timer;
 
@@ -83,10 +86,39 @@ pub fn perform_logout(state: &AppState) -> AgentResult<()> {
     Ok(())
 }
 
+/// Cleanup executado quando a API invalida a sessão (401 no
+/// `validate_auth_session` ou no sync worker).
+///
+/// ORDEM IMPORTA (regressão 2026-07-21): o guard do SQLite precisa ser
+/// descartado ANTES de `set_session_authenticated(false)` — esse método faz
+/// `activity_buffer.dismiss()` → `clear_persisted()` → `db.lock()`, e
+/// `parking_lot::Mutex` não é reentrante. Com o guard vivo na mesma thread,
+/// o segundo lock era um self-deadlock que matava o processo: o mutex `db`
+/// nunca era liberado e a main thread congelava no primeiro `db.lock()`
+/// (window event → `should_show_mini_widget`, `get_auth_state`, tray
+/// refresh) → GNOME exibia "forçar saída" no boot com sessão expirada.
+pub(crate) fn clear_invalidated_session(
+    db: &Arc<Mutex<Database>>,
+    tracking_manager: &TrackingManager,
+) {
+    {
+        let db_guard = db.lock();
+        if let Err(err) = clear_session_store(&db_guard) {
+            log::warn!("failed to clear session after auth invalidation: {err}");
+        }
+    }
+    tracking_manager.set_session_authenticated(false);
+}
+
 #[tauri::command]
-pub fn get_auth_state(state: tauri::State<'_, AppState>) -> AgentResult<AuthState> {
-    let db = state.db.lock();
-    read_auth_state(&db)
+pub async fn get_auth_state(state: tauri::State<'_, AppState>) -> AgentResult<AuthState> {
+    let app_state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let db = app_state.db.lock();
+        read_auth_state(&db)
+    })
+    .await
+    .map_err(|err| AgentError::Other(format!("get auth state worker failed: {err}")))?
 }
 
 #[tauri::command]
@@ -141,11 +173,7 @@ pub async fn validate_auth_session(
             log::info!("auth session invalidated: {msg}");
             let app_state = state.inner().clone();
             let _ = tauri::async_runtime::spawn_blocking(move || {
-                let db_guard = app_state.db.lock();
-                if let Err(clear_err) = clear_session_store(&db_guard) {
-                    log::warn!("failed to clear session after auth invalidation: {clear_err}");
-                }
-                app_state.tracking_manager.set_session_authenticated(false);
+                clear_invalidated_session(&app_state.db, &app_state.tracking_manager);
             })
             .await;
             let _ = app.emit(EVENT_AUTH_SESSION_EXPIRED, ());
@@ -158,5 +186,38 @@ pub async fn validate_auth_session(
             log::warn!("auth refresh failed, keeping local session: {err}");
             Ok(session.to_auth_state())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::screenshot::ScreenshotCapture;
+    use std::time::Duration;
+
+    fn test_state() -> (Arc<Mutex<Database>>, TrackingManager) {
+        let dir = std::env::temp_dir().join(format!("voowork-auth-test-{}", uuid::Uuid::new_v4()));
+        let db = Arc::new(Mutex::new(Database::open(dir.clone()).unwrap()));
+        let screenshot = ScreenshotCapture::new(dir.join("screenshots")).unwrap();
+        let manager = TrackingManager::new(Arc::clone(&db), screenshot);
+        (db, manager)
+    }
+
+    /// Regressão 2026-07-21 (freeze no boot com sessão expirada): o cleanup
+    /// do 401 segurava o guard do db ao chamar `set_session_authenticated(false)`,
+    /// que reentra no mesmo `parking_lot::Mutex` via activity buffer —
+    /// self-deadlock; o mutex nunca era liberado e a main thread congelava
+    /// ("forçar saída" do GNOME). Roda em thread separada com timeout para
+    /// FALHAR (em vez de travar o CI) se a ordem for violada de novo.
+    #[test]
+    fn clear_invalidated_session_does_not_deadlock_on_db_mutex() {
+        let (db, manager) = test_state();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            clear_invalidated_session(&db, &manager);
+            let _ = tx.send(());
+        });
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("clear_invalidated_session deadlocked: db guard alive across set_session_authenticated");
     }
 }
