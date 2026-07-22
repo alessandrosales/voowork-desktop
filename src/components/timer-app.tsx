@@ -1,4 +1,4 @@
-import { FolderIcon, LayoutGridIcon, SquareIcon } from "lucide-react"
+import { FolderIcon, LayoutGridIcon } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 
@@ -55,7 +55,6 @@ export function TimerApp() {
     dismissActivityBuffer,
     refresh,
     loadProjects,
-    stopTracking,
   } = useTrackingSession()
   const [projectId, setProjectId] = useState("")
   const [taskId, setTaskId] = useState(NO_TASK_ID)
@@ -228,13 +227,6 @@ export function TimerApp() {
       if (!confirmed) return
     }
     await logout()
-  }
-
-  const handleStop = async () => {
-    if (!active) return
-    const confirmed = window.confirm(t("timer.confirmStop"))
-    if (!confirmed) return
-    await stopTracking()
   }
 
   const handleSelectTask = (nextProjectId: string, nextTaskId: string) => {
@@ -428,19 +420,6 @@ export function TimerApp() {
               <span className="text-muted-foreground">{time.seconds}</span>
             </div>
           </div>
-
-          {/* Stop button — visible only when tracking is active */}
-          {active && !manuallyPaused ? (
-            <button
-              type="button"
-              className="voowork-stop-btn mt-4 flex items-center gap-2 rounded-lg border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive transition-all hover:bg-destructive/10 hover:border-destructive/50 disabled:opacity-40"
-              onClick={handleStop}
-              disabled={loading}
-            >
-              <SquareIcon className="size-4 fill-destructive/70" />
-              {t("timer.stop")}
-            </button>
-          ) : null}
 
           {/* Workspace card */}
           <div className="mt-6 w-full max-w-xs space-y-2">
