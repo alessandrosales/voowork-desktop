@@ -68,6 +68,7 @@ impl ScreenshotCapture {
         capture_all_monitors_png()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn persist_capture(
         &self,
         conn: &Connection,
