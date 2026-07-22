@@ -14,10 +14,10 @@ pub use constants::{
     DEFAULT_JPEG_QUALITY, SCREENSHOT_FILE_EXTENSION, SETTING_JPEG_QUALITY,
 };
 pub use process::normalize_jpeg_quality;
+pub use process::process_raw_rgba;
 pub use remote::resolve_screenshot_image;
 pub use storage::upload_capture;
 
-use process::process_raw_rgba;
 use std::path::Path;
 
 pub struct ScreenshotCapture {
@@ -43,6 +43,8 @@ pub struct TrackingScreenshotRecord {
     pub width: i32,
     pub height: i32,
     pub captured_at: String,
+    pub is_duplicate: bool,
+    pub activity_level: String,
 }
 
 impl ScreenshotCapture {
@@ -58,6 +60,10 @@ impl ScreenshotCapture {
         self.jpeg_quality = normalize_jpeg_quality(quality);
     }
 
+    pub fn jpeg_quality(&self) -> u8 {
+        self.jpeg_quality
+    }
+
     pub fn capture_pixels(&self) -> AgentResult<(i32, i32, Vec<u8>)> {
         capture_all_monitors_png()
     }
@@ -69,6 +75,8 @@ impl ScreenshotCapture {
         width: i32,
         height: i32,
         image_bytes: &[u8],
+        is_duplicate: bool,
+        activity_level: &str,
     ) -> AgentResult<TrackingScreenshotRecord> {
         let id = Uuid::new_v4().to_string();
         let original_id = id.clone();
@@ -87,9 +95,10 @@ impl ScreenshotCapture {
         conn.execute(
             "INSERT INTO tracking_screenshots (
                 id, path, tracking_id, original_id, captured_at,
-                period_started_at, time_category, created_at, updated_at
+                period_started_at, time_category, is_duplicate, activity_level,
+                created_at, updated_at
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)",
             params![
                 id,
                 file_path.to_string_lossy().to_string(),
@@ -98,6 +107,8 @@ impl ScreenshotCapture {
                 captured_at,
                 context.period_start,
                 context.time_category,
+                is_duplicate,
+                activity_level,
                 now
             ],
         )?;
@@ -113,6 +124,8 @@ impl ScreenshotCapture {
             width,
             height,
             captured_at,
+            is_duplicate,
+            activity_level: activity_level.to_string(),
         })
     }
 }

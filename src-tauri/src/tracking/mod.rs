@@ -45,6 +45,7 @@ pub struct ActiveTracking {
     pub task_id: String,
     pub started_at: String,
     pub last_screenshot_at: Option<String>,
+    pub last_screenshot_hash: Option<String>,
     pub current_period_start: String,
 }
 
@@ -249,6 +250,7 @@ impl TrackingManager {
             task_id,
             started_at,
             last_screenshot_at: None,
+            last_screenshot_hash: None,
             current_period_start: period_start,
         };
         *self.active.lock() = Some(tracking.clone());

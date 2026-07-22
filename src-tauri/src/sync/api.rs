@@ -120,12 +120,17 @@ async fn send_tracking_screenshot(
 
     let storage_path = upload_capture(&local_path, screenshot_id).await?;
 
+    let is_duplicate = payload.get("isDuplicate").and_then(|v| v.as_bool()).unwrap_or(false);
+    let activity_level = str_field(payload, "activityLevel").unwrap_or("medium");
+
     let body = json!({
         "tracking_screenshot": {
             "id": screenshot_id,
             "original_id": original_id,
             "captured_at": captured_at,
             "path": storage_path,
+            "is_duplicate": is_duplicate,
+            "activity_level": activity_level,
         }
     });
 

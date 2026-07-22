@@ -5,7 +5,7 @@ use webp::Encoder as WebpEncoder;
 
 use super::constants::{DEFAULT_JPEG_QUALITY, MAX_SCREENSHOT_LONG_EDGE_PX};
 
-pub(crate) fn process_raw_rgba(
+pub fn process_raw_rgba(
     rgba_bytes: &[u8],
     width: i32,
     height: i32,

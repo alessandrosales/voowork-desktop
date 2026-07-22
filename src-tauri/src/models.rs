@@ -192,6 +192,8 @@ pub struct TrackingScreenshotRow {
     pub synced_at: Option<String>,
     pub sync_status: String,
     pub has_local_file: bool,
+    pub is_duplicate: bool,
+    pub activity_level: String,
 }
 
 #[derive(Debug, Clone)]
