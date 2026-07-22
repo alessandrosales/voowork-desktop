@@ -7,7 +7,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, LogicalSize, Manager, PhysicalPosition, Size, WebviewWindow};
 use tauri::window::Color;
 
-pub use commands::{begin_mini_widget_drag, open_main_window, reset_mini_widget_position};
+pub use commands::{
+    begin_mini_widget_drag, open_main_window, reset_mini_widget_position,
+};
 
 pub const MINI_WINDOW_LABEL: &str = "mini-timer";
 pub const MINI_WINDOW_WIDTH: u32 = 200;
@@ -118,6 +120,7 @@ pub fn setup_windows(app: &tauri::App) -> tauri::Result<()> {
     if let Some(mini) = app.get_webview_window(MINI_WINDOW_LABEL) {
         let _ = mini.set_icon(icon);
         let _ = mini.set_background_color(Some(Color(0, 0, 0, 0)));
+        let _ = mini.set_resizable(true);
         let _ = mini.set_size(Size::Logical(LogicalSize::new(
             MINI_WINDOW_WIDTH as f64,
             MINI_WINDOW_HEIGHT as f64,

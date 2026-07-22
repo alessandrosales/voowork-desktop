@@ -284,25 +284,6 @@ body,
     background: linear-gradient(135deg, #ff4546 0%, #ff3132 100%);
   }
 
-  .voowork-stop-btn {
-    background: var(--secondary);
-    border: 1px solid var(--border);
-    box-shadow: none;
-  }
-
-  .voowork-stop-btn:hover {
-    background: color-mix(in oklch, var(--secondary), var(--foreground) 6%);
-  }
-
-  .dark .voowork-stop-btn {
-    background: #1f2937;
-    border-color: rgba(255, 255, 255, 0.12);
-  }
-
-  .dark .voowork-stop-btn:hover {
-    background: #374151;
-  }
-
   .voowork-live-pill {
     display: inline-flex;
     align-items: center;
@@ -376,6 +357,8 @@ html.voowork-mini-surface #root {
   width: auto !important;
   height: auto !important;
   min-height: 0;
+  max-width: max-content;
+  max-height: max-content;
   pointer-events: none;
 }
 
@@ -388,13 +371,13 @@ html.voowork-mini-surface .voowork-mini-widget {
 .voowork-mini-widget {
   -webkit-user-select: none;
   user-select: none;
-  width: fit-content;
-  height: fit-content;
+  width: max-content;
+  height: max-content;
+  overflow: hidden;
 }
 
-.voowork-mini-drag-handle {
-  -webkit-app-region: drag;
-  app-region: drag;
+.voowork-mini-shell {
+  width: max-content;
 }
 
 .voowork-mini-no-drag {

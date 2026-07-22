@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef } from "react"
-import { GripVertical, PauseIcon, PlayIcon, SquareIcon } from "lucide-react"
+import { useCallback, useLayoutEffect, useRef } from "react"
+import { GripVertical, PauseIcon, PlayIcon } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { isTauri } from "@tauri-apps/api/core"
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window"
@@ -32,7 +32,6 @@ export function MiniTimerWidget() {
     loading,
     pauseTracking,
     resumeTracking,
-    stopTracking,
     startLastTracking,
     openMainWindow,
   } = useMiniTimer()
@@ -41,6 +40,51 @@ export function MiniTimerWidget() {
   const beginDragWithThreshold = useMiniWidgetDrag(false)
 
   const frameRef = useRef<HTMLDivElement>(null)
+
+  const phase = tracking.inactivity.phase
+  const manuallyPaused =
+    tracking.active &&
+    (phase === "manual_paused" || phase === "manual_work_check")
+  const needsMainWindow = tracking.active && INACTIVITY_UI_PHASES.has(phase)
+  const isRunning = tracking.active && !manuallyPaused && !needsMainWindow
+
+  const showPlay =
+    needsMainWindow || !tracking.active || manuallyPaused
+
+  const syncWindowToPill = useCallback(() => {
+    if (!isTauri()) {
+      return
+    }
+
+    const frame = frameRef.current
+    if (!frame) {
+      return
+    }
+
+    const rect = frame.getBoundingClientRect()
+    const width = Math.ceil(rect.width)
+    const height = Math.ceil(rect.height)
+    if (width <= 0 || height <= 0) {
+      return
+    }
+
+    const size = new LogicalSize(width, height)
+    const appWindow = getCurrentWindow()
+
+    void (async () => {
+      try {
+        // Unlock constraints, resize to pill, then lock so the user cannot
+        // drag-resize the frameless window (GTK needs resizable=true for setSize).
+        await appWindow.setMinSize(null)
+        await appWindow.setMaxSize(null)
+        await appWindow.setSize(size)
+        await appWindow.setMinSize(size)
+        await appWindow.setMaxSize(size)
+      } catch (error) {
+        console.error("[mini-timer] failed to resize window to pill", error)
+      }
+    })()
+  }, [])
 
   useLayoutEffect(() => {
     if (!isTauri()) {
@@ -52,39 +96,28 @@ export function MiniTimerWidget() {
       return
     }
 
-    const appWindow = getCurrentWindow()
-
-    const syncWindowToPill = () => {
-      // Measure the frame (pill + small gutter) so the pill's border and
-      // rounded corners are never clipped by the window bounds.
-      const rect = frame.getBoundingClientRect()
-      const width = Math.ceil(rect.width)
-      const height = Math.ceil(rect.height)
-      if (width <= 0 || height <= 0) {
-        return
-      }
-      appWindow.setSize(new LogicalSize(width, height)).catch((error) => {
-        console.error("[mini-timer] failed to resize window to pill", error)
+    let rafId = 0
+    const scheduleSync = () => {
+      cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        syncWindowToPill()
       })
     }
 
-    syncWindowToPill()
+    scheduleSync()
 
-    const observer = new ResizeObserver(syncWindowToPill)
+    const observer = new ResizeObserver(scheduleSync)
     observer.observe(frame)
 
-    return () => observer.disconnect()
-  }, [])
+    return () => {
+      cancelAnimationFrame(rafId)
+      observer.disconnect()
+    }
+  }, [syncWindowToPill])
 
-  const phase = tracking.inactivity.phase
-  const manuallyPaused =
-    tracking.active &&
-    (phase === "manual_paused" || phase === "manual_work_check")
-  const needsMainWindow = tracking.active && INACTIVITY_UI_PHASES.has(phase)
-  const isRunning = tracking.active && !manuallyPaused && !needsMainWindow
-
-  const showPlay =
-    needsMainWindow || !tracking.active || manuallyPaused
+  useLayoutEffect(() => {
+    syncWindowToPill()
+  }, [isRunning, showPlay, loading, displaySeconds, syncWindowToPill])
 
   const toggleLabel = (() => {
     if (needsMainWindow) return t("widget.openApp")
@@ -109,12 +142,6 @@ export function MiniTimerWidget() {
     pauseTracking().catch(() => undefined)
   }
 
-  const handleStop = () => {
-    if (loading) return
-    if (!window.confirm(t("timer.confirmStop"))) return
-    stopTracking().catch(console.error)
-  }
-
   const openMain = () => {
     openMainWindow().catch(() => undefined)
   }
@@ -122,11 +149,11 @@ export function MiniTimerWidget() {
   return (
     <div
       ref={frameRef}
-      className="voowork-mini-widget inline-flex !w-44 shrink-0 p-0.5"
+      className="voowork-mini-widget inline-flex shrink-0 overflow-hidden p-0.5"
     >
       <div
         className={cn(
-          "voowork-mini-shell bg-card/95 border-border/80 flex h-5 items-center gap-2 rounded-full border py-0 pl-2 pr-0",
+          "voowork-mini-shell bg-card/95 border-border/80 flex h-5 w-max items-center gap-2 rounded-full border py-0 pl-2 pr-0",
           isRunning && "border-emerald-500/50"
         )}
       >
@@ -164,24 +191,8 @@ export function MiniTimerWidget() {
           )}
         </Button>
 
-        {isRunning ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            data-no-drag
-            className="voowork-mini-no-drag size-4 shrink-0 rounded-full cursor-pointer"
-            disabled={loading}
-            aria-label={t("timer.stop")}
-            onClick={handleStop}
-          >
-            <SquareIcon className="size-3 fill-current" />
-          </Button>
-        ) : null}
-
         <button
           type="button"
-          data-tauri-drag-region
           aria-label={t("widget.drag")}
           title={t("widget.drag")}
           className="voowork-mini-drag-handle text-muted-foreground hover:bg-muted/60 hover:text-foreground voowork-mini-draggable flex h-5 w-6 shrink-0 cursor-grab items-center justify-center rounded-r-full border-l border-border/60 active:cursor-grabbing"
