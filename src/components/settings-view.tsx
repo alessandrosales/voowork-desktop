@@ -63,7 +63,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
 
-  const [blurEnabled, setBlurEnabled] = useState(false)
   const [inactivityProfile, setInactivityProfile] = useState<Profile | "custom">("standard")
   const [inactivityThreshold, setInactivityThreshold] = useState("2")
   const [miniWidgetEnabled, setMiniWidgetEnabled] = useState(true)
@@ -72,7 +71,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
 
   useEffect(() => {
     Promise.all([
-      trackedInvoke<string | null>("get_setting", { key: "screenshot_blur_enabled" }).catch(() => null),
       trackedInvoke<string | null>("get_setting", { key: "tracking_inactivity_profile" }).catch(() => null),
       trackedInvoke<string | null>("get_setting", { key: "tracking_inactivity_threshold_minutes" }).catch(() => null),
       trackedInvoke<string | null>("get_setting", { key: "mini_widget_enabled" }).catch(() => null),
@@ -82,16 +80,14 @@ export function SettingsView({ onBack }: SettingsViewProps) {
       }>("get_tracking_config").catch(() => null),
     ]).then(
       ([
-        blur, profile, threshold, widget, version, config,
+        profile, threshold, widget, version, config,
       ]: [
-        string | null,
         string | null,
         string | null,
         string | null,
         string,
         { inactivity: { threshold_minutes: number; profile: string; countdown_secs: number } } | null,
       ]) => {
-        setBlurEnabled(blur === "true" || blur === "1")
         if (profile) {
           setInactivityProfile(
             VALID_PROFILES.includes(profile as Profile)
@@ -124,14 +120,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
       console.error(`Failed to save setting ${key}:`, err)
     })
   }, [])
-
-  const handleToggleBlur = useCallback(
-    (checked: boolean) => {
-      setBlurEnabled(checked)
-      saveSetting("screenshot_blur_enabled", checked ? "true" : "false")
-    },
-    [saveSetting],
-  )
 
   const handleProfileChange = useCallback(
     (value: string | null) => {
@@ -203,25 +191,6 @@ export function SettingsView({ onBack }: SettingsViewProps) {
                   >
                     {appVersion}
                   </p>
-                </div>
-              </section>
-
-              <section>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-4">
-                  {t("settings.sectionScreenshots")}
-                </h2>
-                <div className="space-y-4">
-                  <Label htmlFor="screenshot-blur" className="text-sm font-medium">
-                    {t("settings.screenshotBlur")}
-                  </Label>
-                  <p className="text-muted-foreground text-xs leading-relaxed">
-                    {t("settings.screenshotBlurDesc")}
-                  </p>
-                  <ToggleSwitch
-                    id="screenshot-blur"
-                    checked={blurEnabled}
-                    onChange={handleToggleBlur}
-                  />
                 </div>
               </section>
 

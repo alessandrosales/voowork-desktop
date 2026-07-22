@@ -153,7 +153,6 @@ pub(crate) fn spawn_tracking_worker(ctx: TrackingWorkerContext) -> JoinHandle<()
                     &tracking,
                     &period_start,
                     time_category,
-                    &last_active_window,
                 ) {
                     Ok(outcome) => {
                         let period_end = outcome.period_end;

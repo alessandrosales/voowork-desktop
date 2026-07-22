@@ -100,12 +100,9 @@
   "settings": {
     "title": "Configurações",
     "sectionGeneral": "Geral",
-    "sectionScreenshots": "Captura de Tela",
     "sectionInactivity": "Inatividade",
     "sectionWidget": "Mini Widget",
     "appVersion": "Versão do app",
-    "screenshotBlur": "Desfocar capturas de tela",
-    "screenshotBlurDesc": "Aplica desfoque nas screenshots para proteger informações sensíveis.",
     "inactivityProfile": "Perfil de inatividade",
     "inactivityProfileDesc": "Define o tempo de inatividade antes do timer pausar automaticamente.",
     "profileStandard": "Padrão (2 min)",

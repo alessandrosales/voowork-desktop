@@ -44,7 +44,6 @@ impl TrackingManager {
             &tracking,
             &period_start,
             time_category,
-            &self.last_active_window,
         )?;
 
         let _ = close_open_apps(&self.db, &self.active_app_id);

@@ -4,7 +4,7 @@ use crate::db::frontend_settings::ensure_frontend_setting_key;
 use crate::error::{AgentError, AgentResult};
 use crate::locale::LOCALE_SETTING_KEY;
 use crate::models::{TrackingInactivityConfig, TrackingCapabilities, TrackingConfig};
-use crate::screenshot::{normalize_jpeg_quality, SETTING_BLUR_ENABLED, SETTING_JPEG_QUALITY};
+use crate::screenshot::{normalize_jpeg_quality, SETTING_JPEG_QUALITY};
 use crate::tracking_focus::capture_active_window;
 use crate::tracking_inactivity::{
     load_inactivity_threshold_minutes, COUNTDOWN_SECS, SETTING_INACTIVITY_PROFILE,
@@ -41,7 +41,6 @@ pub fn set_setting(
     value: String,
 ) -> AgentResult<()> {
     ensure_frontend_setting_key(&key)?;
-    let apply_blur = key == SETTING_BLUR_ENABLED;
     let apply_jpeg_quality = key == SETTING_JPEG_QUALITY;
     let apply_locale = key == LOCALE_SETTING_KEY;
     let apply_tray_selection =
@@ -60,11 +59,6 @@ pub fn set_setting(
     {
         let db = state.db.lock();
         db.set_setting(&key, &value)?;
-    }
-    if apply_blur {
-        state
-            .tracking_manager
-            .set_screenshot_blur(value == "true" || value == "1");
     }
     if apply_jpeg_quality {
         if let Ok(quality) = value.parse::<u8>() {

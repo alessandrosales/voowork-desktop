@@ -100,12 +100,9 @@
   "settings": {
     "title": "Settings",
     "sectionGeneral": "General",
-    "sectionScreenshots": "Screenshots",
     "sectionInactivity": "Inactivity",
     "sectionWidget": "Mini Widget",
     "appVersion": "App version",
-    "screenshotBlur": "Blur screenshots",
-    "screenshotBlurDesc": "Applies blur to screenshots to protect sensitive information.",
     "inactivityProfile": "Inactivity profile",
     "inactivityProfileDesc": "Sets how long before the timer pauses due to inactivity.",
     "profileStandard": "Standard (2 min)",

@@ -271,7 +271,6 @@ pub(crate) fn capture_screenshot(
     tracking: &ActiveTracking,
     period_start: &str,
     time_category: &str,
-    last_active_window: &Arc<Mutex<Option<ActiveWindowSample>>>,
 ) -> AgentResult<CaptureOutcome> {
     let bucket = tracker.lock().drain_bucket();
     let raw_score = compute_activity_score(bucket.mouse_events, bucket.keyboard_events);
@@ -289,19 +288,12 @@ pub(crate) fn capture_screenshot(
         screenshot_guard.capture_pixels()
     };
 
-    let active_window = last_active_window.lock().clone();
-
     match capture_result {
         Ok((width, height, image_bytes)) => {
             let context = TrackingScreenshotCaptureContext {
                 tracking_id: &tracking.tracking_id,
                 period_start,
                 time_category,
-            };
-
-            let blur_level = {
-                let screenshot_guard = screenshot.lock();
-                screenshot_guard.resolve_blur_level(active_window.as_ref(), time_category)
             };
 
             let record = {
@@ -313,7 +305,6 @@ pub(crate) fn capture_screenshot(
                     width,
                     height,
                     &image_bytes,
-                    blur_level,
                 )?
             };
 
@@ -341,8 +332,6 @@ pub(crate) fn capture_screenshot(
                     "sha256Hash": record.sha256_hash,
                     "width": record.width,
                     "height": record.height,
-                    "blurApplied": record.blur_applied,
-                    "blurLevel": record.blur_level,
                 }),
             )?;
 

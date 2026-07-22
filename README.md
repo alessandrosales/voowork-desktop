@@ -151,7 +151,7 @@ Lista completa em `src-tauri/src/lib.rs` (`generate_handler`).
 Ver **[docs/README.md](docs/README.md)** para documentação completa do produto:
 
 1. **Comportamento:** activity score, pausa manual, buffer persistente, idle local
-2. **Captura:** blur, JPEG, multi-monitor, título de janela
+2. **Captura:** WebP, multi-monitor, título de janela
 3. **UX:** settings mínimas, limpeza de código morto
 
 ## Permissões Linux

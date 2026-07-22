@@ -183,11 +183,7 @@ mod tests {
     fn test_state() -> (Arc<Mutex<Database>>, TrackingManager) {
         let dir = std::env::temp_dir().join(format!("voowork-auth-test-{}", uuid::Uuid::new_v4()));
         let db = Arc::new(Mutex::new(Database::open(dir.clone()).unwrap()));
-        let screenshot = ScreenshotCapture::new(
-            dir.join("screenshots"),
-            crate::screenshot::BlurPolicyConfig::load(None),
-        )
-        .unwrap();
+        let screenshot = ScreenshotCapture::new(dir.join("screenshots")).unwrap();
         let manager = TrackingManager::new(Arc::clone(&db), screenshot);
         (db, manager)
     }
