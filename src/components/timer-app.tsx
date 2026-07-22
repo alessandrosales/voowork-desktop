@@ -221,7 +221,6 @@ export function TimerApp() {
     !active &&
     Boolean(tracking.remoteActiveTrackingId) &&
     Boolean(tracking.remoteActiveDevice)
-  const showSyncPendingBadge = tracking.syncPending > 0
 
   useEffect(() => {
     if (!auth.isAuthenticated) {
@@ -359,16 +358,6 @@ export function TimerApp() {
                 {t("timer.remoteActiveBadge", {
                   device: tracking.remoteActiveDevice ?? "",
                 })}
-              </span>
-            ) : null}
-            {showSyncPendingBadge ? (
-              <span
-                className="rounded-full border border-sky-500/40 bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:text-sky-300"
-                title={t("timer.syncPendingBadge", {
-                  count: tracking.syncPending,
-                })}
-              >
-                {t("timer.syncPendingBadge", { count: tracking.syncPending })}
               </span>
             ) : null}
             {active ? (

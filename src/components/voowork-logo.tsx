@@ -1,4 +1,4 @@
-import { useTheme } from "@/components/theme-provider"
+import { useTheme } from "@/hooks/use-theme"
 import { cn } from "@/lib/utils"
 
 const LOGO_HEIGHTS = {

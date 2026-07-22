@@ -32,8 +32,7 @@
     "openWebPanel": "Abrir painel web",
     "stop": "Encerrar",
     "confirmStop": "Encerrar a sessão ativa? O timer será finalizado.",
-    "remoteActiveBadge": "Ativo em {{device}}",
-    "syncPendingBadge": "Sync pendente ({{count}})"
+    "remoteActiveBadge": "Ativo em {{device}}"
   },
   "workspace": {
     "title": "Workspace",

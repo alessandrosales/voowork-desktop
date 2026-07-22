@@ -95,12 +95,80 @@ impl SyncWorker {
         self.running.store(false, Ordering::SeqCst);
     }
 
+    pub async fn flush(
+        self: &Arc<Self>,
+        db: Arc<Mutex<Database>>,
+        app: AppHandle,
+        timeout_secs: u64,
+    ) {
+        let http_client = match reqwest::Client::builder()
+            .timeout(Duration::from_secs(timeout_secs))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                log::error!("sync flush: failed to build HTTP client: {e}");
+                return;
+            }
+        };
+
+        let api_base_url = self.api_base_url.clone();
+        let on_session_revoked = self.on_session_revoked.lock().clone();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
+        let mut total_processed = 0usize;
+
+        loop {
+            if tokio::time::Instant::now() >= deadline {
+                let remaining = count_pending(&db);
+                log::warn!(
+                    "sync flush: timeout after {timeout_secs}s — {remaining} item(s) remain for next startup"
+                );
+                break;
+            }
+
+            let batch = load_pending_batch(&db);
+            if batch.access_token.is_none() {
+                log::debug!("sync flush: no access token, skipping");
+                break;
+            }
+            if batch.items.is_empty() {
+                break;
+            }
+
+            let count = batch.items.len();
+            log::info!("sync flush: processing {count} pending item(s)");
+
+            process_batch(
+                &http_client,
+                &api_base_url,
+                &batch.access_token.unwrap(),
+                &db,
+                &app,
+                &on_session_revoked,
+                batch.items,
+            )
+            .await;
+
+            total_processed += count;
+        }
+
+        log::info!("sync flush: complete — {total_processed} item(s) processed");
+    }
+
     pub fn flush_blocking(
         self: &Arc<Self>,
         db: Arc<Mutex<Database>>,
         app: AppHandle,
         timeout_secs: u64,
     ) {
+        if tokio::runtime::Handle::try_current().is_ok() {
+            log::error!(
+                "sync flush_blocking called from async runtime; use flush().await instead"
+            );
+            return;
+        }
+
+        let worker = Arc::clone(self);
         let rt = match tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -112,61 +180,7 @@ impl SyncWorker {
             }
         };
 
-        let api_base_url = self.api_base_url.clone();
-        let on_session_revoked = self.on_session_revoked.lock().clone();
-
-        rt.block_on(async move {
-            let http_client = match reqwest::Client::builder()
-                .timeout(Duration::from_secs(timeout_secs))
-                .build()
-            {
-                Ok(c) => c,
-                Err(e) => {
-                    log::error!("sync flush: failed to build HTTP client: {e}");
-                    return;
-                }
-            };
-
-            let deadline = tokio::time::Instant::now() + Duration::from_secs(timeout_secs);
-            let mut total_processed = 0usize;
-
-            loop {
-                if tokio::time::Instant::now() >= deadline {
-                    let remaining = count_pending(&db);
-                    log::warn!(
-                        "sync flush: timeout after {timeout_secs}s — {remaining} item(s) remain for next startup"
-                    );
-                    break;
-                }
-
-                let batch = load_pending_batch(&db);
-                if batch.access_token.is_none() {
-                    log::debug!("sync flush: no access token, skipping");
-                    break;
-                }
-                if batch.items.is_empty() {
-                    break;
-                }
-
-                let count = batch.items.len();
-                log::info!("sync flush: processing {count} pending item(s)");
-
-                process_batch(
-                    &http_client,
-                    &api_base_url,
-                    &batch.access_token.unwrap(),
-                    &db,
-                    &app,
-                    &on_session_revoked,
-                    batch.items,
-                )
-                .await;
-
-                total_processed += count;
-            }
-
-            log::info!("sync flush: complete — {total_processed} item(s) processed");
-        });
+        rt.block_on(worker.flush(db, app, timeout_secs));
     }
 }
 

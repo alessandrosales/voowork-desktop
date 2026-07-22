@@ -32,8 +32,7 @@
     "openWebPanel": "Open web dashboard",
     "stop": "Stop",
     "confirmStop": "Stop the active session? The timer will be finalized.",
-    "remoteActiveBadge": "Active on {{device}}",
-    "syncPendingBadge": "Sync pending ({{count}})"
+    "remoteActiveBadge": "Active on {{device}}"
   },
   "workspace": {
     "title": "Workspace",

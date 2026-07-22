@@ -86,6 +86,7 @@ export function PermissionBanner({ checkActiveWindow }: PermissionBannerProps) {
           }
         })
       } catch {
+        // Focus listener is unavailable outside the Tauri runtime.
       }
     }
     void setupFocusListener()

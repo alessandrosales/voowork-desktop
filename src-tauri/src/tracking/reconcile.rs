@@ -88,11 +88,14 @@ pub async fn prepare_before_start(app: &AppHandle, state: &AppState) -> AgentRes
     };
 
     if state.sync_worker.is_enabled() {
-        state.sync_worker.flush_blocking(
-            Arc::clone(&state.db),
-            app.clone(),
-            SYNC_FLUSH_TIMEOUT_SECS,
-        );
+        state
+            .sync_worker
+            .flush(
+                Arc::clone(&state.db),
+                app.clone(),
+                SYNC_FLUSH_TIMEOUT_SECS,
+            )
+            .await;
     }
 
     let actives = match fetch_active_resilient(&state.api_base_url, &access_token, &user_id).await {

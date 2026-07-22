@@ -1,7 +1,7 @@
+export { AuthProvider } from "./use-auth.tsx"
 export {
-  AuthProvider,
   useAuth,
   type AuthUser,
   type AuthOrganization,
   type AuthState,
-} from "./use-auth.tsx"
+} from "./auth-context"

@@ -1,23 +1,13 @@
 import * as React from "react"
 import { emit, listen } from "@tauri-apps/api/event"
 
+import { ThemeProviderContext, type Theme } from "@/components/theme-context"
 import { isTauriReady, trackedInvoke, waitForTauriReady } from "@/lib/tauri"
-
-type Theme = "dark" | "light"
 
 type ThemeProviderProps = Readonly<{
   children: React.ReactNode
   defaultTheme?: Theme
 }>
-
-type ThemeProviderState = {
-  theme: Theme
-  setTheme: (theme: Theme) => void
-}
-
-const ThemeProviderContext = React.createContext<
-  ThemeProviderState | undefined
->(undefined)
 
 function applyThemeClass(theme: Theme) {
   const root = document.documentElement
@@ -102,14 +92,4 @@ export function ThemeProvider({
       {children}
     </ThemeProviderContext.Provider>
   )
-}
-
-export const useTheme = () => {
-  const context = React.useContext(ThemeProviderContext)
-
-  if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider")
-  }
-
-  return context
 }

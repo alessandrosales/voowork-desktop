@@ -32,8 +32,7 @@
     "openWebPanel": "Abrir panel web",
     "stop": "Detener",
     "confirmStop": "¿Detener la sesión activa? El temporizador se finalizará.",
-    "remoteActiveBadge": "Activo en {{device}}",
-    "syncPendingBadge": "Sync pendiente ({{count}})"
+    "remoteActiveBadge": "Activo en {{device}}"
   },
   "workspace": {
     "title": "Espacio de trabajo",

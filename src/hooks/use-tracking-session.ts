@@ -170,6 +170,7 @@ export function useTrackingSession() {
     try {
       await trackedInvoke("sync_projects")
     } catch {
+      // Project sync is best-effort; list_projects still runs below.
     }
 
     try {
