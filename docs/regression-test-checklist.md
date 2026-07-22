@@ -6,6 +6,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 **Legenda de ambiente:** 🐧 Linux · 🪟 Windows · 🍎 macOS (marque apenas as plataformas suportadas pela release)
 
+**Foco de regressão recente (2026-07):** sessão expirada no boot sem congelar a UI; comandos IPC e ações do tray fora da main thread; ordenação do outbox (screenshot antes de peripheral events); mini-timer sem botão encerrar e com resize programático no GTK.
+
 ---
 
 ## 0. Preparação do ambiente
@@ -43,14 +45,15 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 - [ ] Fechar e reabrir o app com sessão válida → entra direto na tela principal (sem novo login)
 - [ ] No boot, `validate_auth_session` chama `GET /api/v1/auth/me` e confirma o token
-- [ ] Token expirado/inválido no boot → redireciona para login
+- [ ] Token expirado/inválido no boot → redireciona para login **sem congelar a UI** (sem diálogo "forçar saída" do GNOME)
+- [ ] Token expirado no boot com tracking órfão no SQLite → app finaliza o tracking e limpa a sessão sem deadlock
 - [ ] API retornando 401 durante sync → evento `auth-session-expired` dispara logout automático na UI
-- [ ] `get_auth_state` retorna o estado correto sem chamada de rede
+- [ ] `get_auth_state` retorna o estado correto sem chamada de rede e **não bloqueia** a main thread durante o lock do SQLite
 
 ### 1.3 Logout
 
 - [ ] Logout limpa a sessão local (SQLite + keyring)
-- [ ] Logout com tracking ativo é tratado (finaliza ou bloqueia, conforme comportamento esperado)
+- [ ] Logout com tracking ativo: tray e profile-menu param a sessão antes de limpar auth (com confirmação na UI principal)
 - [ ] Após logout, a tela de login é exibida e dados do usuário anterior não aparecem
 
 ---
@@ -93,19 +96,29 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] `resume_tracking` retoma a contagem de onde parou
 - [ ] Tempo pausado **não** conta como tempo trabalhado
 
-### 3.4 Parar
+### 3.4 Parar (encerrar sessão de tracking)
 
-- [ ] `stop_tracking` finaliza a sessão
+> **UI:** não há botão "Encerrar" na janela principal nem no mini widget. O encerramento da sessão é feito pelo menu da bandeja (**⏹ Encerrar**).
+
+- [ ] Item **⏹ Encerrar** no tray chama `stop_tracking` e finaliza a sessão
+- [ ] Ação do tray **não congela** a janela principal nem o mini widget durante o finalize (roda fora da main thread)
 - [ ] Screenshot final é capturada com UUID real (fail-loud, sem placeholder)
-- [ ] Peripheral events do período final são enfileirados com o mesmo UUID
+- [ ] Peripheral events do período final são enfileirados **depois** do screenshot na `sync_queue`
 - [ ] Apps/sites abertos são fechados (com `ended_at`)
 - [ ] `PATCH /api/v1/trackings/:id` é enviado com `status: inactive` e `ended_at`
-- [ ] UI volta ao estado "sem tracking ativo"
+- [ ] UI volta ao estado "sem tracking ativo" (timer principal, mini widget e tray)
 
-### 3.5 Fechamento do app (quit/tray)
+### 3.5 Sair do app vs encerrar sessão
 
-- [ ] Ao fechar com tracking ativo: screenshot final + fechamento de apps/sites + PATCH de finalização
-- [ ] Worker é parado com join síncrono (sem cortar no meio de um envio)
+| Ação no tray | Efeito |
+|--------------|--------|
+| **⏹ Encerrar** | Para o tracking ativo; o app **continua** rodando na bandeja |
+| **Sair** | Screenshot final (se houver sessão) + flush do sync + encerra o processo |
+
+- [ ] **Sair** com tracking ativo: `capture_final_screenshot_and_finalize` roda antes do `_exit`
+- [ ] **Sair**: worker de sync é parado, `flush_blocking` envia itens pendentes, depois o processo termina
+- [ ] **Sair** não exibe diálogo "forçar saída" por UI congelada (finalize fora da main thread)
+- [ ] Fechar a janela principal **não** encerra o processo (app permanece no tray)
 - [ ] Trackings órfãos (crash/kill anterior) são finalizados no próximo boot com `ended_at` estimado
 
 ---
@@ -138,7 +151,7 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Screenshot capturada no intervalo configurado (padrão ~300s; `SCREENSHOT_INTERVAL_SECS` em dev, mín. 10s)
 - [ ] Captura cobre **todos os monitores** (stitch) via `xcap`
 - [ ] Arquivo WebP é gravado em disco e INSERT no SQLite
-- [ ] Pipeline completo dispara junto: drain do bucket → score → captura → persistência → peripheral events → enqueue
+- [ ] Pipeline completo dispara junto: drain do bucket → score → captura → persistência → **enqueue screenshot** → peripheral events → enqueue PE
 - [ ] Durante `PausedInactivity`: screenshots continuam, marcadas `time_category = 'inactivity'`
 - [ ] Durante pausa manual: screenshots são puladas
 - [ ] Falha de captura (permissão de tela negada) não derruba o tracking — erro tratado e logado
@@ -197,6 +210,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 - [ ] Todas as entidades gravam primeiro no SQLite e enfileiram na `sync_queue`
 - [ ] Status transitam corretamente: `pending → sending → confirmed`
 - [ ] Worker processa até 10 itens por lote (5s fila vazia / 2s após lote)
+- [ ] **Ordem:** para cada ciclo de screenshot, o item `tracking_screenshot` entra na fila **antes** dos `tracking_peripheral_event` do mesmo período (evita 422 no backend)
+- [ ] Empates de `created_at` na fila são desempatados por `rowid` (ordem estável de inserção)
 
 ### 9.2 Entidades sincronizadas
 
@@ -210,8 +225,9 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 ### 9.3 Retry e recuperação
 
 - [ ] Erro transitório (5xx/rede): retry exponencial 2s→4s→…→cap 3600s, máx. 8 tentativas
+- [ ] PE rejeitado com 422 por screenshot ainda não sincronizado → retry transitório (não vai para dead-letter imediato)
 - [ ] Após 8 tentativas: item vai para dead-letter
-- [ ] Erro 4xx (exceto 401/403): dead-letter imediato (terminal)
+- [ ] Erro 4xx (exceto 401/403 e o 422 transitório de screenshot): dead-letter imediato (terminal)
 - [ ] Erro 401: emite `auth-session-expired` e para o worker
 - [ ] App offline durante tracking: tudo persiste local e sincroniza ao reconectar (sem duplicar)
 - [ ] IDs gerados no desktop são preservados pelo backend (idempotência)
@@ -244,9 +260,10 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 ## 11. Interface e experiência
 
-- [ ] `timer-app`: layout correto nos estados sem tracking / ativo / pausado
+- [ ] `timer-app`: layout correto nos estados sem tracking / ativo / pausado (**sem** botão encerrar no header)
+- [ ] Controles de start/pause/resume na janela principal funcionam; encerrar sessão só pelo tray
 - [ ] `workspace-view`: navegação entre seções funciona
-- [ ] `profile-menu`: exibe dados do usuário e ações (logout, painel web)
+- [ ] `profile-menu`: exibe dados do usuário e ações (logout com confirmação se tracking ativo, painel web)
 - [ ] `open_web_panel` abre `FRONTEND_URL` no browser
 - [ ] `open_external_url` respeita o guard de links externos (`external-link-guard`)
 - [ ] `settings-view`: configurações carregam e salvam (`get_setting` / `set_setting`)
@@ -263,20 +280,44 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 - [ ] Ícone do tray aparece na área de notificação
 - [ ] Menu do tray exibe ações corretas conforme o estado (tracking ativo/inativo)
-- [ ] Labels do tray seguem o idioma selecionado
+- [ ] Labels do tray seguem o idioma selecionado (pt-BR / en / es)
 - [ ] Clique esquerdo no tray abre/foca a janela principal (`open_main_window`)
 - [ ] Fechar a janela não mata o app (continua no tray)
-- [ ] Quit pelo tray finaliza tracking ativo corretamente (ver 3.5)
+- [ ] **▶ Iniciar / ⏸ Pausar / ▶ Retomar** no tray alternam o tracking sem congelar a UI
+- [ ] Com overlay de inatividade ativo, toggle no tray abre a janela principal em vez de pausar
+- [ ] **⏹ Encerrar** para a sessão sem fechar o app (ver 3.4)
+- [ ] **Sair** finaliza tracking + flush do sync + encerra o processo (ver 3.5)
+- [ ] **Fazer logout** no tray para tracking ativo, limpa sessão e abre a janela principal
+- [ ] **Reposicionar timer** restaura posição padrão do mini widget
+- [ ] Refresh do tray (tooltip/labels) continua responsivo durante finalize longo em background
 
 ---
 
 ## 13. Mini timer widget
 
-- [ ] Mini widget exibe o tempo da sessão em formato compacto
-- [ ] `begin_mini_widget_drag` permite arrastar o widget
+### 13.1 Conteúdo e ações
+
+- [ ] Widget exibe o tempo da sessão em formato `HH:MM:SS` (tabular)
+- [ ] **Não** há botão encerrar no widget — apenas play/pause e arrastar
+- [ ] Botão play/pause: inicia última seleção, pausa, retoma ou abre o app (fases de inatividade)
+- [ ] Duplo clique no tempo abre a janela principal
+- [ ] Ações do widget refletem no estado global e na janela principal (e vice-versa)
+
+### 13.2 Arrastar e posição
+
+- [ ] `begin_mini_widget_drag` no handle (ícone ⋮⋮) arrasta o widget pela área de notificação
+- [ ] Arrastar pelo display do tempo também funciona (com threshold para não confundir com clique)
+- [ ] **Um único** handle de drag visível — sem ícone fantasma ou região de drag duplicada
+- [ ] Após pausar e retomar, o handle de drag permanece alinhado ao pill (não “flutua” fora do componente)
 - [ ] Posição do widget persiste entre sessões
-- [ ] `reset_mini_widget_position` restaura a posição padrão
-- [ ] Ações do widget (pause/resume/stop) refletem no estado global e na janela principal
+- [ ] `reset_mini_widget_position` / item do tray restaura a posição padrão
+
+### 13.3 Tamanho da janela (🐧 GTK)
+
+- [ ] Janela do mini-timer acompanha o tamanho do pill (`ResizeObserver` + `setSize`)
+- [ ] Usuário **não** consegue redimensionar manualmente a janela (min/max travados após sync)
+- [ ] Não há “janela fantasma” maior que o conteúdo visível
+- [ ] Transição play ↔ pause redimensiona o pill sem artefatos visuais
 
 ---
 
@@ -301,7 +342,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 | Captura de janela ativa | [ ] | [ ] | [ ] |
 | Screenshot multi-monitor | [ ] | [ ] | [ ] |
 | Overlay de inatividade | [ ] | [ ] | [ ] |
-| Tray + menu | [ ] | [ ] | [ ] |
+| Tray + menu (toggle / encerrar / sair) | [ ] | [ ] | [ ] |
+| Mini timer (drag, resize, pause) | [ ] | [ ] | [ ] |
 | Modo degradado sem permissões | [ ] | [ ] | [ ] |
 | Sync offline → online | [ ] | [ ] | [ ] |
 
@@ -322,7 +364,8 @@ Checklist completo para validação regressiva de todas as funcionalidades do ag
 
 - [ ] Kill forçado com tracking ativo → no próximo boot o tracking órfão é finalizado
 - [ ] Queda de rede no meio do sync → fila retoma automaticamente
-- [ ] API lenta/timeout → UI não congela (chamadas assíncronas)
+- [ ] API lenta/timeout → UI não congela (`spawn_blocking` nos comandos IPC que seguram o SQLite)
+- [ ] Sessão revogada com tracking ativo → callback de auth não bloqueia `status()` nem o tray refresh
 - [ ] DB bloqueado/cheio → erro tratado com mensagem, sem panic
 - [ ] Relógio do sistema alterado durante tracking → comportamento definido e sem crash
 - [ ] Suspensão/hibernação do SO durante tracking → retomada coerente
@@ -337,11 +380,18 @@ Para validações rápidas após hotfix, execute no mínimo:
 2. [ ] Iniciar tracking em um projeto/tarefa
 3. [ ] Aguardar 1 ciclo de screenshot (ou usar `SCREENSHOT_INTERVAL_SECS=10`)
 4. [ ] Verificar atividade + app/site + screenshot no histórico local
-5. [ ] Pausar e retomar
-6. [ ] Forçar inatividade (ou simular ausência de input) e confirmar overlay
-7. [ ] Parar o tracking e conferir PATCH na API
-8. [ ] Verificar sync completo no painel web (tempo, screenshot, atividade)
-9. [ ] Logout
+5. [ ] Pausar e retomar (janela principal e mini widget)
+6. [ ] Arrastar o mini widget e confirmar tamanho/posição corretos após pause
+7. [ ] Forçar inatividade (ou simular ausência de input) e confirmar overlay
+8. [ ] **⏹ Encerrar** pelo tray e conferir PATCH na API
+9. [ ] Verificar sync completo no painel web (tempo, screenshot, atividade)
+10. [ ] Logout
+
+### 17.1 Smoke de regressão crítica (boot + auth)
+
+1. [ ] Com token expirado no keyring/SQLite, abrir o app → login sem UI congelada
+2. [ ] Com tracking ativo, revogar sessão no backend → logout automático sem deadlock
+3. [ ] **Sair** pelo tray com tracking ativo → screenshot final aparece no painel após sync
 
 ---
 
